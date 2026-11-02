@@ -77,7 +77,16 @@ def list_agents(root: Path) -> List[Dict[str, object]]:
             continue
         if pid_alive(pid):
             out.append(rec)
+        else:
+            try:  # a Dobby that died without cleaning up: drop its file
+                path.unlink()
+            except OSError:
+                pass
     return out
+
+
+def is_registered(root: Path, pid: int) -> bool:
+    return (agents_dir(root) / f"{pid}.json").is_file()
 
 
 class AgentPidCache:

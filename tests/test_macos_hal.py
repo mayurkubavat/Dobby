@@ -69,8 +69,9 @@ def _win(num, owner, title, pid, x, y, w, h, layer=0):
 class FakeAppKit:
     NSApplicationActivateIgnoringOtherApps = 2
 
-    def __init__(self, front_pid=42):
+    def __init__(self, front_pid=42, refuse=False):
         self.activated = []
+        self.front_pid = front_pid
         outer = self
 
         class App:
@@ -82,11 +83,13 @@ class FakeAppKit:
 
             def activateWithOptions_(self, opts):
                 outer.activated.append(self.pid)
-                return True
+                if not refuse:
+                    outer.front_pid = self.pid
+                return True  # macOS says yes even when it refuses
 
         class WS:
             def frontmostApplication(self_inner):
-                return App(front_pid)
+                return App(outer.front_pid)
 
         self.NSWorkspace = SimpleNamespace(sharedWorkspace=lambda: WS())
         self.NSRunningApplication = SimpleNamespace(runningApplicationWithProcessIdentifier_=lambda pid: App(pid))
@@ -213,6 +216,87 @@ def test_list_windows_and_focus():
     assert hal.focus_window("999") is False
 
 
+def _focus_wins():
+    return [_win(7, "Vivado", "project_1", 42, 50, 40, 1200, 800),
+            _win(9, "Terminal", "zsh", 77, 0, 0, 800, 600)]
+
+
+class RaiseAX:
+    """Just enough AX for focus_window's fallback raise."""
+
+    kAXValueCGPointType, kAXValueCGSizeType = 1, 2
+
+    def __init__(self, appkit=None, works=True):
+        self.appkit, self.works, self.calls = appkit, works, []
+
+    def AXUIElementCreateApplication(self, pid):
+        return {"pid": pid}
+
+    def AXUIElementSetAttributeValue(self, el, name, value):
+        self.calls.append((name, el["pid"]))
+        if self.works and name == "AXFrontmost":
+            self.appkit.front_pid = el["pid"]
+        return 0
+
+    def AXUIElementCopyAttributeValue(self, el, name, _):
+        if name == "AXWindows":
+            return 0, [{"AXPosition": SimpleNamespace(x=0, y=0), "AXSize": SimpleNamespace(width=800, height=600)}]
+        return 0, el.get(name)
+
+    def AXValueGetValue(self, value, kind, _):
+        return True, value
+
+    def AXUIElementPerformAction(self, el, action):
+        self.calls.append((action, None))
+        return 0
+
+
+def test_focus_refused_by_macos_reports_failure_with_reason():
+    appkit = FakeAppKit(front_pid=42, refuse=True)
+    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=appkit, ax=RaiseAX(appkit, works=False),
+                 capture_fn=lambda r: None)
+    assert hal.focus_window("9") is False
+    assert "did not bring window 9 to the front" in hal.last_focus_error
+    assert "project_1 - Vivado (7)" in hal.last_focus_error
+    assert hal.get_active_window().window_id == "7"
+
+
+def test_focus_falls_back_to_ax_raise_when_activation_is_refused():
+    appkit = FakeAppKit(front_pid=42, refuse=True)
+    ax = RaiseAX(appkit)
+    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=appkit, ax=ax, capture_fn=lambda r: None)
+    assert hal.focus_window("9") is True
+    assert hal.last_focus_error is None
+    assert ("AXFrontmost", 77) in ax.calls and ("AXRaise", None) in ax.calls
+
+
+def test_focus_missing_window_says_so():
+    hal, _ = _hal(windows=_focus_wins())
+    assert hal.focus_window("999") is False
+    assert hal.last_focus_error == "window 999 is not on screen"
+
+
+def test_frontmost_is_read_fresh_not_from_nsworkspace_cache():
+    # NSWorkspace (the fake) still says pid 42; the fresh probe knows Terminal is in front.
+    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=FakeAppKit(front_pid=42),
+                 front_pid_fn=lambda: 77, capture_fn=lambda r: None)
+    assert hal.get_active_window().window_id == "9"
+    broken = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=FakeAppKit(front_pid=42),
+                    front_pid_fn=lambda: (_ for _ in ()).throw(OSError("no lsappinfo")), capture_fn=lambda r: None)
+    assert broken.get_active_window().window_id == "7"  # falls back to NSWorkspace
+
+
+def test_lsappinfo_front_pid_parses_both_output_styles(monkeypatch):
+    import dobby.hal.macos as macos
+
+    for info in ('    pid = 85435 !cgsConnection', '"pid"=85435'):
+        def run(args, **kw):
+            out = "ASN:0x0-0xad9ad9:\n" if args[1] == "front" else info
+            return SimpleNamespace(stdout=out)
+        monkeypatch.setattr(macos.subprocess, "run", run)
+        assert macos._lsappinfo_front_pid() == 85435
+
+
 def test_cursor_position_and_screen_size():
     hal, _ = _hal()
     assert hal.get_cursor_position() == (10, 20)
@@ -322,6 +406,7 @@ def test_ax_inspector_enables_electron_web_content(monkeypatch):
     from dobby.config import CONFIG
 
     monkeypatch.setattr(CONFIG, "ax_web_content_settle_seconds", 0)
+    monkeypatch.setattr(CONFIG, "ax_web_content_retry_seconds", 0)
     send = _el("AXButton", (200, 300, 60, 24), AXTitle="Send", AXEnabled=True)
     web = _el("AXWebArea", (0, 30, 1512, 900), children=[send])
     win = _el("AXWindow", (0, 0, 1512, 982), children=[web], AXTitle="Claude")
@@ -331,6 +416,37 @@ def test_ax_inspector_enables_electron_web_content(monkeypatch):
     assert insp.web_content_enabled == {42: True}
     insp.inspect_desktop()
     assert fake.set_calls == [("AXManualAccessibility", True)]  # once per pid
+
+
+def test_ax_inspector_rereads_while_chromium_builds_its_tree(monkeypatch):
+    from dobby.config import CONFIG
+
+    monkeypatch.setattr(CONFIG, "ax_web_content_settle_seconds", 0)
+    monkeypatch.setattr(CONFIG, "ax_web_content_retry_seconds", 5)
+    buttons = [_el("AXButton", (100 + 70 * i, 300, 60, 24), AXTitle=f"b{i}", AXEnabled=True) for i in range(6)]
+    web = _el("AXWebArea", (0, 30, 1512, 900), children=[])
+    win = _el("AXWindow", (0, 0, 1512, 982), children=[web], AXTitle="Antigravity")
+    reads = {"n": 0}
+
+    class LazyChromium(FakeAX):
+        def AXUIElementCopyAttributeValue(self, el, name, _):
+            if el is web and name == "AXChildren":
+                reads["n"] += 1
+                return 0, buttons if reads["n"] >= 3 else []  # tree appears on the 3rd read
+            return super().AXUIElementCopyAttributeValue(el, name, _)
+
+    fake = LazyChromium({42: {"electron": True, "_hidden_windows": [win]}})
+    insp = AXInspector(ax=fake, appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982))
+    assert len(insp.inspect_desktop()) == 6
+    assert reads["n"] == 3
+
+
+def test_ax_inspector_front_app_is_read_fresh():
+    other = _el("AXWindow", (0, 0, 400, 300), children=[_el("AXButton", (10, 10, 60, 24), AXTitle="Go")])
+    tree = {**_ax_tree(), 77: {"AXWindows": [other]}}
+    insp = AXInspector(ax=FakeAX(tree), appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982),
+                       front_pid_fn=lambda: 77)
+    assert [e.name for e in insp.inspect_desktop()] == ["Go"]
 
 
 def test_ax_inspector_native_app_rejects_flag_harmlessly():

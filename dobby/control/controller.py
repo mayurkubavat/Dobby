@@ -225,7 +225,19 @@ class Controller:
 
     def tool_scope(self):
         """Lazy scope for a whole tool call: acquire only if the tool acts."""
+        self.ensure_registered()
         return _LazyToolScope(self)
+
+    def ensure_registered(self) -> None:
+        """Put this agent's registry file back if something removed it, so the
+        other Dobbys and the overlay keep counting this one as an agent."""
+        if not self._registered:
+            return
+        try:
+            if not registry.is_registered(self.root, self.agent.pid):
+                registry.register(self.root, self.agent.id, self.agent.name, self.agent.pid, self.agent.priority)
+        except OSError:
+            pass
 
     def note_observation(self) -> None:
         """Record what the world looked like when this agent last read the screen."""

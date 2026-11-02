@@ -147,6 +147,10 @@ class VisionConfig(BaseModel):
         default=0.4,
         description="After first enabling web-content AX on an app, wait this long for Chromium to build its tree.",
     )
+    ax_web_content_retry_seconds: float = Field(
+        default=1.5,
+        description="If that first read is still near-empty, keep re-reading for up to this long.",
+    )
 
     # Local Gemma 3 Multimodal Sidecar Plugin
     enable_gemma3_sidecar: bool = Field(

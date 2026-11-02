@@ -82,6 +82,9 @@ python scripts/smoke_local.py
 This only reads: it reports screen capture, accessibility, OCR and the local
 model, with timings. It never clicks or types.
 
+When a tool fails in your AI client, look in `~/.dobby/logs/server.log`: one
+line per tool call with its duration, plus the full traceback of any error.
+
 ---
 
 ## Local models (Ollama)

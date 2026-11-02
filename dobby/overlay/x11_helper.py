@@ -1120,6 +1120,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         _stdin_watch(overlay)
         overlay.start_hotkeys()
+        from dobby.parentwatch import watch_parent
+
+        watch_parent(lambda: GLib.idle_add(overlay.quit))  # server died, pipe held elsewhere
     overlay.emit({"ready": True, "version": protocol.PROTOCOL_VERSION, "pid": os.getpid()})
     Gtk.main()
     return 0

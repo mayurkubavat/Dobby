@@ -2633,6 +2633,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         _replay(controller, replay, speed)
     else:
         threading.Thread(target=_stdin_loop, args=(controller,), name="stdin", daemon=True).start()
+        from dobby.parentwatch import watch_parent
+
+        watch_parent(lambda: AppHelper.callAfter(controller.quit))  # server died, pipe held elsewhere
     controller.emit({"ready": True, "version": protocol.PROTOCOL_VERSION, "pid": os.getpid()})
     AppHelper.runEventLoop(installInterrupt=True)
     return 0

@@ -6,8 +6,9 @@ macOS Desktop Hardware Abstraction Layer.
   Retina backing scale (usually 2x) and are resized to points, so a pixel in a
   captured image is a point on screen and no caller has to rescale.
 * Input: Quartz CGEvent (mouse, scroll, keyboard, Unicode typing).
-* Windows: CGWindowListCopyWindowInfo, frontmost app via NSWorkspace,
-  activation via NSRunningApplication.
+* Windows: CGWindowListCopyWindowInfo, frontmost app via ``lsappinfo``
+  (NSWorkspace caches it until a run loop turns, which a server never does),
+  activation via NSRunningApplication with an AX raise as fallback, verified.
 
 Needs pyobjc (``pip install -e ".[macos]"``) and these macOS permissions for
 the process that runs the server (Terminal, Claude, Antigravity, ...):
@@ -19,8 +20,9 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from PIL import Image
 
@@ -85,6 +87,31 @@ def _load_appkit():
     return AppKit
 
 
+_LSAPPINFO = "/usr/bin/lsappinfo"
+_PID_RE = re.compile(r'"?pid"?\s*=\s*(\d+)')
+
+# focus_window: how long to wait for macOS to report the target in front, per attempt
+_FOCUS_WAIT_S = 0.5
+_FOCUS_POLL_S = 0.05
+
+
+def _lsappinfo_front_pid() -> Optional[int]:
+    """The frontmost app's pid, asked fresh from the launch services daemon (~10 ms)."""
+    asn = subprocess.run([_LSAPPINFO, "front"], capture_output=True, text=True, timeout=2).stdout.strip()
+    if not asn:
+        return None
+    out = subprocess.run([_LSAPPINFO, "info", "-only", "pid", asn],
+                         capture_output=True, text=True, timeout=2).stdout
+    m = _PID_RE.search(out)
+    return int(m.group(1)) if m else None
+
+
+def _load_ax():
+    import ApplicationServices  # type: ignore
+
+    return ApplicationServices
+
+
 def _screencapture(region: Optional[Tuple[int, int, int, int]]) -> Image.Image:
     fd, path = tempfile.mkstemp(suffix=".png", prefix="dc_cap_")
     os.close(fd)
@@ -107,9 +134,17 @@ def _screencapture(region: Optional[Tuple[int, int, int, int]]) -> Image.Image:
 class MacHAL(IDesktopHAL):
     """macOS HAL in logical points: screencapture + CGEvent + CGWindowList."""
 
-    def __init__(self, quartz: Any = None, appkit: Any = None, capture_fn=None) -> None:
+    def __init__(self, quartz: Any = None, appkit: Any = None, capture_fn=None,
+                 front_pid_fn: Optional[Callable[[], Optional[int]]] = None, ax: Any = None) -> None:
         self.Q = quartz if quartz is not None else _load_quartz()
         self._appkit = appkit
+        # Fresh frontmost lookup. With injected fakes (tests) the fake AppKit answers instead.
+        if front_pid_fn is None and appkit is None and os.path.exists(_LSAPPINFO):
+            front_pid_fn = _lsappinfo_front_pid
+        self._front_pid_fn = front_pid_fn
+        self._ax = ax
+        # Why the last focus_window returned False, for the tool result.
+        self.last_focus_error: Optional[str] = None
         self._capture = capture_fn or _screencapture
         self._is_wayland = False  # diagnostics compatibility
         self.display_server = "Quartz"
@@ -317,6 +352,13 @@ class MacHAL(IDesktopHAL):
     # ------------------------------------------------------------ windows
 
     def _frontmost_pid(self) -> Optional[int]:
+        if self._front_pid_fn is not None:
+            try:
+                pid = self._front_pid_fn()
+                if pid:
+                    return int(pid)
+            except Exception:  # noqa: BLE001 - fall back to NSWorkspace
+                pass
         try:
             app = self.AK.NSWorkspace.sharedWorkspace().frontmostApplication()
             return int(app.processIdentifier()) if app else None
@@ -368,19 +410,75 @@ class MacHAL(IDesktopHAL):
         return None
 
     def focus_window(self, window_id: str) -> bool:
-        """Activates the owning app (window-level raise is done via AX when available)."""
+        """
+        Activates the owning app, then checks that the window really is in front.
+        macOS may refuse activation and still report success, so when the window
+        is not active after a short wait, Dobby raises it through AX
+        (AXFrontmost + AXRaise) and checks again. ``last_focus_error`` says why
+        a False came back.
+        """
+        self.last_focus_error = None
         pid = self.window_pid(window_id)
         if pid is None:
+            self.last_focus_error = f"window {window_id} is not on screen"
             return False
         try:
             app = self.AK.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
             if app is None:
+                self.last_focus_error = f"no running app with pid {pid}"
                 return False
-            ok = bool(app.activateWithOptions_(self.AK.NSApplicationActivateIgnoringOtherApps))
-            self._cooldown()
-            return ok
-        except Exception:
+            app.activateWithOptions_(self.AK.NSApplicationActivateIgnoringOtherApps)
+        except Exception as e:  # noqa: BLE001
+            self.last_focus_error = f"activation failed: {e}"
             return False
+        if self._wait_active(window_id) or (self._ax_raise(pid, window_id) and self._wait_active(window_id)):
+            self._cooldown()
+            return True
+        active = self.get_active_window()
+        self.last_focus_error = (
+            f"macOS did not bring window {window_id} to the front; "
+            f"active is {active.title + ' (' + active.window_id + ')' if active else 'unknown'}"
+        )
+        return False
+
+    def _wait_active(self, window_id: str) -> bool:
+        for _ in range(max(1, int(_FOCUS_WAIT_S / _FOCUS_POLL_S))):
+            active = self.get_active_window()
+            if active is not None and active.window_id == str(window_id):
+                return True
+            time.sleep(_FOCUS_POLL_S)
+        return False
+
+    def _ax_raise(self, pid: int, window_id: str) -> bool:
+        """Fallback raise through the Accessibility API. False if AX is unavailable."""
+        try:
+            ax = self._ax if self._ax is not None else _load_ax()
+            self._ax = ax
+            root = ax.AXUIElementCreateApplication(pid)
+            ax.AXUIElementSetAttributeValue(root, "AXFrontmost", True)
+            target = None
+            bounds = next((w.bbox for w in self.list_windows() if w.window_id == str(window_id)), None)
+            err, wins = ax.AXUIElementCopyAttributeValue(root, "AXWindows", None)
+            for win in (wins or []) if err == 0 else []:
+                if bounds is None or self._ax_frame(ax, win) == (bounds.x, bounds.y, bounds.width, bounds.height):
+                    target = win
+                    break
+            if target is not None:
+                ax.AXUIElementPerformAction(target, "AXRaise")
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+    @staticmethod
+    def _ax_frame(ax: Any, win: Any) -> Optional[Tuple[int, int, int, int]]:
+        try:
+            _, pos = ax.AXUIElementCopyAttributeValue(win, "AXPosition", None)
+            _, size = ax.AXUIElementCopyAttributeValue(win, "AXSize", None)
+            _, p = ax.AXValueGetValue(pos, ax.kAXValueCGPointType, None)
+            _, s = ax.AXValueGetValue(size, ax.kAXValueCGSizeType, None)
+            return int(p.x), int(p.y), int(s.width), int(s.height)
+        except Exception:  # noqa: BLE001
+            return None
 
 
 def build_hal() -> MacHAL:

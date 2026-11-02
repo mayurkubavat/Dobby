@@ -5,6 +5,7 @@ perception with Set-of-Marks, pluggable GroundingEngine (ensemble, semantic, cv,
 input injection, compound autonomous actions, and closed-loop verification.
 """
 
+import logging
 import os
 import sys
 import tempfile
@@ -30,6 +31,32 @@ from dobby.toolset import ToolSetManager, ToolDefinition, OutputMode
 from dobby.control import ControlChanged, adopt_client_name, get_controller
 
 _TOOL_LIST_NOTIFICATIONS: List[str] = []
+
+# One line per tool call (name, duration, outcome) plus tracebacks, in
+# ~/.dobby/logs/server.log. Never stdout: that carries the MCP protocol.
+tool_log = logging.getLogger("dobby.tools")
+SERVER_LOG = os.path.expanduser("~/.dobby/logs/server.log")
+
+
+def setup_server_log(path: str = SERVER_LOG, max_bytes: int = 1_000_000, backups: int = 2) -> Optional[logging.Handler]:
+    """Attach a small rotating file log to the ``dobby`` loggers. Silent if the file can't be opened."""
+    from logging.handlers import RotatingFileHandler
+
+    root = logging.getLogger("dobby")
+    for h in root.handlers:
+        if isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", "") == os.path.abspath(path):
+            return h
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        handler = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8")
+    except OSError:
+        return None
+    handler.setFormatter(logging.Formatter(f"%(asctime)s [{os.getpid()}] %(levelname)s %(name)s: %(message)s"))
+    handler.setLevel(logging.INFO)
+    root.addHandler(handler)
+    if root.level == logging.NOTSET or root.level > logging.INFO:
+        root.setLevel(logging.INFO)
+    return handler
 
 
 def _notify_tools_changed() -> None:
@@ -90,6 +117,7 @@ def _handoff_guard(fn: Any) -> Any:
     def answer(exc: BaseException) -> Dict[str, Any]:
         result = classify(exc)
         if result is None:
+            tool_log.error("%s raised %s: %s", fn.__name__, type(exc).__name__, exc, exc_info=exc)
             raise exc
         if not as_dict:
             raise ToolError(f"[{result['handoff']}] {result['note']} ({result['detail']})") from exc
@@ -136,6 +164,18 @@ class DobbyServer(MCPServer):
         if not toolset_manager.is_tool_active(name):
             raise ToolError(f"Tool '{name}' is outside the active tool profile. Call manage_toolsets to enable it.")
         _adopt_client_name(context)
+        started = time.monotonic()
+        try:
+            result = await self._call_in_scope(name, arguments, context)
+        except BaseException as exc:
+            tool_log.error("%s failed after %.2fs: %s: %s", name, time.monotonic() - started, type(exc).__name__, exc)
+            raise
+        is_error = bool(getattr(result, "is_error", getattr(result, "isError", False)))
+        tool_log.log(logging.ERROR if is_error else logging.INFO, "%s %s %.2fs",
+                     name, "error" if is_error else "ok", time.monotonic() - started)
+        return result
+
+    async def _call_in_scope(self, name, arguments, context):
         ctl = get_controller(create=False)
         if ctl is None or name in _OUTSIDE_LEASE_TOOLS:
             return await super().call_tool(name, arguments, context)
@@ -803,7 +843,11 @@ def focus_window(window_id: str) -> Dict[str, Any]:
     """
     ok = hal.focus_window(window_id)
     _enable_plugin_domain()
-    return {"success": ok, "window_id": window_id}
+    result: Dict[str, Any] = {"success": ok, "window_id": window_id}
+    if not ok:
+        reason = getattr(hal, "last_focus_error", None)
+        result["reason"] = reason if isinstance(reason, str) and reason else "window did not come to the front"
+    return result
 
 
 def _enable_plugin_domain() -> None:
@@ -1915,8 +1959,24 @@ async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> Dict[str, Any
         raise
 
 
+def _exit_orphaned() -> None:
+    """The MCP client is gone: run the atexit cleanup (overlay, agent registry) and exit."""
+    import atexit
+
+    tool_log.info("parent process gone; exiting")
+    try:
+        atexit._run_exitfuncs()
+    finally:
+        os._exit(0)
+
+
 def main():
     """Starts the FastMCP server in standard I/O mode."""
+    setup_server_log()
+    tool_log.info("server start (parent pid %s)", os.getppid())
+    from dobby.parentwatch import watch_parent
+
+    watch_parent(_exit_orphaned)
     if CONFIG.gemma3_warmup_on_start:
         import threading
 

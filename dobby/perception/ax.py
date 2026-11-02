@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 from dobby.config import CONFIG
 from dobby.perception.atspi import INTERACTABLE_ROLES
@@ -59,6 +59,10 @@ PASSTHROUGH_ROLES = {"AXGroup", "AXWebArea", "AXScrollArea", "AXSplitGroup", "AX
 
 DIALOG_SUBROLES = {"AXDialog", "AXSystemDialog", "AXFloatingWindow"}
 
+# Fewer window elements than this (menu bar aside) right after enabling web content
+# means Chromium has not built its tree yet.
+_NEAR_EMPTY = 5
+
 
 class AXInspector:
     """Walks the AX tree of the frontmost app (or apps matching a filter)."""
@@ -70,8 +74,16 @@ class AXInspector:
         max_nodes: int = 4000,
         max_seconds: float = 0.6,
         screen_bounds: Optional[Tuple[int, int, int, int]] = None,
+        front_pid_fn: Optional[Callable[[], Optional[int]]] = None,
     ) -> None:
         self.screen_bounds = screen_bounds
+        # NSWorkspace's frontmost app goes stale in a server (no run loop turns),
+        # so the real thing asks lsappinfo. Injected fakes (tests) answer themselves.
+        if front_pid_fn is None and ax is None and appkit is None:
+            from dobby.hal.macos import _lsappinfo_front_pid
+
+            front_pid_fn = _lsappinfo_front_pid
+        self._front_pid_fn = front_pid_fn
         self.max_nodes = max_nodes
         self.max_seconds = max_seconds
         self._ax = ax
@@ -156,7 +168,16 @@ class AXInspector:
     def _apps(self, app_name_filter: Optional[str]):
         ws = self._appkit.NSWorkspace.sharedWorkspace()
         if not app_name_filter:
-            front = ws.frontmostApplication()
+            front = None
+            if self._front_pid_fn is not None:
+                try:
+                    pid = self._front_pid_fn()
+                    if pid:
+                        front = self._appkit.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+                except Exception:  # noqa: BLE001 - fall back to NSWorkspace
+                    front = None
+            if front is None:
+                front = ws.frontmostApplication()
             return [front] if front is not None else []
         needle = app_name_filter.lower()
         return [
@@ -178,8 +199,6 @@ class AXInspector:
         if screen is None:
             screen = self._main_screen()
 
-        elements: List[UIElement] = []
-        budget = [self.max_nodes]
         apps = []
         settle = False
         for app in self._apps(app_name_filter):
@@ -190,6 +209,22 @@ class AXInspector:
         if settle and CONFIG.ax_web_content_settle_seconds > 0:
             time.sleep(CONFIG.ax_web_content_settle_seconds)
 
+        elements = self._collect(apps, max_depth, filter_interactable, screen)
+        # Chromium builds the web tree lazily after the first enable; a read that
+        # finds only the menu bar and window buttons is retried while it fills in.
+        retry_until = time.monotonic() + CONFIG.ax_web_content_retry_seconds
+        while settle and self._near_empty(elements) and time.monotonic() < retry_until:
+            time.sleep(0.25)
+            elements = self._collect(apps, max_depth, filter_interactable, screen)
+        return elements
+
+    @staticmethod
+    def _near_empty(elements: List[UIElement]) -> bool:
+        return sum(1 for e in elements if e.role != "menu item" and e.role != "menubar") < _NEAR_EMPTY
+
+    def _collect(self, apps, max_depth, filter_interactable, screen) -> List[UIElement]:
+        elements: List[UIElement] = []
+        budget = [self.max_nodes]
         deadline = time.monotonic() + self.max_seconds
         if CONFIG.ax_include_menu_bar and apps:
             # Top-level menu bar items of the first (frontmost) app only: depth 2 stops

@@ -344,6 +344,25 @@ def test_registry_and_pid_cache(tmp_path):
     assert list_agents(tmp_path) == []
 
 
+def test_dead_agent_file_is_pruned(tmp_path):
+    d = tmp_path / "agents"
+    d.mkdir()
+    (d / "999999.json").write_text(json.dumps({"pid": 999999, "name": "ghost"}))
+    assert list_agents(tmp_path) == []
+    assert not (d / "999999.json").exists()
+
+
+def test_agent_whose_file_vanished_registers_again(tmp_path):
+    ctl = Controller(tmp_path, name="Claude", pid=os.getpid())
+    try:
+        (tmp_path / "agents" / f"{os.getpid()}.json").unlink()
+        assert list_agents(tmp_path) == []
+        ctl.tool_scope()  # next tool call
+        assert [a["name"] for a in list_agents(tmp_path)] == ["Claude"]
+    finally:
+        ctl.close()
+
+
 def test_dead_pid_not_listed(tmp_path):
     d = tmp_path / "agents"
     d.mkdir()
