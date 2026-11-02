@@ -592,18 +592,24 @@ def test_modern_agent_colour_name_and_dots(make):
     assert not c.pill.dots_btn.isHidden() and c.pill.dots_btn.image() is not None
 
 
+_IDLE_AGENTS = [{"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
+                {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
+                {"pid": 333, "name": "cursor", "started": 3, "color": "#EC4899"}]
+
+
 def test_modern_idle_dobbys_add_no_dots(make):
-    agents = [{"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
-              {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
-              {"pid": 333, "name": "cursor", "started": 3, "color": "#EC4899"}]
     c, _ = _modern(make)
     c.server_pid = 222
-    c._apply_agents(agents)
+    c._apply_agents(_IDLE_AGENTS)
     assert c.pill.dots_btn.isHidden() and c.agent_dots == []
-    quiet, _ = _modern(make, narrate=False)
-    quiet.server_pid = 222
-    quiet._apply_agents(agents)
-    assert not quiet.pill.dots_btn.isHidden() and len(quiet.agent_dots) == 3
+
+
+# Its own test: two controllers in one test would share the bar lock.
+def test_modern_quiet_look_dots_every_running_dobby(make):
+    c, _ = _modern(make, narrate=False)
+    c.server_pid = 222
+    c._apply_agents(_IDLE_AGENTS)
+    assert not c.pill.dots_btn.isHidden() and len(c.agent_dots) == 3
 
 
 def test_modern_tag_keeps_the_action_until_idle(make):
