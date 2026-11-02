@@ -28,7 +28,8 @@ def make(tmp_path):
     def _make(**cfg):
         out = io.StringIO()
         # The older tests below check the classic bar; modern tests ask for it.
-        base = {"bar_lock": str(tmp_path / "bar.lock"), "style": "classic"}
+        # Plain wording: these check the bar, test_personality checks the voice.
+        base = {"bar_lock": str(tmp_path / "bar.lock"), "style": "classic", "personality": "off"}
         base.update(cfg)
         c = mac_helper.OverlayController(base, out=out, interactive=False)
         c._claim_bar()
