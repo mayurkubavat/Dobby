@@ -37,7 +37,7 @@ def test_run_terminal_command():
     assert "MCP_TEST_OUTPUT" in res["stdout"]
 
 
-def test_take_screenshot_tool():
+def test_take_screenshot_tool(live_screen):
     """Verify take_screenshot tool executes and returns valid payload."""
     try:
         res = server.take_screenshot(mode="raw", include_image=True)

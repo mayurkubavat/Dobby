@@ -164,7 +164,7 @@ def test_self_healing_find_and_click(mock_hal):
     assert res.success is True
 
 
-def test_phase1_mcp_server_tools(mock_hal):
+def test_phase1_mcp_server_tools(mock_hal, live_screen):
     """Verifies capture_window, dismiss_obstructions, and manage_cache MCP tools."""
     # 1. manage_cache stats
     stats = manage_cache(action="stats")

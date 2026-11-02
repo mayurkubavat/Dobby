@@ -162,3 +162,40 @@ def _guard_real_desktop_input():
         yield
     finally:
         mp.undo()
+
+
+# ------------------------------------------------- local model role isolation
+# Model roles resolve env > runtime > ~/.dobby/models.json > CONFIG. A user's
+# real models.json (or DOBBY_MODEL_* in the shell) would point the fake Ollama
+# tests at a model the fake does not serve, so every test starts from defaults.
+@pytest.fixture(autouse=True)
+def _isolate_model_roles(monkeypatch, tmp_path):
+    from dobby import local_models as lm
+
+    for role in lm.ROLES:
+        monkeypatch.delenv(f"DOBBY_MODEL_{role.upper()}", raising=False)
+        lm.set_role(role, None)
+    monkeypatch.setattr(lm, "MODELS_FILE", tmp_path / "models.json")
+    yield
+    for role in lm.ROLES:
+        lm.set_role(role, None)
+
+# ------------------------------------------------- real-screen reads
+@pytest.fixture
+def live_screen():
+    """For tests that read the real screen through the server (never input).
+
+    Skips with the reason when this machine has no screen Dobby can capture:
+    CI or a cloud container without DISPLAY, Wayland without XWayland, or
+    macOS without Screen Recording permission. Elsewhere the test runs.
+    """
+    from subprocess import CalledProcessError
+
+    from dobby.hal.errors import CapabilityUnavailable
+
+    server = pytest.importorskip("dobby.server")
+    try:
+        server.hal.capture_screen()
+    except (CapabilityUnavailable, CalledProcessError, OSError) as exc:
+        pytest.skip(f"no screen to capture on this machine: {str(exc)[:120]}")
+    return server

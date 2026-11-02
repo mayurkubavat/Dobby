@@ -65,7 +65,7 @@ def test_cv_detector_scaling_inversion():
     assert 120 <= cy <= 160
 
 
-def test_server_take_screenshot_annotated_cv():
+def test_server_take_screenshot_annotated_cv(live_screen):
     """Verify take_screenshot with mode='annotated_cv' works on live desktop."""
     from subprocess import CalledProcessError
 

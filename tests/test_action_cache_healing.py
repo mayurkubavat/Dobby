@@ -339,7 +339,7 @@ def test_controller_find_and_click_healed():
     assert (270, 228, "left", 1) in mock_hal.clicks
 
 
-def test_manage_cache_verify_and_heal():
+def test_manage_cache_verify_and_heal(live_screen):
     """Validates manage_cache tool with verify, heal, and stats actions."""
     from dobby.server import manage_cache, controller
 

@@ -11,15 +11,7 @@ from dobby.gemma.client import GemmaClient
 from dobby.model_bench import bench_model, markdown, pick_text_cases
 
 
-@pytest.fixture(autouse=True)
-def clean(monkeypatch, tmp_path):
-    for r in lm.ROLES:
-        monkeypatch.delenv(f"DOBBY_MODEL_{r.upper()}", raising=False)
-        lm.set_role(r, None)
-    monkeypatch.setattr(lm, "MODELS_FILE", tmp_path / "models.json")
-    yield
-    for r in lm.ROLES:
-        lm.set_role(r, None)
+# conftest._isolate_model_roles gives each test clean roles and tmp_path/models.json.
 
 
 def test_defaults_follow_legacy_gemma_settings():
@@ -102,3 +94,12 @@ def test_bench_scores_confident_mistakes_and_none_answers():
 def test_bench_check_task_runs_on_images():
     res = bench_model(GemmaClient(transport=Oracle()), "good:1", tasks=("check",))["tasks"][0]
     assert res["n"] == 11 and res["errors"] == 0 and res["correct"] >= 5  # always-yes gets the yes cases
+
+
+def test_tests_never_read_the_developers_own_model_file(monkeypatch):
+    """Guard for conftest._isolate_model_roles: your ~/.dobby/models.json must not leak in."""
+    from pathlib import Path
+    import os
+
+    assert lm.MODELS_FILE != Path(os.path.expanduser("~/.dobby/models.json"))
+    assert all(lm.source_of(r) == "default" for r in lm.ROLES)
