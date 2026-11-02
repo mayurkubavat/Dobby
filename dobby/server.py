@@ -1921,6 +1921,11 @@ def main():
         import threading
 
         threading.Thread(target=_warmup_gemma, name="gemma-warmup", daemon=True).start()
+    from dobby.personality import startup_line
+
+    greeting = startup_line()
+    if greeting:
+        print(greeting, file=sys.stderr, flush=True)  # stdout carries the MCP protocol
     mcp_server.run()
 
 

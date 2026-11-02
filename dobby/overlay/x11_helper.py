@@ -49,6 +49,7 @@ import cairo  # noqa: E402
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import geometry, protocol, style  # noqa: E402
+from ..personality import Voice  # noqa: E402
 from .barlock import BAR_LOCK, BarOwner, mark_waiting, others_waiting, waiting_dir  # noqa: E402
 from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
 
@@ -284,6 +285,7 @@ class X11Overlay:
         self.state = "idle"
         self.style = style.normalize_style(self.cfg.get("style"))
         self.narrate = self.style == "modern" and bool(self.cfg.get("narrate", True))
+        self.voice = Voice.from_config(self.cfg)  # Dobby's words (DOBBY_PERSONALITY)
         self.server_pid = int(os.environ.get("DOBBY_SERVER_PID", "0") or 0)
         self.agents_next = 0.0
         # The task in progress, for the bar's live step and timer.
@@ -614,6 +616,8 @@ class X11Overlay:
         rgb = {"ok": _rgb(self.cfg["color"]), "caution": _rgb(self.cfg["caution_color"]),
                "danger": _rgb(self.cfg["danger_color"])}.get(color) or self._color()
         if self.style == "classic":
+            view = self.voice.dress(view, str(self.cfg["label"]), self.task_steps)
+            mode, text, primary, secondary, color, dot_alpha = view
             self.bar.show(mode, text, primary, secondary, rgb, dot_alpha=dot_alpha)
             return
         now = time.monotonic()
@@ -622,7 +626,7 @@ class X11Overlay:
                               steps=self.task_steps,
                               elapsed=(now - self.task_started) if self.task_started else 0.0,
                               turbo=bool(self.cfg.get("turbo")), thinking=self.state == "thinking",
-                              narrate=self.narrate)
+                              narrate=self.narrate, voice=self.voice)
         self.bar.show_spec(spec, rgb)
 
     def _refresh_agents(self) -> None:
@@ -667,6 +671,8 @@ class X11Overlay:
             if second != self.bar_second:  # the bar's timer
                 self.bar_second = second
                 self._refresh_bar()
+        if self.voice.refresh_due():
+            self._refresh_bar()  # the "Dobby did it!" cheer is over
         if self.bar is not None and not self.bar_owner.owned and now >= self.bar_owner_retry:
             self.bar_owner_retry = now + 2.0
             if self.bar_owner.try_acquire():

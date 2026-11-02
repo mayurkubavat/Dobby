@@ -60,6 +60,7 @@ import contextlib
 from .client import NullOverlay, OverlayClient, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
 from .hal import OverlayHAL, unwrap
 from .protocol import OVERLAY_WINDOW_TITLE, PROTOCOL_VERSION
+from ..personality import normalize_level
 
 __all__ = [
     "NullOverlay", "OverlayClient", "OverlayHAL", "OverlayStopped", "OverlayInterrupted",
@@ -99,6 +100,12 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         cfg["agent_colors"] = False
     if env.get("DOBBY_OVERLAY_NARRATE", "").strip().lower() in _FALSE:
         cfg["narrate"] = False
+    if env.get("DOBBY_PERSONALITY", "").strip():
+        cfg["personality"] = normalize_level(env["DOBBY_PERSONALITY"])
+    if env.get("DOBBY_USER_NAME", "").strip():
+        cfg["user_name"] = env["DOBBY_USER_NAME"].strip()
+    if env.get("DOBBY_PERSONALITY_LINES", "").strip():
+        cfg["personality_lines"] = env["DOBBY_PERSONALITY_LINES"].strip()
     if env.get("DOBBY_OVERLAY_LABEL"):
         cfg["label"] = env["DOBBY_OVERLAY_LABEL"]
     elif env.get("DOBBY_AGENT_NAME", "").strip():

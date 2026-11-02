@@ -128,6 +128,7 @@ from Quartz import (
 )
 
 from . import geometry, protocol, style
+from ..personality import Voice
 
 _kCGEventSourceUserData = 42
 DOBBY_EVENT_TAG = 0x444F4242  # same value as dobby.hal.macos.DOBBY_EVENT_TAG
@@ -1221,6 +1222,7 @@ class OverlayController:
         self.rgb = self.colors["ok"]
         self.style = style.normalize_style(self.cfg.get("style"))
         self.narrate = self.style == "modern" and bool(self.cfg.get("narrate", True))
+        self.voice = Voice.from_config(self.cfg)  # Dobby's words (DOBBY_PERSONALITY)
         self.ok_hex = str(self.cfg["color"])
         self.os_major = _os_major()
         self.reduce_motion = _reduce_motion()
@@ -1771,6 +1773,8 @@ class OverlayController:
             if second != self.bar_second:  # the bar's timer
                 self.bar_second = second
                 self._refresh_pill()
+        if self.voice.refresh_due():
+            self._refresh_pill()  # the "Dobby did it!" cheer is over
         if self.interactive and not self.bar_owner.owned and now >= self.bar_owner_retry:
             self.bar_owner_retry = now + 2.0
             self._claim_bar()
@@ -2000,6 +2004,7 @@ class OverlayController:
                 step=self.current_step, steps=self.task_steps,
                 elapsed=(now - self.task_started) if self.task_started else 0.0,
                 turbo=self.turbo, thinking=self.cursor_state == "thinking", narrate=self.narrate,
+                voice=self.voice,
             )
             self.pill.show_spec(spec, rgb, dots=self.agent_dots,
                                 tip=bar_tip(mode, self.ai_waiting > 0, self.wait_reason))

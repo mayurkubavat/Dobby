@@ -244,6 +244,13 @@ it. Settings go in the client's `env`:
 | `DOBBY_OVERLAY_TURBO=1` | No Allow/Deny prompts and no pause on take-over (Stop and Pause still work) |
 | `DOBBY_OVERLAY_COLOR=#7c5cff` | Fix the colour (otherwise each Dobby gets its own) |
 | `DOBBY_OVERLAY_CAPTURE_VISIBLE=0` | Hide the overlay from your screen recordings too |
+| `DOBBY_PERSONALITY=elf` | Dobby's house-elf voice on the bar: rotating lines ("Dobby is on it!", "Dobby is thinking hard…"), a cheer when a task ends, rare surprises. `subtle` (default) uses a few fixed words; `off` keeps the plain text |
+| `DOBBY_USER_NAME=Sam` | Dobby calls you by name instead of "sir" |
+| `DOBBY_PERSONALITY_LINES=~/dobby-lines.json` | Your own lines: `{"working": ["Dobby is on it!"], "done": [...]}` replaces that moment's lines |
+
+Dobby's lines only reach the bar and the startup log. What the AI reads back
+from tools, the pointer tag, Allow/Deny prompts and "You're in control" stay
+plain, and a new line shows at most every 20 seconds.
 
 On Linux the trail of recent clicks, the scan sweep and take-over detection
 are not drawn yet.

@@ -17,7 +17,10 @@ trail marks, and Dobby dots only while two or more Dobbys are busy.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+
+if TYPE_CHECKING:  # pragma: no cover
+    from dobby.personality import Voice
 
 Rect = Tuple[float, float, float, float]  # x, y, w, h (global, top-left origin)
 Point = Tuple[float, float]
@@ -92,18 +95,20 @@ def _short(text: str, limit: int) -> str:
 
 
 def working_text(step: str, steps: int, elapsed: float, turbo: bool = False, limit: int = 38,
-                 label: Optional[str] = None, thinking: bool = False) -> str:
+                 label: Optional[str] = None, thinking: bool = False, lead: Optional[str] = None) -> str:
     """What the bar says while Dobby works: "Click ‘Send’ · step 7 · 0:42".
 
     With ``label`` (narration) it starts with a sentence:
     "Dobby is working · Click ‘Send’ · step 7 · 0:42", or "Dobby is thinking…".
+    ``lead`` (Dobby's personality) replaces that sentence, or "Working" when
+    there is no step yet; the step, its count and the timer always stay.
     """
     if label:
-        parts = [f"{label} is thinking…" if thinking else f"{label} is working"]
+        parts = [lead or (f"{label} is thinking…" if thinking else f"{label} is working")]
         if step:
             parts.append(_short(step, limit))
     else:
-        parts = [_short(step, limit) if step else "Working"]
+        parts = [_short(step, limit) if step else (lead or "Working")]
     if steps > 0:
         parts.append(f"step {steps}")
     parts.append(fmt_elapsed(elapsed))
@@ -152,7 +157,7 @@ def _action_button(key: str, title: str, style: str) -> Button:
 
 def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = False, label: str = "Dobby",
              step: str = "", steps: int = 0, elapsed: float = 0.0, turbo: bool = False,
-             thinking: bool = False, narrate: bool = True) -> Optional[BarSpec]:
+             thinking: bool = False, narrate: bool = True, voice: Optional["Voice"] = None) -> Optional[BarSpec]:
     """Turn ``menu.bar_view``'s answer into what the bar draws.
 
     Modern: the sleeping bar is a small capsule (dot + name) that grows on
@@ -161,10 +166,15 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
     Classic: exactly the old text-button bar.
     ``narrate``: the compact bar says "Dobby is sleeping" and the working
     bar starts with "Dobby is working" / "Dobby is thinking…".
+    ``voice`` (``dobby.personality``): Dobby's own words for the sleeping,
+    working, thinking, paused and stopped bars, and a cheer when a task ends.
     """
+    if voice is not None:
+        view = voice.dress(view, label, steps)
     if view is None:
         return None
     mode, text, primary, secondary, color, dot_alpha = view
+    talk = voice is not None and voice.on
     if style == "classic":
         buttons = (_action_button("primary", primary, style), _action_button("secondary", secondary, style),
                    Button("hide", "–", None, _HIDE.tip), Button("menu", "▾", "chevron.down", _MENU.tip))
@@ -174,6 +184,12 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
         waiting = "click to wake" in text
         if not hovered:
             name = f"{label} is sleeping" if narrate else label
+            if talk:
+                cheer = voice.done(label)
+                if cheer:
+                    name = cheer
+                elif narrate:
+                    name = voice.line("sleeping", name, label, rotate=False)
             short = f"{name} · click to wake" if waiting else name
             return BarSpec(mode, short, (), color, 1.0 if waiting else dot_alpha, compact=True,
                            tip="Click to wake Dobby")
@@ -184,10 +200,17 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
     if mode == "awake":
         return BarSpec(mode, text, (_HIDE, _MENU), color, dot_alpha, tip="Click to put Dobby to sleep")
     if mode == "working":
+        lead = None
+        if talk:
+            lead = voice.egg(steps=steps, elapsed=elapsed, name=label)
+            if lead is None and narrate and thinking:
+                lead = voice.line("thinking", f"{label} is thinking…", label)
+            elif lead is None:
+                lead = voice.line("working", f"{label} is working" if narrate else "Working", label)
         if narrate:
-            live = working_text(step, steps, elapsed, turbo, limit=32, label=label, thinking=thinking)
+            live = working_text(step, steps, elapsed, turbo, limit=32, label=label, thinking=thinking, lead=lead)
         else:
-            live = working_text(step, steps, elapsed, turbo)
+            live = working_text(step, steps, elapsed, turbo, lead=lead)
         buttons = (_action_button("primary", primary, style), _action_button("secondary", secondary, style),
                    _HIDE, _MENU)
         return BarSpec(mode, live, buttons, color, dot_alpha, shimmer=thinking)

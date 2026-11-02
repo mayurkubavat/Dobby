@@ -87,6 +87,11 @@ def main() -> int:
         report["gemma_stats"] = g.diagnostics()
 
     print(json.dumps(report, indent=2, default=str))
+    from dobby.personality import startup_line
+
+    greeting = startup_line()
+    if greeting:
+        print(greeting, file=sys.stderr)
     return 0
 
 
