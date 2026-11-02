@@ -60,11 +60,67 @@ def _notify_tools_changed() -> None:
 _OUTSIDE_LEASE_TOOLS = frozenset({"wait_for_wake"})
 
 
+def _returns_dict(fn: Any) -> bool:
+    import typing
+
+    try:
+        ret = typing.get_type_hints(fn).get("return")
+    except Exception:  # noqa: BLE001
+        ret = getattr(fn, "__annotations__", {}).get("return")
+    origin = typing.get_origin(ret) or ret
+    return origin in (dict, Dict)
+
+
+def _handoff_guard(fn: Any) -> Any:
+    """Report Stop / Deny / take-over / pause as a clear result, not a failure.
+
+    Every tool goes through this, so whichever tool was running when the
+    person stepped in, the AI gets ``{"handoff": "stopped" | "denied" |
+    "interrupted" | "paused" | ...}`` with what to do next (see
+    ``dobby.handoff``). Tools that do not return a dict raise a ToolError
+    with the same advice instead.
+    """
+    import functools
+    import inspect
+
+    from dobby.handoff import classify
+
+    as_dict = _returns_dict(fn)
+
+    def answer(exc: BaseException) -> Dict[str, Any]:
+        result = classify(exc)
+        if result is None:
+            raise exc
+        if not as_dict:
+            raise ToolError(f"[{result['handoff']}] {result['note']} ({result['detail']})") from exc
+        return result
+
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def guarded_async(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await fn(*args, **kwargs)
+            except Exception as exc:  # noqa: BLE001 - re-raised unless a handoff
+                return answer(exc)
+        return guarded_async
+
+    @functools.wraps(fn)
+    def guarded(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - re-raised unless a handoff
+            return answer(exc)
+    return guarded
+
+
 class DobbyServer(MCPServer):
     """MCP server whose tools/list follows the active domain profile."""
 
     active_session: Any = None
     active_loop: Any = None
+
+    def add_tool(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        return super().add_tool(_handoff_guard(fn), *args, **kwargs)
 
     async def list_tools(self):
         tools = await super().list_tools()

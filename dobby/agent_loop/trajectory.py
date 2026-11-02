@@ -223,6 +223,10 @@ class TrajectoryEngine:
                 message = error
 
         except Exception as e:
+            from dobby.handoff import is_handoff
+
+            if is_handoff(e):
+                raise  # Stop / Deny / take-over ends the trajectory; the AI must see it
             success = False
             error = str(e)
             message = f"Step exception: {e}"

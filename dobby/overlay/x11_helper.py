@@ -50,7 +50,7 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import geometry, protocol, style  # noqa: E402
 from .barlock import BAR_LOCK, BarOwner, mark_waiting, others_waiting, waiting_dir  # noqa: E402
-from .menu import bar_click, bar_view, label_click  # noqa: E402
+from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "color": "#7C5CFF",
@@ -64,6 +64,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "intent_ms": 1600,
     "turbo": False,
     "active_secs": 8.0,   # "working" lasts this long after an action
+    "linger_secs": 20.0,  # then "thinking" stops and the pointer is put away
     "awake_secs": 120.0,  # woken from the bar: stays awake this long without a task
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
     "pill": "always",     # control bar: "always", "auto" (only while working) or "off"
@@ -640,6 +641,22 @@ class X11Overlay:
             self._apply_colors()
             self._refresh_bar()
 
+    def _put_away_when_done(self, now: float) -> None:
+        """The task is over: stop "thinking", hide the agent pointer and tag."""
+        reset_thinking, hide_pointer = idle_cleanup(
+            since_action=now - self.last_action, active_secs=float(self.cfg["active_secs"]),
+            linger_secs=float(self.cfg.get("linger_secs", 20.0)), cursor_state=self.state,
+            pointer_visible=bool(self.pointer.get_visible()), awake=self._awake(),
+            halted=self.paused, confirming=self.pending_confirm is not None)
+        if reset_thinking:
+            self.state = "idle"
+            self._layout_tag()
+            self._refresh_bar()
+        if hide_pointer:
+            self.pointer.hide()
+            self.tag.hide()
+            self.cursor = None
+
     def _bar_tick(self) -> bool:
         now = time.monotonic()
         if now >= self.agents_next:
@@ -656,6 +673,7 @@ class X11Overlay:
                 self._refresh_bar()
         if self.awake_until and now >= self.awake_until:
             self.sleep()
+        self._put_away_when_done(now)
         if self.bar_owner.owned and now >= self.others_checked:
             self.others_checked = now + 1.0
             others = not self.ai_waiting and others_waiting(self.wait_dir, os.getpid())
@@ -879,7 +897,8 @@ class X11Overlay:
             self.cursor = None
             self.ack(msg_id)
         elif op == "intent":
-            self._mark_active()
+            if msg["text"]:  # clearing the tag after a step is not a new step
+                self._mark_active()
             self._set_intent(msg["text"], msg.get("ms"))
             self.ack(msg_id)
         elif op == "target.box":

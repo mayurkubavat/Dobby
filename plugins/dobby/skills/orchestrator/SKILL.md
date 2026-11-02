@@ -73,3 +73,9 @@ End with what was done, the verdict and tier of each critical step, anything lef
 ## 7. Staying available
 
 If the user wants Dobby to stay available after a task, do not end the turn: report, then call `wait_for_wake(timeout_s, reason)`. The bar reads "Dobby is sleeping · click to wake" and does not hold desktop control. When it returns `woken`, ask for or continue with the user's next instruction and look at the screen again before acting; on `stopped`, stop; on `timed_out`, call it again or end the turn; on `unavailable` (overlay off), end the turn.
+
+When the person steps in, a tool returns `handoff` instead of a result. Follow its `note`:
+- `stopped`: end the task now and say where you stopped. Do not retry or continue unless they ask again.
+- `denied`: do not do that step again or reach the same result another way; explain and ask.
+- `interrupted` / `control_changed`: the step was skipped. Look at the screen again, then decide; never replay old coordinates.
+- `paused`: call `wait_for_wake` (Resume or a click on the bar hands back), or end the turn and ask.

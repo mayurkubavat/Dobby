@@ -132,7 +132,8 @@ from . import geometry, protocol, style
 _kCGEventSourceUserData = 42
 DOBBY_EVENT_TAG = 0x444F4242  # same value as dobby.hal.macos.DOBBY_EVENT_TAG
 from .barlock import BAR_LOCK, BarOwner as _BarOwner, mark_waiting, others_waiting, waiting_dir
-from .menu import bar_click, bar_tip, bar_view, label_click, menu_entries, picker_groups, status_of
+from .menu import (bar_click, bar_tip, bar_view, idle_cleanup, label_click, menu_entries, picker_groups,
+                   status_of, takes_over)
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "color": "#7C5CFF",  # Dobby violet; deliberately not Claude's orange
@@ -153,6 +154,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "takeover_resume": "auto",  # or "manual"
     "idle_secs": 2.0,
     "active_secs": 8.0,  # "working" lasts this long after an action
+    # After active_secs + this of quiet the task is over: the "thinking"
+    # sweep stops and the agent pointer and its tag are put away.
+    "linger_secs": 20.0,
     "awake_secs": 120.0,  # woken from the bar: stays awake this long without a task
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
     # Control bar at the top: "always" (stays while Dobby runs; the user can
@@ -198,6 +202,9 @@ _CHIP_FONT = 11.5
 
 _KEY_ESC, _KEY_P, _KEY_H = 53, 35, 4
 _HOTKEY_MODS = NSEventModifierFlagControl | NSEventModifierFlagOption
+# NSEventType -> kind for menu.takes_over: 1/3 mouse down, 6 left drag,
+# 22 scroll wheel, 5 mouse moved, 10 key down.
+_INPUT_KIND = {1: "click", 3: "click", 6: "drag", 22: "scroll", 5: "move", 10: "key"}
 
 
 def _hex_rgb(value: str) -> Tuple[float, float, float]:
@@ -1780,6 +1787,7 @@ class OverlayController:
             self._refresh_pill()
         if self.awake_until and now >= self.awake_until:
             self.sleep()  # woken, but no task came
+        self._put_away_when_done(now)
         if self.bar_owner.owned and now >= self.others_checked:
             self.others_checked = now + 1.0
             others = not self.ai_waiting and others_waiting(self.wait_dir, os.getpid())
@@ -1793,6 +1801,22 @@ class OverlayController:
                 self.pill.mode = "ready"
                 self._refresh_pill()
         self._track_tick()
+
+    def _put_away_when_done(self, now: float) -> None:
+        """The task is over: stop the thinking sweep, hide the agent pointer."""
+        reset_thinking, hide_pointer = idle_cleanup(
+            since_action=now - self.last_action, active_secs=float(self.cfg["active_secs"]),
+            linger_secs=float(self.cfg["linger_secs"]), cursor_state=self.cursor_state,
+            pointer_visible=self.pointer_visible, awake=self._awake(),
+            halted=self.paused or self.takeover, confirming=self.pending_confirm is not None)
+        if reset_thinking:
+            self.cursor_state = "idle"
+            self._refresh_tag()
+            self._refresh_pill()  # also refreshes the glow
+        if hide_pointer:
+            self._set_pointer_visible(False)
+            self.cursor = None  # the next task glides in from the real mouse
+            self._clear_box()
 
     def _track_tick(self) -> None:
         if self.track_wid is None and self.track_pid is None:
@@ -2115,20 +2139,19 @@ class OverlayController:
                 if flags == _HOTKEY_MODS and int(event.keyCode()) == _KEY_H:
                     self.set_pill_hidden(not self.pill_user_hidden)
                     return
-            if etype == 5:  # mouse moved: ignore tiny jitter
-                if abs(float(event.deltaX())) + abs(float(event.deltaY())) < 2.0:
-                    return
-            self._on_user_input()
+            self._on_user_input(_INPUT_KIND.get(etype, "key"))
         except Exception as exc:  # noqa: BLE001
             sys.stderr.write(f"dobby.overlay: input monitor: {exc}\n")
 
-    def _on_user_input(self) -> None:
+    def _on_user_input(self, kind: str = "click") -> None:
         now = time.monotonic()
         working = now - self.last_action <= float(self.cfg["active_secs"])
-        if not (working or self.paused or self.takeover):
-            return  # Dobby idle: the user is just using their Mac
-        if self.turbo and not self.paused:
-            return  # Turbo: only Stop / Pause halt Dobby
+        if self.takeover and kind == "move":
+            self.last_user_input = now  # still busy: keep the take-over going
+            return
+        if not takes_over(kind, working=working, paused=self.paused, takeover=self.takeover,
+                          turbo=self.turbo, confirming=self.pending_confirm is not None):
+            return  # idle, Turbo, reaching for the bar / Allow-Deny, or just moving the mouse
         self.last_user_input = now
         if self.paused:
             if not self.takeover_reported:
@@ -2363,8 +2386,9 @@ class OverlayController:
             self.cursor = None
             self.ack(msg_id)
         elif op == "intent":
-            self._mark_active()
             text = msg["text"]
+            if text:  # clearing the tag after a step is not a new step
+                self._mark_active()
             self._set_intent(text, msg.get("ms"))
             if text:
                 self._add_step(_short(text, 60))

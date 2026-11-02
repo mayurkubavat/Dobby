@@ -174,3 +174,46 @@ def bar_tip(mode: str, ai_waiting: bool = False, reason: str = "") -> Optional[s
 def label_click(mode: str) -> str:
     """Action for a click on the bar itself, away from its buttons."""
     return {"ready": "wake", "awake": "sleep"}.get(mode, "none")
+
+
+# ----------------------------------------------------- person vs Dobby
+# Kinds of real input seen by a helper's global monitor.
+INPUT_KINDS = ("move", "click", "drag", "scroll", "key")
+
+
+def takes_over(kind: str, *, working: bool, paused: bool, takeover: bool, turbo: bool,
+               confirming: bool) -> bool:
+    """Does this real input from the person count as taking over from Dobby?
+
+    * Never while an Allow/Deny prompt is up: the person is reaching for it.
+    * Never for a bare pointer move: moving the mouse to the bar's Pause or
+      Stop (or anywhere) must not turn Pause into "Resume now" under the
+      pointer, nor make Dobby skip its next step. Clicks, drags, scrolls and
+      keys change what is on screen, so they do count.
+    * Never while Dobby idles (the person is just using their computer) or
+      in Turbo (only Stop / Pause halt Dobby), unless it is paused.
+    """
+    if confirming or kind == "move":
+        return False
+    if not (working or paused or takeover):
+        return False
+    if turbo and not paused:
+        return False
+    return True
+
+
+def idle_cleanup(*, since_action: float, active_secs: float, linger_secs: float, cursor_state: str,
+                 pointer_visible: bool, awake: bool, halted: bool, confirming: bool) -> Tuple[bool, bool]:
+    """What to put away once Dobby has stopped acting: ``(reset_thinking, hide_pointer)``.
+
+    ``since_action`` is the seconds since Dobby's last step. After
+    ``active_secs + linger_secs`` of quiet the task is over as far as the
+    screen is concerned: the "thinking" sweep stops (it was set by the last
+    screen read and nothing else clears it) and the agent pointer and its
+    tag go away. Nothing is put away while the person is asked Allow/Deny,
+    while Dobby is paused or taken over, or while it is awake for a handoff.
+    """
+    if confirming or halted or awake:
+        return False, False
+    over = since_action > active_secs + max(0.0, linger_secs)
+    return over and cursor_state == "thinking", over and pointer_visible

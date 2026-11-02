@@ -692,3 +692,57 @@ def test_modern_one_step_per_action(make):
 def test_modern_dot_sits_above_glass(make):
     c, _ = _modern(make)
     assert c.pill.dot.superlayer() is c.pill.tint.layer()
+
+
+# ------------------------------------------- handoff: person vs Dobby
+def test_reaching_for_pause_does_not_turn_it_into_resume(make):
+    c, out = make()
+    c.handle({"op": "intent", "text": "Click ‘Send’"})  # working
+    c._on_user_input("move")  # the pointer travels to the bar
+    assert not c.takeover and c.pill.mode == "working"
+    assert "user_input" not in _events(out)
+    c.on_pill("primary")
+    assert c.paused  # the click paused, as the person meant
+
+
+def test_moving_to_allow_deny_does_not_skip_the_next_step(make):
+    c, out = make()
+    c.handle({"op": "confirm", "id": 7, "text": "Allow Dobby to quit?", "secs": 30})
+    for kind in ("move", "click", "key"):
+        c._on_user_input(kind)
+    assert not c.takeover and "user_input" not in _events(out)
+    c.on_pill("primary")  # Allow
+    assert {"ack": 7, "ok": True} in [{k: m[k] for k in ("ack", "ok")} for m in _lines(out) if "ack" in m]
+
+
+def test_a_click_elsewhere_while_working_is_a_take_over(make):
+    c, out = make()
+    c.handle({"op": "intent", "text": "Click ‘Send’"})
+    c._on_user_input("click")
+    assert c.takeover and "user_input" in _events(out)
+
+
+def test_clearing_the_tag_is_not_a_new_step(make):
+    c, _ = make()
+    c.last_action = 0.0
+    c.handle({"op": "intent", "text": ""})
+    assert c.last_action == 0.0
+
+
+def test_finished_task_stops_thinking_and_hides_the_pointer(make):
+    c, _ = make(style="modern")
+    c.handle({"op": "cursor.move", "x": 50, "y": 50, "ms": 0})
+    c.handle({"op": "cursor.state", "state": "thinking"})  # the AI's last look
+    assert c.pointer_visible and c.cursor_state == "thinking"
+    c.last_action -= 60
+    c.on_tick()
+    assert c.cursor_state == "idle" and not c.pointer_visible and c.cursor is None
+
+
+def test_pointer_stays_while_the_ai_thinks_between_steps(make):
+    c, _ = make(style="modern")
+    c.handle({"op": "cursor.move", "x": 50, "y": 50, "ms": 0})
+    c.handle({"op": "cursor.state", "state": "thinking"})
+    c.last_action -= 12  # longer than "working", shorter than the linger
+    c.on_tick()
+    assert c.pointer_visible and c.cursor_state == "thinking"

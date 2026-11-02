@@ -42,6 +42,25 @@ class OverlayInterrupted(OverlayStopped):
     """
 
 
+class OverlayDenied(OverlayStopped):
+    """The user answered Deny (or nothing) to an Allow/Deny prompt.
+
+    The AI must not do the step another way; it should ask the user.
+    """
+
+
+class OverlayPaused(OverlayStopped):
+    """Dobby stayed paused (or taken over) longer than a step may wait.
+
+    The user has not said stop: the AI can wait with ``wait_for_wake``.
+    """
+
+
+# A Stop older than this when the next action comes was pressed for a task
+# that already ended (or while Dobby idled); it must not kill the next task.
+STOP_TTL_S = 120.0
+
+
 class NullOverlay:
     """No-op overlay. Every method returns quickly and reports success."""
 
@@ -119,6 +138,7 @@ class OverlayClient(NullOverlay):
         startup_timeout: float = 8.0,
         log_path: Optional[Path] = None,
         track_dir: Optional[Path] = None,
+        stop_ttl: float = STOP_TTL_S,
     ) -> None:
         self.cmd = cmd or [sys.executable, "-m", "dobby.overlay"]
         self.config = dict(config or {})
@@ -139,12 +159,15 @@ class OverlayClient(NullOverlay):
         # Control state driven by helper events.
         self._cond = threading.Condition()
         self._stop_requested = False
+        self._stop_at = 0.0  # monotonic time of the pending Stop
+        self.stop_ttl = stop_ttl
         self._paused = False
         self._user_active = False
         self._user_input_seen = False
         self.awake = False
         self._wakes = 0  # "wake" / "stop" events seen, for wait_for_wake
         self._stops = 0
+        self._resumes = 0
         self._wake_callbacks: List[Callable[[], None]] = []
         atexit.register(self.close)
 
@@ -273,10 +296,12 @@ class OverlayClient(NullOverlay):
             if name == "stop":
                 self._stops += 1
                 self._stop_requested = True
+                self._stop_at = time.monotonic()
                 self._paused = False
             elif name == "pause":
                 self._paused = True
             elif name == "resume":
+                self._resumes += 1
                 self._paused = False
             elif name == "user_input":
                 self._user_active = True
@@ -352,6 +377,10 @@ class OverlayClient(NullOverlay):
         deadline = time.monotonic() + max_wait
         shown_wait = False
         with self._cond:
+            if self._stop_requested and time.monotonic() - self._stop_at > self.stop_ttl:
+                # Pressed long before this action: it ended an earlier task.
+                log.info("overlay: ignoring a Stop pressed %.0f s ago", time.monotonic() - self._stop_at)
+                self._stop_requested = False
             while True:
                 if self._stop_requested:
                     self._stop_requested = False
@@ -369,7 +398,7 @@ class OverlayClient(NullOverlay):
                     continue
                 left = deadline - time.monotonic()
                 if left <= 0:
-                    raise OverlayStopped("Dobby stayed paused too long; stopping")
+                    raise OverlayPaused("Dobby stayed paused too long; this step was not done")
                 self._cond.wait(min(left, 0.25))
             interrupted = self._user_input_seen
             self._user_input_seen = False
@@ -393,7 +422,8 @@ class OverlayClient(NullOverlay):
         * Only a wake or Stop that arrives during the wait counts.
         * A Stop pending from before (pressed on the idle bar) is reported
           at once and consumed, like a Stop is reported by one checkpoint.
-        * Pause while waiting changes nothing. A wake ends a pause or
+        * Pause while waiting changes nothing; but when Dobby was already
+          paused as the wait began, Resume counts as a wake. A wake ends a pause or
           take-over (the helper sends "resume" / "user_idle" first), and
           clears the take-over flag here, so the AI's first step after the
           wake is not skipped as interrupted: it is told to look again anyway.
@@ -403,11 +433,15 @@ class OverlayClient(NullOverlay):
         if not self._ensure_started():
             return {**result, "unavailable": True}
         with self._cond:
-            if self._stop_requested:
+            if self._stop_requested and time.monotonic() - self._stop_at <= self.stop_ttl:
                 self._stop_requested = False
                 self._user_input_seen = False
                 return {**result, "stopped": True}
-            wakes, stops = self._wakes, self._stops
+            self._stop_requested = False  # a stale Stop ended an earlier task
+            wakes, stops, resumes = self._wakes, self._stops, self._resumes
+            # Paused before the AI began to wait (it was told "paused"): the
+            # person's Resume is the hand-back, as much as a click on the bar.
+            resume_wakes = self._paused
         if not self._send("sleep.wait", reason=reason or None):
             return {**result, "unavailable": True}
         deadline = t0 + max(0.0, float(timeout_s))
@@ -419,7 +453,7 @@ class OverlayClient(NullOverlay):
                         self._user_input_seen = False
                         result["stopped"] = True
                         break
-                    if self._wakes != wakes:
+                    if self._wakes != wakes or (resume_wakes and self._resumes != resumes):
                         self._paused = self._user_active = self._user_input_seen = False
                         result["woken"] = True
                         break

@@ -212,8 +212,16 @@ When Dobby acts you see it:
   shows one coloured dot per Dobby ("2 Dobbys"); click them to pause or stop one.
 
 Risky steps (quit, close, delete, log out) turn amber or red and ask you to
-**Allow** or **Deny** first. If you move the mouse or type, Dobby pauses and
-looks again before its next step.
+**Allow** or **Deny** first. If you click, scroll or type while Dobby works,
+it pauses and looks again before its next step (just moving the mouse, for
+example to reach the bar, does not count).
+
+The AI is told exactly what you did: each tool returns `handoff` =
+`stopped`, `denied`, `interrupted` or `paused` with what to do next, so it
+ends the task on Stop, does not work around a Deny, and looks again after you
+took over. A Stop ends the task it was pressed for; one pressed more than two
+minutes before Dobby's next step is ignored. About half a minute after the
+last step the agent pointer and the "thinking" glow go away.
 
 | Shortcut | macOS | Linux |
 | --- | --- | --- |
@@ -223,6 +231,7 @@ looks again before its next step.
 
 **Keep Dobby on call.** Ask the AI to call `wait_for_wake` when it is done.
 The bar then says "click to wake"; clicking it hands control back to the AI.
+If you paused Dobby and the AI is waiting, Resume hands back too.
 
 The overlay is hidden from Dobby's own screenshots, so the model never sees
 it. Settings go in the client's `env`:

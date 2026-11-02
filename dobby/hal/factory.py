@@ -103,10 +103,12 @@ def _build(kind: str, cassette: Path | str | None) -> DesktopSession:
         raise ValueError(f"Unknown desktop HAL kind: {kind}")
     module = importlib.import_module(module_name)
     backend = module.build_hal()
-    if kind == "darwin":
+    if kind in ("darwin", "linux"):
         from dobby.overlay import wrap_hal
 
-        backend = wrap_hal(backend)  # agent cursor + glow; no-op when disabled
+        # Agent cursor, glow, Stop / Pause / Allow-Deny and wait_for_wake's bar
+        # (mac_helper or x11_helper); a no-op when the overlay is disabled.
+        backend = wrap_hal(backend)
     from dobby.control import wrap_hal as wrap_control
 
     backend = wrap_control(backend)  # shared lease between agents; no-op when disabled

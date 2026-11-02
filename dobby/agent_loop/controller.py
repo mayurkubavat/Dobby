@@ -7,6 +7,7 @@ import sys
 from typing import Any, Optional, Dict, Tuple, List, Callable
 from PIL import Image
 
+from dobby.handoff import is_handoff
 from dobby.hal.base import IDesktopHAL
 from dobby.hal.quiescence import X11QuiescenceMonitor
 from dobby.perception.capture import CapturePipeline
@@ -601,6 +602,8 @@ class FeedbackLoopController:
                     execution_phase=ExecutionPhase.CONTRACT_VERIFIED,
                 )
             except Exception as e:
+                if is_handoff(e):
+                    raise  # Stop / Deny / take-over: the AI must see what happened
                 return ActionVerificationResult(
                     success=False,
                     action_type=action_name,
@@ -631,6 +634,8 @@ class FeedbackLoopController:
         try:
             action_func()
         except Exception as e:
+            if is_handoff(e):
+                raise  # Stop / Deny / take-over: the AI must see what happened
             return ActionVerificationResult(
                 success=False,
                 action_type=action_name,

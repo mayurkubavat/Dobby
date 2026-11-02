@@ -57,12 +57,13 @@ from typing import Any, Dict, Optional
 
 import contextlib
 
-from .client import NullOverlay, OverlayClient, OverlayInterrupted, OverlayStopped
+from .client import NullOverlay, OverlayClient, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
 from .hal import OverlayHAL, unwrap
 from .protocol import OVERLAY_WINDOW_TITLE, PROTOCOL_VERSION
 
 __all__ = [
     "NullOverlay", "OverlayClient", "OverlayHAL", "OverlayStopped", "OverlayInterrupted",
+    "OverlayDenied", "OverlayPaused",
     "unwrap", "make_overlay", "find_overlay_hal", "step",
     "wrap_hal", "overlay_enabled", "OVERLAY_WINDOW_TITLE", "PROTOCOL_VERSION",
 ]

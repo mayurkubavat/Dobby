@@ -150,9 +150,9 @@ class OverlayHAL:
         """Name the next action(s) for the overlay; optionally colour by risk.
 
         With ``confirm=True`` (or risk "danger") the user is asked Allow/Deny
-        first; a deny raises ``OverlayStopped``.
+        first; a deny raises ``OverlayDenied`` (an ``OverlayStopped``).
         """
-        from .client import OverlayStopped
+        from .client import OverlayDenied
 
         self.overlay.checkpoint()
         self.overlay.intent(text, ms=60000)
@@ -161,7 +161,7 @@ class OverlayHAL:
         try:
             if confirm or risk == "danger":
                 if not self.overlay.confirm(f"Allow Dobby to {text[:1].lower() + text[1:]}?"):
-                    raise OverlayStopped(f"The user denied: {text}")
+                    raise OverlayDenied(f"The user denied: {text}")
             self._in_step += 1
             try:
                 yield
@@ -220,7 +220,7 @@ class OverlayHAL:
         return self._inner.keyboard_press_key(key_name, *args, **kwargs)
 
     def keyboard_hotkey(self, keys: List[str], *args: Any, **kwargs: Any) -> Any:
-        from .client import OverlayStopped
+        from .client import OverlayDenied
 
         self.overlay.checkpoint()
         label = combo_label(keys)
@@ -232,7 +232,7 @@ class OverlayHAL:
         self.overlay.intent(f"Press {label} ({reason})", ms=60000)
         try:
             if not self.overlay.confirm(f"Allow Dobby to press {label} and {reason}?"):
-                raise OverlayStopped(f"The user denied {label} ({reason})")
+                raise OverlayDenied(f"The user denied {label} ({reason})")
             return self._inner.keyboard_hotkey(keys, *args, **kwargs)
         finally:
             self.overlay.risk("ok")
