@@ -50,7 +50,8 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import geometry, protocol, style  # noqa: E402
 from ..personality import Voice  # noqa: E402
-from .barlock import BAR_LOCK, BarOwner, mark_waiting, others_waiting, waiting_dir  # noqa: E402
+from .barlock import (BAR_LOCK, BarOwner, BarRow, mark_waiting, others_showing, others_waiting,  # noqa: E402
+                      showing_dir, waiting_dir)
 from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
 
 DEFAULT_CONFIG: Dict[str, Any] = {
@@ -197,8 +198,13 @@ _BAR_CSS = b"""
 class _Bar:
     """The control bar: clickable (not click-through), top centre of the screen."""
 
-    def __init__(self, on_label, on_button) -> None:
+    def __init__(self, on_label, on_button, bar_lock: str = BAR_LOCK) -> None:
         self.mode = "hidden"
+        # Bars of several Dobbys stack one row apart instead of overlapping (see barlock).
+        self.rows = BarRow(bar_lock)
+        self.row = 0
+        self.show_dir = showing_dir(bar_lock)
+        self.marked_showing = False
         self.win = Gtk.Window(type=Gtk.WindowType.POPUP)
         self.win.set_title(protocol.OVERLAY_WINDOW_TITLE)
         self.win.set_name("dobby-bar")
@@ -233,7 +239,19 @@ class _Bar:
     def _place(self) -> None:
         screen = Gdk.Screen.get_default()
         w, _h = self.win.get_preferred_size()[1].width, 0
-        self.win.move(max(0, (screen.get_width() - w) // 2), 8)
+        h = max(self.win.get_preferred_size()[1].height, 30)
+        self.win.move(max(0, (screen.get_width() - w) // 2), 8 + self.row * (h + 6))
+
+    def _sync_presence(self) -> None:
+        """Hold a screen row and the "showing" marker while visible; drop them when hidden."""
+        if self.visible:
+            self.row = self.rows.claim()
+        else:
+            self.rows.release()
+        showing = self.visible and self.mode != "ready"
+        if showing != self.marked_showing:
+            self.marked_showing = showing
+            mark_waiting(self.show_dir, os.getpid(), showing)
 
     def show(self, mode: str, text: str, primary: str, secondary: str, rgb, dot_alpha: float = 1.0) -> None:
         self.mode = mode
@@ -245,6 +263,7 @@ class _Bar:
         r, g, b = (int(v * 255) for v in rgb)
         self.dot.set_markup(f'<span foreground="#{r:02x}{g:02x}{b:02x}" alpha="{int(dot_alpha * 100)}%">●</span>')
         self.visible = True
+        self._sync_presence()
         self.win.resize(1, 1)
         self._place()  # centre for the new text before mapping, so it does not jump
         self.win.show_all()
@@ -269,6 +288,8 @@ class _Bar:
         if not keep_mode:
             self.mode = "hidden"
         self.visible = False
+        if not keep_mode:  # hidden for a moment during a capture: keep the row
+            self._sync_presence()
         self.win.hide()
 
 
@@ -317,7 +338,8 @@ class X11Overlay:
         self.bar_owner = BarOwner(self.cfg.get("bar_lock", BAR_LOCK))
         self.bar_owner_retry = 0.0
         self.wait_dir = waiting_dir(self.cfg.get("bar_lock", BAR_LOCK))
-        self.bar = None if self.bar_mode == "off" else _Bar(self.on_bar_label, self.on_bar)
+        self.bar = None if self.bar_mode == "off" else _Bar(self.on_bar_label, self.on_bar,
+                                                           self.cfg.get("bar_lock", BAR_LOCK))
 
         self.pointer = _Panel(self.composited, 26, 28, painter=self._paint_pointer)
         self.tag = _Panel(self.composited, 120, 26, painter=self._paint_tag)
@@ -682,7 +704,10 @@ class X11Overlay:
         self._put_away_when_done(now)
         if self.bar_owner.owned and now >= self.others_checked:
             self.others_checked = now + 1.0
-            others = not self.ai_waiting and others_waiting(self.wait_dir, os.getpid())
+            # Step aside while another helper's AI waits or another Dobby's bar shows.
+            others = not self.ai_waiting and (
+                others_waiting(self.wait_dir, os.getpid())
+                or others_showing(showing_dir(self.cfg.get("bar_lock", BAR_LOCK)), os.getpid()))
             if others != self.others_waiting:
                 self.others_waiting = others
                 self._refresh_bar()
@@ -1026,6 +1051,8 @@ class X11Overlay:
             self._answer_confirm(False)
         self.bar_owner.release()
         mark_waiting(self.wait_dir, os.getpid(), False)
+        if self.bar is not None:
+            self.bar.hide()  # frees its row and "showing" marker
         Gtk.main_quit()
         return False
 

@@ -838,6 +838,48 @@ def test_bar_owner_lock_is_exclusive_and_handed_over(tmp_path):
     b.release()
 
 
+def test_bar_rows_stack_and_move_up_when_freed(tmp_path):
+    from dobby.overlay.barlock import BarRow
+
+    path = str(tmp_path / "bar.lock")
+    a, b, c = BarRow(path), BarRow(path), BarRow(path)
+    assert (a.claim(), b.claim(), c.claim()) == (0, 1, 2)
+    assert b.claim() == 1  # claiming again keeps the row
+    a.release()
+    assert c.claim() == 0  # the top row freed: the lowest bar moves up
+    assert b.claim() == 1
+    b.release()
+    c.release()
+    assert a.claim() == 0
+    a.release()
+
+
+def test_bar_rows_overlap_rather_than_vanish_when_full(tmp_path):
+    from dobby.overlay.barlock import BarRow
+
+    path = str(tmp_path / "bar.lock")
+    rows = [BarRow(path, max_rows=2) for _ in range(3)]
+    assert [r.claim() for r in rows] == [0, 1, 0]
+    for r in rows:
+        r.release()
+
+
+def test_others_showing_ignores_own_and_dead_helpers(tmp_path):
+    import os
+
+    from dobby.overlay.barlock import mark_waiting, others_showing, showing_dir
+
+    d = showing_dir(str(tmp_path / "bar.lock"))
+    assert not others_showing(d, os.getpid())
+    mark_waiting(d, os.getpid(), True)
+    assert not others_showing(d, os.getpid())  # our own bar does not count
+    mark_waiting(d, os.getppid(), True)
+    assert others_showing(d, os.getpid())
+    mark_waiting(d, os.getppid(), False)
+    mark_waiting(d, 2 ** 22 + 12345, True)  # no such process: stale marker dropped
+    assert not others_showing(d, os.getpid())
+
+
 def test_overlay_config_awake_secs():
     from dobby.overlay import overlay_config
 

@@ -269,6 +269,10 @@ When more than one Dobby runs, the **▾** menu on the control bar lists them,
 so you can pause or stop each one. You always outrank both: Pause, Stop and
 taking over the mouse still work.
 
+There is one bar per busy Dobby. If two are working (or one is asking
+Allow/Deny), their bars stack one row apart at the top of the screen, each in
+its own colour, and the "sleeping" bar steps aside until they are done.
+
 Useful settings, per client:
 
 | Variable | Effect |

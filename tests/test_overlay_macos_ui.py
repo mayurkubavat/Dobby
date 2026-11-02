@@ -370,6 +370,40 @@ def test_owner_hides_its_idle_bar_while_another_ai_waits(make):
     assert a.pill.window.isVisible() and a.pill.mode == "ready"
 
 
+def test_owner_hides_its_idle_bar_while_another_dobby_shows_a_bar(make):
+    import os
+
+    from dobby.overlay.barlock import mark_waiting
+
+    a, _ = make()
+    _asleep(a)
+    assert a.pill.window.isVisible()
+    mark_waiting(a.pill_show_dir, os.getppid(), True)  # another (live) Dobby is working
+    try:
+        a.others_checked = 0
+        a.on_tick()
+        assert not a.pill.window.isVisible()
+    finally:
+        mark_waiting(a.pill_show_dir, os.getppid(), False)
+    a.others_checked = 0
+    a.on_tick()
+    assert a.pill.window.isVisible() and a.pill.mode == "ready"
+
+
+def test_two_working_bars_stack_instead_of_overlapping(make):
+    a, _ = make()
+    b, _ = make()
+    a.handle({"op": "intent", "text": "Click ‘Send’"})
+    b.handle({"op": "intent", "text": "Type “hi”"})
+    fa, fb = a.pill.window.frame(), b.pill.window.frame()
+    assert a.pill.window.isVisible() and b.pill.window.isVisible()
+    assert {a.pill.row, b.pill.row} == {0, 1}
+    assert abs(fa.origin.y - fb.origin.y) >= a.pill.H
+    a.pill.hide()
+    b.handle({"op": "intent", "text": "Press ⏎"})
+    assert b.pill.row == 0  # the top row freed: b moves up
+
+
 # ------------------------------------------------- menu on the bar's ▾
 def test_no_menu_bar_icon_by_default(make):
     c, _ = make()

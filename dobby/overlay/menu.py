@@ -116,7 +116,8 @@ def bar_view(*, paused: bool, takeover: bool, takeover_resume: str, working: boo
     otherwise no AI was waiting and the bar says so briefly.
     ``ai_waiting``: this helper's AI waits for a wake; any helper shows it, so
     the click reaches the AI that waits. ``other_waiting``: another helper's AI
-    waits, so the bar owner hides its plain idle bar instead of stacking on it.
+    waits or another Dobby shows a bar (working, paused, Allow/Deny…), so the
+    bar owner hides its plain idle bar instead of drawing it under that one.
     An Allow/Deny prompt is shown separately and is never hidden.
     """
     if paused:

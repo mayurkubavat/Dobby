@@ -132,7 +132,8 @@ from ..personality import Voice
 
 _kCGEventSourceUserData = 42
 DOBBY_EVENT_TAG = 0x444F4242  # same value as dobby.hal.macos.DOBBY_EVENT_TAG
-from .barlock import BAR_LOCK, BarOwner as _BarOwner, mark_waiting, others_waiting, waiting_dir
+from .barlock import (BAR_LOCK, BarOwner as _BarOwner, BarRow, mark_waiting, others_showing, others_waiting,
+                      showing_dir, waiting_dir)
 from .menu import (bar_click, bar_tip, bar_view, idle_cleanup, label_click, menu_entries, picker_groups,
                    status_of, takes_over)
 
@@ -925,6 +926,14 @@ class _Pill:
         self.style = style.normalize_style(cfg.get("style"))
         self.modern = self.style == "modern"
         self.animate = animate
+        # Bars of several Dobbys stack one row apart instead of overlapping;
+        # a bar other than the plain idle one also tells the bar owner to
+        # hide its "sleeping" bar (see barlock).
+        lock = cfg.get("bar_lock", BAR_LOCK)
+        self.rows = BarRow(lock)
+        self.row = 0
+        self.show_dir = showing_dir(lock)
+        self.marked_showing = False
         win_style = NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
         win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
             ((0, 0), (300, self.H)), win_style, NSBackingStoreBuffered, False
@@ -1051,9 +1060,22 @@ class _Pill:
                                   narrate=bool(self.cfg.get("narrate", True)))
         self.show_spec(spec, rgb, tip=tip)
 
+    def _sync_presence(self) -> None:
+        """Hold a screen row and the "showing" marker while visible; drop them when hidden."""
+        visible = self.visible
+        if visible:
+            self.row = self.rows.claim()
+        else:
+            self.rows.release()
+        showing = visible and self.mode != "ready"
+        if showing != self.marked_showing:
+            self.marked_showing = showing
+            mark_waiting(self.show_dir, os.getpid(), showing)
+
     def show_spec(self, spec: style.BarSpec, rgb, dots=(), tip: Optional[str] = None) -> None:
         self.mode = spec.mode
         self.spec = spec
+        self._sync_presence()
         H = self.H
         tip = tip or spec.tip or _LABEL_TIPS.get(spec.mode)
         self.view.setToolTip_(tip)
@@ -1104,7 +1126,7 @@ class _Pill:
         if screens:
             vf = screens[0].visibleFrame()
             fx = vf.origin.x + (vf.size.width - w) / 2
-            fy = vf.origin.y + vf.size.height - H - 8
+            fy = vf.origin.y + vf.size.height - H - 8 - self.row * (H + 6)
             frame = ((fx, fy), (w, H))
             old = self.window.frame()
             if self.animate and self.window.isVisible() and abs(old.size.width - w) > 0.5:
@@ -1188,6 +1210,7 @@ class _Pill:
 
     def _apply_visibility(self) -> None:
         if not self.visible:
+            self._sync_presence()
             self.window.setIgnoresMouseEvents_(True)
             self.window.orderOut_(None)
             return
@@ -1204,6 +1227,8 @@ class _Pill:
                 and f.origin.y - margin <= cocoa_pt[1] <= f.origin.y + f.size.height + margin)
 
     def close(self) -> None:
+        self.mode = "hidden"
+        self._sync_presence()
         self.window.orderOut_(None)
         self.window.close()
 
@@ -1292,6 +1317,7 @@ class OverlayController:
         self.bar_owner = _BarOwner(self.cfg.get("bar_lock", BAR_LOCK))
         self.bar_owner_retry = 0.0
         self.wait_dir = waiting_dir(self.cfg.get("bar_lock", BAR_LOCK))
+        self.pill_show_dir = showing_dir(self.cfg.get("bar_lock", BAR_LOCK))
         self.interactive = interactive
         self.status_item = None
         self.rebuild_panels()
@@ -1794,7 +1820,9 @@ class OverlayController:
         self._put_away_when_done(now)
         if self.bar_owner.owned and now >= self.others_checked:
             self.others_checked = now + 1.0
-            others = not self.ai_waiting and others_waiting(self.wait_dir, os.getpid())
+            # Step aside while another helper's AI waits or another Dobby's bar shows.
+            others = not self.ai_waiting and (others_waiting(self.wait_dir, os.getpid())
+                                              or others_showing(self.pill_show_dir, os.getpid()))
             if others != self.others_waiting:
                 self.others_waiting = others
                 self._refresh_pill()

@@ -86,3 +86,71 @@ def others_waiting(path: str, own_pid: int) -> bool:
             pass  # alive, owned by someone else
         found = True
     return found
+
+
+def showing_dir(bar_lock: str = BAR_LOCK) -> str:
+    """Where helpers mark that they show a bar other than the plain idle one.
+
+    The bar owner hides its idle "sleeping" bar while any other helper shows
+    one, so a working Dobby's bar never lands on top of it.
+    """
+    return os.path.join(os.path.dirname(bar_lock), "showing")
+
+
+def others_showing(path: str, own_pid: int) -> bool:
+    """True if another live helper shows a bar. Drops stale markers."""
+    return others_waiting(path, own_pid)
+
+
+class BarRow:
+    """Which row of the screen this helper's bar uses while it is visible.
+
+    Several helpers can show a bar at once (two Dobbys working, one asking
+    Allow/Deny). Each takes the lowest free row (an flock on ``rows/<n>``
+    next to the bar lock) and the bar sits that many rows down from the top,
+    so bars stack instead of overlapping. Calling :meth:`claim` again moves
+    the bar up when a lower row frees. The OS drops the locks when a helper
+    exits.
+    """
+
+    def __init__(self, bar_lock: str = BAR_LOCK, max_rows: int = 6) -> None:
+        self.dir = os.path.join(os.path.dirname(bar_lock), "rows")
+        self.max_rows = max_rows
+        self.row: int = -1
+        self.fh = None
+
+    def _try(self, n: int):
+        try:
+            os.makedirs(self.dir, exist_ok=True)
+            fh = open(os.path.join(self.dir, str(n)), "a+")
+        except OSError:
+            return None
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            fh.close()
+            return None
+        return fh
+
+    def claim(self) -> int:
+        """The row to draw on: the current one, or a lower one that is free now."""
+        limit = self.row if self.fh is not None else self.max_rows
+        for n in range(limit):
+            fh = self._try(n)
+            if fh is not None:
+                self.release()
+                self.fh, self.row = fh, n
+                return n
+        if self.fh is not None:
+            return self.row
+        return 0  # every row taken (or no lock dir): overlap rather than vanish
+
+    def release(self) -> None:
+        if self.fh is not None:
+            try:
+                fcntl.flock(self.fh, fcntl.LOCK_UN)
+                self.fh.close()
+            except OSError:
+                pass
+        self.fh = None
+        self.row = -1
