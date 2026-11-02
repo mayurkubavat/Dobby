@@ -7,6 +7,11 @@ helpers (``mac_helper``, ``x11_helper``) only draw what these functions say.
 ``style`` is "modern" (default) or "classic" (the look before this module:
 text buttons, wide sleeping bar, numbered trail). ``DOBBY_OVERLAY_STYLE``
 picks it.
+
+``narrate`` (modern only, on by default; ``DOBBY_OVERLAY_NARRATE=0`` turns it
+off) says in words what Dobby does: "Dobby is working · Click ‘Send’ · …" on
+the bar, the current action on the pointer tag until the next one, numbered
+trail marks, and Dobby dots only while two or more Dobbys are busy.
 """
 
 from __future__ import annotations
@@ -86,9 +91,19 @@ def _short(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def working_text(step: str, steps: int, elapsed: float, turbo: bool = False, limit: int = 38) -> str:
-    """What the bar says while Dobby works: "Click ‘Send’ · step 7 · 0:42"."""
-    parts = [_short(step, limit) if step else "Working"]
+def working_text(step: str, steps: int, elapsed: float, turbo: bool = False, limit: int = 38,
+                 label: Optional[str] = None, thinking: bool = False) -> str:
+    """What the bar says while Dobby works: "Click ‘Send’ · step 7 · 0:42".
+
+    With ``label`` (narration) it starts with a sentence:
+    "Dobby is working · Click ‘Send’ · step 7 · 0:42", or "Dobby is thinking…".
+    """
+    if label:
+        parts = [f"{label} is thinking…" if thinking else f"{label} is working"]
+        if step:
+            parts.append(_short(step, limit))
+    else:
+        parts = [_short(step, limit) if step else "Working"]
     if steps > 0:
         parts.append(f"step {steps}")
     parts.append(fmt_elapsed(elapsed))
@@ -137,13 +152,15 @@ def _action_button(key: str, title: str, style: str) -> Button:
 
 def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = False, label: str = "Dobby",
              step: str = "", steps: int = 0, elapsed: float = 0.0, turbo: bool = False,
-             thinking: bool = False) -> Optional[BarSpec]:
+             thinking: bool = False, narrate: bool = True) -> Optional[BarSpec]:
     """Turn ``menu.bar_view``'s answer into what the bar draws.
 
     Modern: the sleeping bar is a small capsule (dot + name) that grows on
     hover; nothing running means no Pause/Stop (they stay in the ▾ menu);
     working shows the live step, step count and a timer; icon buttons.
     Classic: exactly the old text-button bar.
+    ``narrate``: the compact bar says "Dobby is sleeping" and the working
+    bar starts with "Dobby is working" / "Dobby is thinking…".
     """
     if view is None:
         return None
@@ -156,7 +173,8 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
         # An AI waiting in wait_for_wake: the bar already says "click to wake".
         waiting = "click to wake" in text
         if not hovered:
-            short = f"{label} · click to wake" if waiting else label
+            name = f"{label} is sleeping" if narrate else label
+            short = f"{name} · click to wake" if waiting else name
             return BarSpec(mode, short, (), color, 1.0 if waiting else dot_alpha, compact=True,
                            tip="Click to wake Dobby")
         sleeping = text.replace("Dobby is sleeping", f"{label} is sleeping") if label != "Dobby" else text
@@ -166,7 +184,10 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
     if mode == "awake":
         return BarSpec(mode, text, (_HIDE, _MENU), color, dot_alpha, tip="Click to put Dobby to sleep")
     if mode == "working":
-        live = working_text(step, steps, elapsed, turbo)
+        if narrate:
+            live = working_text(step, steps, elapsed, turbo, limit=32, label=label, thinking=thinking)
+        else:
+            live = working_text(step, steps, elapsed, turbo)
         buttons = (_action_button("primary", primary, style), _action_button("secondary", secondary, style),
                    _HIDE, _MENU)
         return BarSpec(mode, live, buttons, color, dot_alpha, shimmer=thinking)
@@ -185,12 +206,23 @@ def confirm_spec(text: str) -> BarSpec:
                                      Button("secondary", "Deny", None, "", "danger")), "danger", 1.0)
 
 
-def agent_dots(agents: Iterable[Mapping[str, object]], colors: Mapping[int, str], own_pid: int) -> List[Tuple[int, str, bool, bool]]:
+def agent_busy(agent: Mapping[str, object]) -> bool:
+    """Doing something now: holding control, waiting for it, or paused mid-task."""
+    return bool(agent.get("holding") or agent.get("waiting") or agent.get("paused"))
+
+
+def agent_dots(agents: Iterable[Mapping[str, object]], colors: Mapping[int, str], own_pid: int,
+               busy_only: bool = False) -> List[Tuple[int, str, bool, bool]]:
     """(pid, colour, holding control, is this bar's Dobby) for the bar's Dobby dots.
 
     Empty with fewer than two Dobbys: one Dobby needs no picker.
+    ``busy_only`` (narration): count only Dobbys that are doing something, so
+    idle servers (one per AI app that loaded Dobby) add no dots. They stay in
+    the ▾ menu's picker.
     """
     agents = list(agents)
+    if busy_only:
+        agents = [a for a in agents if agent_busy(a)]
     if len(agents) < 2:
         return []
     out = []
@@ -198,6 +230,31 @@ def agent_dots(agents: Iterable[Mapping[str, object]], colors: Mapping[int, str]
         pid = int(a.get("pid", 0) or 0)
         out.append((pid, colors.get(pid, AGENT_PALETTE[0]), bool(a.get("holding")), pid == own_pid))
     return out
+
+
+def dots_caption(dots: Sequence[object]) -> str:
+    """Words next to the Dobby dots, so they are not a mystery: "2 Dobbys"."""
+    return f"{len(dots)} Dobbys" if len(dots) >= 2 else ""
+
+
+# ------------------------------------------------------------- pointer tag
+def intent_secs(ms: Optional[float], default_ms: float, narrate: bool) -> Optional[float]:
+    """How long the tag shows an action. None: until the next action or until Dobby is idle.
+
+    An explicit ``ms`` (a tool's ``step()``, a clear) always wins.
+    """
+    if ms is not None:
+        return max(0.0, float(ms)) / 1000.0
+    if narrate:
+        return None
+    return float(default_ms) / 1000.0
+
+
+def tag_detail(intent: str, state: str, narrate: bool) -> str:
+    """Text after "Dobby ›" on the pointer tag: the action, or "Thinking…" between actions."""
+    if narrate and state == "thinking":
+        return "Thinking…"
+    return intent
 
 
 # --------------------------------------------------------------------- glow
@@ -251,12 +308,15 @@ def corner_radius(rect: Rect, screens: Iterable[Rect], os_major: int, configured
 
 # -------------------------------------------------------------------- trail
 def trail_view(points: Sequence[Tuple[int, Point, float]], now: float, style: str = "modern",
-               keep: int = 3, fade_secs: float = 10.0) -> List[Tuple[Optional[int], Point, float, float, float]]:
+               keep: int = 3, fade_secs: float = 10.0,
+               numbered: bool = False) -> List[Tuple[Optional[int], Point, float, float, float]]:
     """(number or None, point, opacity, diameter, seconds left) per trail mark, oldest first.
 
     ``points`` are (step number, point, time added). Modern: the last
     ``keep`` clicks as small unnumbered dots that fade out over ``fade_secs``
-    (seconds left says how long the fade still runs). Classic: the last
+    (seconds left says how long the fade still runs); ``numbered``
+    (narration) gives them their step number in a 16 pt badge, matching the
+    bar's "step 7". Classic: the last
     ``keep`` numbered badges, older ones fainter, never fading.
     """
     if style == "classic":
@@ -268,13 +328,17 @@ def trail_view(points: Sequence[Tuple[int, Point, float]], now: float, style: st
     pts = [p for p in points if now - p[2] < fade_secs]
     pts = pts[-keep:] if keep > 0 else []
     n = len(pts)
-    for i, (_num, pt, t) in enumerate(pts):
+    for i, (num, pt, t) in enumerate(pts):
         age = n - 1 - i
         left = max(0.0, fade_secs - (now - t))
         life = left / fade_secs if fade_secs > 0 else 0.0
         opacity = round(max(0.15, 0.7 - 0.2 * age) * life, 3)
         if opacity > 0.01:
-            out.append((None, pt, opacity, 8.0, round(left, 3)))
+            if numbered:
+                badge = round(max(0.45, 0.9 - 0.2 * age) * life, 3)  # text must stay readable
+                out.append((num, pt, badge, 16.0, round(left, 3)))
+            else:
+                out.append((None, pt, opacity, 8.0, round(left, 3)))
     return out
 
 

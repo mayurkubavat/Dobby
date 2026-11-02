@@ -29,6 +29,12 @@ working, one colour per running Dobby, a glow that follows Dobby's state and
 the window's corners, a short fading trail, a tag that flips away from screen
 edges) or ``classic`` (the earlier look). ``DOBBY_OVERLAY_AGENT_COLORS=0``
 keeps every Dobby violet; ``DOBBY_OVERLAY_COLOR`` fixes one colour.
+The modern look narrates by default: the bar says "Dobby is working · Click
+‘Send’ · step 7 · 0:42" (or "Dobby is thinking…", "Dobby is sleeping"), the
+pointer tag keeps the current action until the next one or until Dobby goes
+idle, clicks leave numbered marks that fade, and the Dobby dots (with a
+"2 Dobbys" caption) appear only while two or more Dobbys are busy.
+``DOBBY_OVERLAY_NARRATE=0`` turns that off for a quieter modern look.
 
 Click the sleeping control bar to wake Dobby. If the AI waits in the
 ``wait_for_wake`` tool, that call returns and the bar says it hands back to
@@ -90,6 +96,8 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         cfg["style"] = look
     if env.get("DOBBY_OVERLAY_AGENT_COLORS", "").strip().lower() in _FALSE:
         cfg["agent_colors"] = False
+    if env.get("DOBBY_OVERLAY_NARRATE", "").strip().lower() in _FALSE:
+        cfg["narrate"] = False
     if env.get("DOBBY_OVERLAY_LABEL"):
         cfg["label"] = env["DOBBY_OVERLAY_LABEL"]
     elif env.get("DOBBY_AGENT_NAME", "").strip():

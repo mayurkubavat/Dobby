@@ -178,6 +178,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "agent_colors": True,
     "color_fixed": False,
     "trail_secs": 10.0,  # modern trail: dots fade out after this long
+    # Modern look only: say what Dobby does ("Dobby is working · Click ‘Send’"
+    # on the bar, the action on the pointer tag until the next one, numbered
+    # trail marks, Dobby dots only while two or more are busy).
+    "narrate": True,
 }
 
 
@@ -859,10 +863,21 @@ class _Panel:
         self.window.close()
 
 
-def _dots_image(dots):
-    """The bar's Dobby dots: one per running Dobby, the one in control ringed."""
+def _dots_image(dots, caption: str = ""):
+    """The bar's Dobby dots: one per running Dobby, the one in control ringed.
+
+    ``caption`` ("2 Dobbys") is drawn after the dots so they explain themselves.
+    """
     d, gap, h = 9.0, 5.0, 14.0
-    w = len(dots) * (d + gap) - gap + 4.0
+    dots_w = len(dots) * (d + gap) - gap + 4.0
+    text = None
+    if caption:
+        font = NSFont.systemFontOfSize_(11.0)
+        text = NSAttributedString.alloc().initWithString_attributes_(caption, {
+            NSFontAttributeName: font,
+            NSForegroundColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.75),
+        })
+    w = dots_w + (4.0 + float(text.size().width) if text is not None else 0.0)
     img = NSImage.alloc().initWithSize_((w, h))
     img.lockFocus()
     try:
@@ -876,6 +891,8 @@ def _dots_image(dots):
                 ring.setLineWidth_(1.2)
                 ring.stroke()
             x += d + gap
+        if text is not None:
+            text.drawAtPoint_((dots_w + 2.0, (h - float(text.size().height)) / 2))
     finally:
         img.unlockFocus()
     return img
@@ -1022,7 +1039,8 @@ class _Pill:
         if mode == "confirm":
             spec = style.confirm_spec(text)
         else:
-            spec = style.bar_spec((mode, text, primary, secondary, "ok", dot_alpha), style=self.style)
+            spec = style.bar_spec((mode, text, primary, secondary, "ok", dot_alpha), style=self.style,
+                                  narrate=bool(self.cfg.get("narrate", True)))
         self.show_spec(spec, rgb, tip=tip)
 
     def show_spec(self, spec: style.BarSpec, rgb, dots=(), tip: Optional[str] = None) -> None:
@@ -1046,7 +1064,8 @@ class _Pill:
         x = 12.0 if spec.compact else 14.0
         dots = list(dots) if self.modern else []
         if dots:
-            img = _dots_image(dots)
+            narrate = bool(self.cfg.get("narrate", True))
+            img = _dots_image(dots, style.dots_caption(dots) if narrate else "")
             self.dots_btn.setImage_(img)
             dw = float(img.size().width) + 6.0
             self.dots_btn.setFrame_(((x - 3.0, (H - 22.0) / 2), (dw, 22.0)))
@@ -1194,6 +1213,7 @@ class OverlayController:
         self.risk_level = "ok"
         self.rgb = self.colors["ok"]
         self.style = style.normalize_style(self.cfg.get("style"))
+        self.narrate = self.style == "modern" and bool(self.cfg.get("narrate", True))
         self.ok_hex = str(self.cfg["color"])
         self.os_major = _os_major()
         self.reduce_motion = _reduce_motion()
@@ -1333,7 +1353,7 @@ class OverlayController:
 
     def _tag_parts(self) -> Tuple[str, str]:
         detail = self.intent_text if (self.intent_text and time.monotonic() < self.intent_until) else ""
-        return self.agent_label, detail
+        return self.agent_label, style.tag_detail(detail, self.cursor_state, self.narrate)
 
     def _refresh_tag(self) -> None:
         label, detail = self._tag_parts()
@@ -1393,7 +1413,7 @@ class OverlayController:
         if label != self.agent_label:
             self.agent_label = label
             self._refresh_tag()
-        dots = style.agent_dots(self.agents, colors, self.server_pid)
+        dots = style.agent_dots(self.agents, colors, self.server_pid, busy_only=self.narrate)
         if dots != self.agent_dots:
             self.agent_dots = dots
             self._refresh_pill()
@@ -1669,7 +1689,7 @@ class OverlayController:
     def _redraw_trail(self) -> None:
         keep = 3 if self.style == "modern" else int(self.cfg["trail_len"])
         marks = style.trail_view(self.trail_points, time.monotonic(), self.style, keep=keep,
-                                 fade_secs=float(self.cfg["trail_secs"]))
+                                 fade_secs=float(self.cfg["trail_secs"]), numbered=self.narrate)
         for p in self.panels:
             for sub in list(p.trail.sublayers() or []):
                 sub.removeFromSuperlayer()
@@ -1677,7 +1697,7 @@ class OverlayController:
                 continue
             for num, pt, opacity, dia, left in marks:
                 cx, cy = geometry.global_point_to_local(pt, p.frame, self.primary_h)
-                if num is not None:  # classic numbered badge
+                if num is not None:  # numbered badge (classic, or modern with narration)
                     dot = CATextLayer.layer()
                     dot.setForegroundColor_(_cg((1, 1, 1)))
                     dot.setFontSize_(10.0)
@@ -1693,7 +1713,7 @@ class OverlayController:
                 dot.setFrame_(CGRectMake(cx - dia / 2, cy - dia / 2, dia, dia))
                 dot.setCornerRadius_(dia / 2)
                 dot.setOpacity_(opacity)
-                if num is None and left > 0 and not self.reduce_motion:
+                if left > 0 and not self.reduce_motion:  # modern marks fade out
                     fade = CABasicAnimation.animationWithKeyPath_("opacity")
                     fade.setFromValue_(opacity)
                     fade.setToValue_(0.0)
@@ -1747,8 +1767,9 @@ class OverlayController:
         if self.interactive and not self.bar_owner.owned and now >= self.bar_owner_retry:
             self.bar_owner_retry = now + 2.0
             self._claim_bar()
-        if self.intent_text and now >= self.intent_until:
-            self.intent_text = ""
+        if self.intent_text and (now >= self.intent_until or (
+                self.narrate and now - self.last_action > float(self.cfg["active_secs"]))):
+            self.intent_text = ""  # narration: the action stays until Dobby goes idle
             self._refresh_tag()
         if self.pending_confirm is not None and now >= self.pending_confirm[1]:
             self._answer_confirm(False)
@@ -1954,7 +1975,7 @@ class OverlayController:
                 view, style=self.style, hovered=self.pill_hovered, label=str(self.cfg["label"]),
                 step=self.current_step, steps=self.task_steps,
                 elapsed=(now - self.task_started) if self.task_started else 0.0,
-                turbo=self.turbo, thinking=self.cursor_state == "thinking",
+                turbo=self.turbo, thinking=self.cursor_state == "thinking", narrate=self.narrate,
             )
             self.pill.show_spec(spec, rgb, dots=self.agent_dots,
                                 tip=bar_tip(mode, self.ai_waiting > 0, self.wait_reason))
@@ -2277,8 +2298,11 @@ class OverlayController:
 
     def _set_intent(self, text: str, ms: Optional[float] = None) -> None:
         self.intent_text = _short(text) if text else ""
-        dur = float(ms if ms is not None else self.cfg["intent_ms"]) / 1000.0
-        self.intent_until = time.monotonic() + dur if text else 0.0
+        secs = style.intent_secs(ms, float(self.cfg["intent_ms"]), self.narrate)
+        if not text:
+            self.intent_until = 0.0
+        else:  # None: until the next action, or until Dobby is idle (see on_tick)
+            self.intent_until = time.monotonic() + secs if secs is not None else float("inf")
         self._refresh_tag()
 
     def handle(self, msg: Dict[str, Any]) -> None:

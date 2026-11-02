@@ -203,10 +203,13 @@ Vivado and Verdi).
 When Dobby acts you see it:
 
 - a violet **agent cursor** that glides to each target and ripples on click,
-  with a tag saying what it is about to do ("Click 'Run Synthesis'");
+  with a tag saying what it is doing ("Dobby › Click 'Run Synthesis'") until
+  its next action, and numbered marks where it clicked that fade out;
 - a soft **glow** around the window it is working in;
 - a **control bar** at the top of the screen: "Dobby is sleeping" when idle,
-  the current step and a timer while working, with **Pause** and **Stop**.
+  "Dobby is working · Click 'Send' · step 7 · 0:42" while working, with
+  **Pause** and **Stop**. When two or more Dobbys are busy at once it also
+  shows one coloured dot per Dobby ("2 Dobbys"); click them to pause or stop one.
 
 Risky steps (quit, close, delete, log out) turn amber or red and ask you to
 **Allow** or **Deny** first. If you move the mouse or type, Dobby pauses and
@@ -228,6 +231,7 @@ it. Settings go in the client's `env`:
 | --- | --- |
 | `DOBBY_OVERLAY=0` | Turn the overlay off |
 | `DOBBY_OVERLAY_STYLE=classic` | Use the older, larger look |
+| `DOBBY_OVERLAY_NARRATE=0` | Quieter modern look: no "Dobby is working" text, the tag shows each action only briefly, unnumbered trail dots, a dot for every running Dobby |
 | `DOBBY_OVERLAY_TURBO=1` | No Allow/Deny prompts and no pause on take-over (Stop and Pause still work) |
 | `DOBBY_OVERLAY_COLOR=#7c5cff` | Fix the colour (otherwise each Dobby gets its own) |
 | `DOBBY_OVERLAY_CAPTURE_VISIBLE=0` | Hide the overlay from your screen recordings too |

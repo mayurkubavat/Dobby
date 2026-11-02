@@ -67,6 +67,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "awake_secs": 120.0,  # woken from the bar: stays awake this long without a task
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
     "pill": "always",     # control bar: "always", "auto" (only while working) or "off"
+    "narrate": True,      # modern look: say what Dobby does on the bar and the tag
 }
 
 # Classic arrow, y down, tip at (0, 0) (same outline as the macOS helper).
@@ -281,6 +282,7 @@ class X11Overlay:
         self.risk = "ok"
         self.state = "idle"
         self.style = style.normalize_style(self.cfg.get("style"))
+        self.narrate = self.style == "modern" and bool(self.cfg.get("narrate", True))
         self.server_pid = int(os.environ.get("DOBBY_SERVER_PID", "0") or 0)
         self.agents_next = 0.0
         # The task in progress, for the bar's live step and timer.
@@ -383,8 +385,10 @@ class X11Overlay:
             icon = "⏸"
         if icon:
             parts.append(icon)
-        if self.intent and time.monotonic() < self.intent_until:
-            parts.append(self.intent)
+        intent = self.intent if (self.intent and time.monotonic() < self.intent_until) else ""
+        detail = style.tag_detail(intent, self.state, self.narrate)
+        if detail:
+            parts.append(("› " + detail) if self.narrate else detail)
         return "  ".join(parts)
 
     def _paint_tag(self, cr, w, h) -> None:
@@ -555,8 +559,8 @@ class X11Overlay:
         return True
 
     def _tag_tick(self) -> bool:
-        if self.intent and time.monotonic() >= self.intent_until:
-            self.intent = ""
+        if self.intent and (time.monotonic() >= self.intent_until or (self.narrate and not self._working())):
+            self.intent = ""  # narration: the action stays until Dobby goes idle
             self._layout_tag()
         return True
 
@@ -616,7 +620,8 @@ class X11Overlay:
         spec = style.bar_spec(view, hovered=True, label=str(self.cfg["label"]), step=self.current_step,
                               steps=self.task_steps,
                               elapsed=(now - self.task_started) if self.task_started else 0.0,
-                              turbo=bool(self.cfg.get("turbo")), thinking=self.state == "thinking")
+                              turbo=bool(self.cfg.get("turbo")), thinking=self.state == "thinking",
+                              narrate=self.narrate)
         self.bar.show_spec(spec, rgb)
 
     def _refresh_agents(self) -> None:
@@ -939,8 +944,11 @@ class X11Overlay:
             self.task_steps += 1
             self.current_step = text
         self.intent = _short(text) if text else ""
-        dur = float(ms if ms is not None else self.cfg["intent_ms"]) / 1000.0
-        self.intent_until = time.monotonic() + dur if text else 0.0
+        secs = style.intent_secs(ms, float(self.cfg["intent_ms"]), self.narrate)
+        if not text:
+            self.intent_until = 0.0
+        else:  # None: until the next action, or until Dobby is idle (see _tag_tick)
+            self.intent_until = time.monotonic() + secs if secs is not None else float("inf")
         self._layout_tag()
 
     def _real_mouse(self) -> Tuple[float, float]:

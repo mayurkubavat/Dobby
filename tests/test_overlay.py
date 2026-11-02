@@ -133,6 +133,12 @@ def test_overlay_config():
         "turbo": True, "takeover_resume": "manual", "idle_secs": 0.5, "trail": False}
 
 
+def test_overlay_config_narration_is_on_unless_turned_off():
+    assert "narrate" not in overlay_config({})
+    assert overlay_config({"DOBBY_OVERLAY_NARRATE": "0"}) == {"narrate": False}
+    assert "narrate" not in overlay_config({"DOBBY_OVERLAY_NARRATE": "1"})
+
+
 def test_overlay_config_menu_bar_icon_is_opt_in():
     assert "menu_bar" not in overlay_config({})
     assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "1"}) == {"menu_bar": True}

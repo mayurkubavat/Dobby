@@ -555,10 +555,10 @@ def _modern(make, **cfg):
 def test_modern_sleeping_bar_is_compact_and_grows_on_hover(make):
     c, _ = _modern(make)
     assert c.pill.mode == "ready" and c.pill.spec.compact
-    assert c.pill.label.stringValue() == "Dobby"
+    assert c.pill.label.stringValue() == "Dobby is sleeping"
     assert c.pill.primary.isHidden() and c.pill.menu_btn.isHidden()
     w0 = c.pill.window.frame().size.width
-    assert w0 < 120
+    assert w0 < 180
     c.on_pill_hover(True)
     assert not c.pill.spec.compact and "click to wake" in c.pill.label.stringValue()
     assert not c.pill.menu_btn.isHidden() and c.pill.primary.isHidden()
@@ -577,7 +577,7 @@ def test_modern_working_bar_shows_step_and_timer_with_icons(make):
     c, _ = _modern(make)
     c.handle({"op": "intent", "text": "Click ‘Send’"})
     text = c.pill.label.stringValue()
-    assert c.pill.mode == "working" and text.startswith("Click ‘Send’ · step 1 · 0:0")
+    assert c.pill.mode == "working" and text.startswith("Dobby is working · Click ‘Send’ · step 1 · 0:0")
     assert c.pill.primary.image() is not None and c.pill.secondary.image() is not None
     assert c.pill.secondary.toolTip().startswith("Stop")
     assert not c.pill.menu_btn.isHidden()
@@ -586,10 +586,36 @@ def test_modern_working_bar_shows_step_and_timer_with_icons(make):
 def test_modern_agent_colour_name_and_dots(make):
     c, _ = _modern(make)
     c.server_pid = 222
-    c._apply_agents([{"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
+    c._apply_agents([{"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF", "waiting": True},
                      {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True}])
     assert c.ok_hex == "#14B8A6" and c.agent_label == "Dobby · claude-code"
     assert not c.pill.dots_btn.isHidden() and c.pill.dots_btn.image() is not None
+
+
+def test_modern_idle_dobbys_add_no_dots(make):
+    agents = [{"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
+              {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
+              {"pid": 333, "name": "cursor", "started": 3, "color": "#EC4899"}]
+    c, _ = _modern(make)
+    c.server_pid = 222
+    c._apply_agents(agents)
+    assert c.pill.dots_btn.isHidden() and c.agent_dots == []
+    quiet, _ = _modern(make, narrate=False)
+    quiet.server_pid = 222
+    quiet._apply_agents(agents)
+    assert not quiet.pill.dots_btn.isHidden() and len(quiet.agent_dots) == 3
+
+
+def test_modern_tag_keeps_the_action_until_idle(make):
+    c, _ = _modern(make)
+    c.handle({"op": "intent", "text": "Click ‘Send’"})
+    assert c.intent_until == float("inf") and c._tag_parts()[1] == "Click ‘Send’"
+    c.cursor_state = "thinking"
+    assert c._tag_parts()[1] == "Thinking…"
+    c.cursor_state = "idle"
+    c.last_action = time.monotonic() - float(c.cfg["active_secs"]) - 1
+    c.on_tick()
+    assert c.intent_text == "" and c._tag_parts()[1] == ""
 
 
 def test_modern_fixed_colour_ignores_registry(make):
@@ -634,7 +660,8 @@ def test_modern_trail_keeps_three_dots(make):
     c.cursor = (300.0, 300.0)
     for _ in range(5):
         c.handle({"op": "cursor.click", "count": 1})
-    assert len(c.panels[0].trail.sublayers() or []) == 3
+    marks = c.panels[0].trail.sublayers() or []
+    assert len(marks) == 3 and all(hasattr(m, "string") for m in marks)  # numbered badges
 
 
 def test_modern_paused_turns_pointer_and_tag_amber(make):
