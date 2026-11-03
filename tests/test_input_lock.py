@@ -254,6 +254,7 @@ def _xvfb():
 
 
 def test_x11_shield_blocks_person_passes_dobby_and_dies_with_the_helper():
+    pytest.importorskip("Xlib")  # Linux extra; skip cleanly on macOS
     from Xlib import X, XK, Xatom, display
     from Xlib.ext import xtest
 
