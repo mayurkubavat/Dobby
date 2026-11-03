@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Optional
 
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
 
 #: Name given to every overlay panel, so window listings can filter them out.
 OVERLAY_WINDOW_TITLE = "Dobby Overlay"
@@ -45,6 +45,11 @@ OPS: Dict[str, tuple] = {
     # An AI waits for the user to wake Dobby (``wait_for_wake``), then is done.
     "sleep.wait": ((), ("reason",)),
     "sleep.done": ((), ()),
+    # Input lock (``inputlock``): Dobby's own input is about to run (on=True)
+    # or is done (on=False). The X11 helper opens its shield and drops its
+    # keyboard grab in between; macOS needs nothing (its tap knows Dobby's
+    # events) and just acks.
+    "input.pass": (("on",), ()),
     "hide": ((), ()),
     "show": ((), ()),
     "ping": ((), ()),

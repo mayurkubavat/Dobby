@@ -127,7 +127,7 @@ from Quartz import (
     kCGWindowListOptionOnScreenOnly,
 )
 
-from . import geometry, protocol, style
+from . import geometry, inputlock, protocol, style
 from ..personality import Voice
 
 _kCGEventSourceUserData = 42
@@ -188,6 +188,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # on the bar, the action on the pointer tag until the next one, numbered
     # trail marks, Dobby dots only while two or more are busy).
     "narrate": True,
+    # Input lock (dobby.overlay.inputlock): "window" keeps the person's
+    # clicks, scrolls and keys out of the window Dobby works in while it
+    # works; "off" keeps take-over as before.
+    "input_lock": "off",
 }
 
 
@@ -1328,6 +1332,26 @@ class OverlayController:
             1.0 / float(self.cfg["track_hz"]), self.target, "tick:", None, True
         )
         self.monitors: List[Any] = []
+        # Input lock: the tracked window's frame, windows above it, and
+        # whether it is in front (from _track_tick); the tap itself.
+        self.event_tag = DOBBY_EVENT_TAG
+        self.lock_mode = str(self.cfg.get("input_lock") or "off")
+        self.lock_target: Optional[geometry.Rect] = None
+        self.lock_above: List[geometry.Rect] = []
+        self.lock_front = False
+        self.lock_note_next = 0.0
+        self.lock_stopped = False  # Stop frees the window until Dobby acts again
+        self.voiceover = False
+        self.voiceover_checked = 0.0
+        self.input_lock = None
+        if interactive and self.lock_mode != "off":
+            try:
+                from .mac_lock import MacInputLock
+
+                lock = MacInputLock(self, _configure_overlay_window, _white_symbol)
+                self.input_lock = lock if lock.ok else None
+            except Exception as exc:  # noqa: BLE001 - Dobby works without the lock
+                sys.stderr.write(f"dobby.overlay: input lock unavailable: {exc}\n")
         if interactive:
             self._install_monitors()
             self._refresh_agents(force=True)
@@ -1818,6 +1842,14 @@ class OverlayController:
         if self.awake_until and now >= self.awake_until:
             self.sleep()  # woken, but no task came
         self._put_away_when_done(now)
+        if self.input_lock is not None:
+            if now >= self.voiceover_checked:
+                self.voiceover_checked = now + 2.0
+                try:
+                    self.voiceover = bool(NSWorkspace.sharedWorkspace().isVoiceOverEnabled())
+                except Exception:  # noqa: BLE001 - macOS < 10.13
+                    self.voiceover = False
+            self.input_lock.tick()
         if self.bar_owner.owned and now >= self.others_checked:
             self.others_checked = now + 1.0
             # Step aside while another helper's AI waits or another Dobby's bar shows.
@@ -1863,6 +1895,7 @@ class OverlayController:
                     break
         index = next((i for i, info in enumerate(onscreen) if info.get("kCGWindowNumber") == wid), None)
         if wid is None or index is None:
+            self.lock_target = None
             if self.glow_rect is not None:
                 self.glow_rect = None
                 self._set_glow_opacity(0.0)
@@ -1878,6 +1911,9 @@ class OverlayController:
             and float(info.get("kCGWindowAlpha", 1)) > 0
         ]
         dim = geometry.occluded(rect, above)
+        self.lock_target = rect
+        self.lock_above = above
+        self.lock_front = inputlock.frontmost_owner(onscreen, me) == onscreen[index].get("kCGWindowOwnerPID")
         first = self.glow_rect is None
         if rect != self.glow_rect:
             self._place_glow(rect, 0 if first else 1000.0 / float(self.cfg["track_hz"]))
@@ -1898,6 +1934,7 @@ class OverlayController:
             self.task_steps = 0
             self.current_step = ""
         self.last_action = now
+        self.lock_stopped = False
         self.wake_pointer = False  # Dobby drives the pointer now
         if self.awake_until:
             self._end_awake()  # working takes over; afterwards Dobby sleeps
@@ -2020,6 +2057,7 @@ class OverlayController:
             turbo=self.turbo, current_mode=self.pill.mode, bar_mode=self.pill_mode,
             owner=self.bar_owner.owned, awake=self._awake(), ai_waiting=self.ai_waiting > 0,
             handoff=self.handoff, other_waiting=self.others_waiting,
+            locked=self.input_lock is not None,
         )
         if view is None:
             self.pill.hide()
@@ -2092,6 +2130,7 @@ class OverlayController:
             self._answer_confirm(False)
         self.paused = False
         self.takeover = False
+        self.lock_stopped = True
         if self.awake_until:
             self.sleep()
         self.send_event("stop")
@@ -2172,6 +2211,10 @@ class OverlayController:
                 if flags == _HOTKEY_MODS and int(event.keyCode()) == _KEY_H:
                     self.set_pill_hidden(not self.pill_user_hidden)
                     return
+            if self.lock_armed():
+                # The lock already swallowed what landed in Dobby's window;
+                # what got here is the person using another app: no take-over.
+                return
             self._on_user_input(_INPUT_KIND.get(etype, "key"))
         except Exception as exc:  # noqa: BLE001
             sys.stderr.write(f"dobby.overlay: input monitor: {exc}\n")
@@ -2202,6 +2245,56 @@ class OverlayController:
             else:
                 self.takeover = True
             self._refresh_pill()
+
+    # ------------------------------------------- controls: input lock
+    def is_dobby_pid(self, pid: int) -> bool:
+        if pid in (self.server_pid, os.getpid()):
+            return True
+        return self.agent_pids is not None and pid in self.agent_pids
+
+    def lock_armed(self) -> bool:
+        return inputlock.armed(
+            mode=self.lock_mode if self.input_lock is not None else "off",
+            working=time.monotonic() - self.last_action <= float(self.cfg["active_secs"]),
+            paused=self.paused or self.lock_stopped, takeover=self.takeover,
+            confirming=self.pending_confirm is not None,
+            has_target=self.lock_target is not None, screen_reader=self.voiceover)
+
+    def _own_rects(self) -> List[geometry.Rect]:
+        """The overlay's clickable windows (bar, tag hotspot), global top-left."""
+        rects: List[geometry.Rect] = []
+        if self.pill is not None and self.pill.visible:
+            f = self.pill.window.frame()
+            rects.append((float(f.origin.x), self.primary_h - float(f.origin.y) - float(f.size.height),
+                          float(f.size.width), float(f.size.height)))
+        if self.hotspot is not None and self.hotspot.rect is not None:
+            rects.append(self.hotspot.rect)
+        return rects
+
+    def lock_blocks(self, kind: str, pt: Optional[Tuple[float, float]]) -> bool:
+        return inputlock.blocks(kind, pt, target=self.lock_target, above=self.lock_above,
+                                own=self._own_rects(), target_front=self.lock_front)
+
+    def on_lock_swallowed(self, kind: str, pt: Optional[Tuple[float, float]]) -> None:
+        """The person tried to use Dobby's window: point them at Take over."""
+        now = time.monotonic()
+        if now < self.lock_note_next:
+            return
+        self.lock_note_next = now + 0.8
+        if self.pill_user_hidden:
+            self.set_pill_hidden(False)  # the way out must be visible
+        if self.pill is not None and self.pill.visible:
+            self.pill.flash(self.colors["caution"])
+
+    def on_lock_insist(self) -> None:
+        """Clicked again and again (or held): that is a take-over."""
+        if self.input_lock is not None:
+            self.input_lock.insist.reset()
+        if not self.turbo:
+            self._on_user_input("click")
+        if not (self.paused or self.takeover):
+            self.set_paused(True)  # Turbo ignores take-over; a pause still frees the window
+        self._refresh_pill()
 
     # ------------------------------------- controls: menu (bar ▾, menu bar)
     def _install_status_item(self) -> None:
@@ -2465,6 +2558,7 @@ class OverlayController:
         elif op == "glow.clear":
             self.track_wid = self.track_pid = None
             self.glow_rect = None
+            self.lock_target = None
             self._set_glow_opacity(0.0)
             self._glow_sig = None
             self.ack(msg_id)
@@ -2484,6 +2578,8 @@ class OverlayController:
         elif op == "sleep.done":
             self._ai_wait(False)
             self.ack(msg_id)
+        elif op == "input.pass":
+            self.ack(msg_id)  # the tap lets Dobby's tagged events through already
         elif op == "ping":
             self.ack(msg_id)
         elif op == "bye":
@@ -2506,6 +2602,9 @@ class OverlayController:
                 pass
         if self.pending_confirm is not None:
             self._answer_confirm(False)
+        if self.input_lock is not None:
+            self.input_lock.close()
+            self.input_lock = None
         for p in self.panels:
             p.close()
         if self.hotspot is not None:

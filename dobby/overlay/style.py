@@ -139,6 +139,7 @@ class BarSpec:
 
 _ICONS = {
     "Pause": ("pause.fill", "Pause Dobby (⌃⌥P)"),
+    "Take over": ("hand.raised.fill", "Take over: pause Dobby and use this window (⌃⌥P)"),
     "Resume": ("play.fill", "Resume (⌃⌥P)"),
     "Resume now": ("play.fill", "Resume now"),
     "Stop": ("stop.fill", "Stop Dobby (⌃⌥⎋)"),

@@ -106,7 +106,7 @@ BarView = Tuple[str, str, str, str, str, float]
 def bar_view(*, paused: bool, takeover: bool, takeover_resume: str, working: bool, turbo: bool,
              current_mode: str, bar_mode: str, owner: bool, awake: bool = False,
              ai_waiting: bool = False, handoff: bool = False,
-             other_waiting: bool = False) -> Optional[BarView]:
+             other_waiting: bool = False, locked: bool = False) -> Optional[BarView]:
     """What the control bar shows, or None to hide it.
 
     Colour keys: "caution", "ok", or "risk" (the current risk colour).
@@ -119,6 +119,8 @@ def bar_view(*, paused: bool, takeover: bool, takeover_resume: str, working: boo
     waits or another Dobby shows a bar (working, paused, Allow/Deny…), so the
     bar owner hides its plain idle bar instead of drawing it under that one.
     An Allow/Deny prompt is shown separately and is never hidden.
+    ``locked``: the input lock is on (``inputlock``), so the person cannot
+    click into Dobby's window; Pause is offered as "Take over".
     """
     if paused:
         return ("paused", "Dobby is paused", "Resume", "Stop", "caution", 1.0)
@@ -129,7 +131,7 @@ def bar_view(*, paused: bool, takeover: bool, takeover_resume: str, working: boo
         return ("stopped", "Dobby stopped", "OK", "Hide", "danger", 1.0)
     if working:
         label = "Dobby ⚡ Turbo" if turbo else "Dobby is working"
-        return ("working", label + " · ⌃⌥⎋ stops", "Pause", "Stop", "risk", 1.0)
+        return ("working", label + " · ⌃⌥⎋ stops", "Take over" if locked else "Pause", "Stop", "risk", 1.0)
     if awake:
         if handoff:
             label = "Dobby ⚡ Turbo · awake · handing back to the AI" if turbo else "Dobby is awake · handing back to the AI"

@@ -46,6 +46,11 @@ a Dobby icon in the macOS menu bar (off by default).
 
 Hotkeys while Dobby runs: Ctrl+Option+Esc stops, Ctrl+Option+P pauses or
 resumes.
+
+Input lock: ``DOBBY_INPUT_LOCK=window`` keeps the person's clicks (and keys,
+while it is in front) out of the window Dobby works in, like an agent browser
+locking its tab; other windows stay usable and the bar offers "Take over".
+Default off. See ``dobby.overlay.inputlock``.
 """
 
 from __future__ import annotations
@@ -59,6 +64,7 @@ import contextlib
 
 from .client import NullOverlay, OverlayClient, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
 from .hal import OverlayHAL, unwrap
+from .inputlock import lock_mode
 from .protocol import OVERLAY_WINDOW_TITLE, PROTOCOL_VERSION
 from ..personality import normalize_level
 
@@ -138,6 +144,8 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         cfg["menu_bar"] = True
     if env.get("DOBBY_OVERLAY_PILL_RECORD", "").strip().lower() in _TRUE:
         cfg["pill_in_recordings"] = True
+    if lock_mode(env) != "off":
+        cfg["input_lock"] = lock_mode(env)
     if env.get("DOBBY_OVERLAY_SPEED"):
         try:
             cfg["speed"] = float(env["DOBBY_OVERLAY_SPEED"])

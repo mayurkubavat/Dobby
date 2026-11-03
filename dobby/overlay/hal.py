@@ -135,6 +135,37 @@ class OverlayHAL:
             self._tracked = str(wid)
             self.overlay.track(window_id=wid)
 
+    def _reclaim_target(self) -> None:
+        """Input lock: bring Dobby's window back to the front before acting.
+
+        With the lock on, the person may click into other apps while Dobby
+        works. Dobby still drives the real mouse and keyboard, so before its
+        next step it puts its own window back in front; otherwise a click
+        could land on the person's window or keys go to their app.
+        """
+        if not getattr(self.overlay, "lock_on", False) or self._tracked is None:
+            return
+        getter = getattr(self._inner, "get_active_window", None)
+        focus = getattr(self._inner, "focus_window", None)
+        if getter is None or focus is None:
+            return
+        try:
+            win = getter()
+        except Exception:  # noqa: BLE001 - best effort
+            return
+        wid = getattr(win, "window_id", None) if win is not None else None
+        if wid is not None and str(wid) == self._tracked:
+            return
+        try:
+            focus(self._tracked)
+        except Exception:  # noqa: BLE001 - the step still runs; the AI looks again on failure
+            pass
+
+    def _after_keys(self) -> None:
+        """Input lock: a key may switch windows (new window, app switch): follow it."""
+        if getattr(self.overlay, "lock_on", False):
+            self._follow_active_window()
+
     def _point_to(self, x: float, y: float, ms: Optional[int] = None, wait: bool = True,
                   verb: Optional[str] = None, probe: bool = False) -> None:
         px, py = self._to_points(x, y)
@@ -144,6 +175,15 @@ class OverlayHAL:
     def _intent(self, text: str) -> None:
         if not self._in_step:
             self.overlay.intent(text)
+
+    @contextlib.contextmanager
+    def _passing(self) -> Iterator[None]:
+        """Let this action's real input past the input lock (X11 shield)."""
+        self.overlay.input_pass(True)
+        try:
+            yield
+        finally:
+            self.overlay.input_pass(False)
 
     @contextlib.contextmanager
     def step(self, text: str, risk: Optional[str] = None, confirm: bool = False) -> Iterator[None]:
@@ -176,14 +216,17 @@ class OverlayHAL:
     def mouse_move(self, x: int, y: int, *args: Any, **kwargs: Any) -> Any:
         self.overlay.checkpoint()
         self._point_to(x, y, verb="Move")
-        return self._inner.mouse_move(x, y, *args, **kwargs)
+        with self._passing():
+            return self._inner.mouse_move(x, y, *args, **kwargs)
 
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1,
                     *args: Any, **kwargs: Any) -> Any:
         self.overlay.checkpoint()
+        self._reclaim_target()
         verb = _VERBS.get((button, click_count), "Click")
         self._point_to(x, y, verb=verb, probe=True)
-        result = self._inner.mouse_click(x, y, button, click_count, *args, **kwargs)
+        with self._passing():
+            result = self._inner.mouse_click(x, y, button, click_count, *args, **kwargs)
         self.overlay.click(button=button, count=click_count)
         self._follow_active_window()
         return result
@@ -191,50 +234,68 @@ class OverlayHAL:
     def mouse_drag(self, start_x: int, start_y: int, end_x: int, end_y: int,
                    duration_sec: float = 0.3, *args: Any, **kwargs: Any) -> Any:
         self.overlay.checkpoint()
+        self._reclaim_target()
         self._point_to(start_x, start_y, verb="Drag", probe=True)
         # Follow the drag in parallel with the real one.
         self._point_to(end_x, end_y, ms=int(duration_sec * 1000), wait=False)
-        result = self._inner.mouse_drag(start_x, start_y, end_x, end_y, duration_sec, *args, **kwargs)
+        with self._passing():
+            result = self._inner.mouse_drag(start_x, start_y, end_x, end_y, duration_sec, *args, **kwargs)
         self.overlay.clear_box()
         return result
 
     def mouse_scroll(self, dx: int, dy: int, *args: Any, **kwargs: Any) -> Any:
         self.overlay.checkpoint()
+        self._reclaim_target()
         direction = ("down" if dy < 0 else "up") if dy else ("right" if dx > 0 else "left")
         self._intent(f"Scroll {direction}")
-        return self._inner.mouse_scroll(dx, dy, *args, **kwargs)
+        with self._passing():
+            return self._inner.mouse_scroll(dx, dy, *args, **kwargs)
 
     # ------------------------------------------------------------ keyboard
     def keyboard_type(self, text: str, *args: Any, **kwargs: Any) -> Any:
         self.overlay.checkpoint()
+        self._reclaim_target()
         self._intent(typed_label(text))
         self.overlay.state("typing")
         try:
-            return self._inner.keyboard_type(text, *args, **kwargs)
+            with self._passing():
+                return self._inner.keyboard_type(text, *args, **kwargs)
         finally:
             self.overlay.state("idle")
 
     def keyboard_press_key(self, key_name: str, *args: Any, **kwargs: Any) -> Any:
         self.overlay.checkpoint()
+        self._reclaim_target()
         self._intent(f"Press {combo_label([key_name])}")
-        return self._inner.keyboard_press_key(key_name, *args, **kwargs)
+        try:
+            with self._passing():
+                return self._inner.keyboard_press_key(key_name, *args, **kwargs)
+        finally:
+            self._after_keys()
 
     def keyboard_hotkey(self, keys: List[str], *args: Any, **kwargs: Any) -> Any:
         from .client import OverlayDenied
 
         self.overlay.checkpoint()
+        self._reclaim_target()
         label = combo_label(keys)
         reason = danger_reason(keys) if self._confirm_danger else None
         if reason is None:
             self._intent(f"Press {label}")
-            return self._inner.keyboard_hotkey(keys, *args, **kwargs)
+            try:
+                with self._passing():
+                    return self._inner.keyboard_hotkey(keys, *args, **kwargs)
+            finally:
+                self._after_keys()
         self.overlay.risk("danger")
         self.overlay.intent(f"Press {label} ({reason})", ms=60000)
         try:
             if not self.overlay.confirm(f"Allow Dobby to press {label} and {reason}?"):
                 raise OverlayDenied(f"The user denied {label} ({reason})")
-            return self._inner.keyboard_hotkey(keys, *args, **kwargs)
+            with self._passing():
+                return self._inner.keyboard_hotkey(keys, *args, **kwargs)
         finally:
+            self._after_keys()
             self.overlay.risk("ok")
             self.overlay.intent("", ms=0)
 

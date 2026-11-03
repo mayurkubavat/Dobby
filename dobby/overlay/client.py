@@ -67,6 +67,7 @@ class NullOverlay:
     active = False
     pid: Optional[int] = None
     awake = False  # the user woke Dobby from the control bar
+    lock_on = False  # the input lock (DOBBY_INPUT_LOCK) is enabled
 
     def on_wake(self, cb: Callable[[], None]) -> None:
         """Call ``cb`` (on the reader thread) when the user wakes Dobby."""
@@ -114,6 +115,10 @@ class NullOverlay:
         return {"woken": False, "stopped": False, "timed_out": False, "waited_s": 0.0, "unavailable": True}
 
     def track(self, window_id: Any = None, pid: Optional[int] = None) -> bool:
+        return True
+
+    def input_pass(self, on: bool) -> bool:
+        """Dobby's own input runs now (True) or is done (False); see ``inputlock``."""
         return True
 
     def clear(self) -> bool:
@@ -526,6 +531,22 @@ class OverlayClient(NullOverlay):
         if wid is None and pid is None:
             return False
         return self._send("glow.track", window_id=wid, pid=pid)
+
+    @property
+    def lock_on(self) -> bool:  # type: ignore[override]
+        return self.config.get("input_lock", "off") != "off"
+
+    def input_pass(self, on: bool) -> bool:  # type: ignore[override]
+        """Let Dobby's own input past the X11 input lock (shield + key grab).
+
+        Only the X11 helper needs this: XTest input would hit its shield
+        window like the person's. Waits for the ack before Dobby acts, so the
+        shield is open in time; closing it again does not wait. macOS tells
+        Dobby's events apart by their tag and needs no round trip.
+        """
+        if self.config.get("input_lock", "off") == "off" or sys.platform == "darwin" or not self.active:
+            return True
+        return self._send("input.pass", wait=bool(on), timeout=0.5, on=bool(on))
 
     def clear(self) -> bool:
         return self._send("glow.clear")

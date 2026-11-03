@@ -27,6 +27,10 @@ Controls: Ctrl+Alt+Esc sends ``stop`` (Ctrl+Alt+End when another app, such as
 GNOME's cycle-panels, already grabs Esc); Ctrl+Alt+P toggles ``pause`` /
 ``resume`` (global key grabs on the root window).
 
+Input lock (``DOBBY_INPUT_LOCK=window``, see ``x11_lock``): while Dobby works,
+a shield with the "not-allowed" cursor covers its window and swallows the
+person's clicks there; other windows stay usable.
+
 Not ported from macOS yet: the numbered step trail, the scan sweep, the menu
 bar icon / tag menu and user take-over detection. Their ops are accepted and acked so the
 server behaves the same.
@@ -49,7 +53,7 @@ gi.require_version("Gdk", "3.0")
 import cairo  # noqa: E402
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-from . import geometry, protocol, style  # noqa: E402
+from . import geometry, inputlock, protocol, style  # noqa: E402
 from ..personality import Voice  # noqa: E402
 from .barlock import (BAR_LOCK, BarOwner, BarRow, mark_waiting, others_showing, others_waiting,  # noqa: E402
                       showing_dir, waiting_dir)
@@ -72,6 +76,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
     "pill": "always",     # control bar: "always", "auto" (only while working) or "off"
     "narrate": True,      # modern look: say what Dobby does on the bar and the tag
+    "input_lock": "off",  # "window": shield Dobby's window while it works (inputlock)
 }
 
 # Classic arrow, y down, tip at (0, 0) (same outline as the macOS helper).
@@ -361,6 +366,13 @@ class X11Overlay:
 
         self._hal = None
         self._probe = None
+        self.track_found: Optional[int] = None  # the tracked window's id, as found
+        self.lock_rect: Optional[Tuple[int, int, int, int]] = None
+        self.lock = None
+        self.lock_stopped = False  # Stop frees the window until Dobby acts again
+        self._lock_cursor = None
+        if str(self.cfg.get("input_lock") or "off") != "off":
+            self._start_lock()
         GLib.timeout_add(int(1000 / max(float(self.cfg["track_hz"]), 0.5)), self._track_tick)
         GLib.timeout_add(200, self._tag_tick)
         GLib.timeout_add(250, self._bar_tick)
@@ -575,18 +587,77 @@ class X11Overlay:
             wid = protocol.window_id_int(w.window_id)
             if self.track_wid is not None and wid == self.track_wid:
                 b = w.bbox
+                self.track_found = wid
                 return (b.x, b.y, b.width, b.height)
         if self.track_pid is not None:
             for w in windows:  # front to back: the pid's topmost window
                 if hal.window_pid(w.window_id) == self.track_pid:
                     b = w.bbox
+                    self.track_found = protocol.window_id_int(w.window_id)
                     return (b.x, b.y, b.width, b.height)
+        self.track_found = None
         return None
 
+    # ---------------------------------------------------------- input lock
+    def _start_lock(self) -> None:
+        try:
+            from .x11_lock import X11InputLock
+
+            cursor_xid = None
+            try:  # the theme's "not-allowed" sign, made by GDK, used by xid
+                gi.require_version("GdkX11", "3.0")
+                from gi.repository import GdkX11
+
+                self._lock_cursor = Gdk.Cursor.new_from_name(Gdk.Display.get_default(), "not-allowed")
+                if self._lock_cursor is not None:
+                    cursor_xid = int(GdkX11.X11Cursor.get_xcursor(self._lock_cursor))
+                    Gdk.flush()
+            except Exception as exc:  # noqa: BLE001 - fall back to the X cursor font
+                sys.stderr.write(f"dobby.overlay: lock cursor: {exc}\n")
+            self.lock = X11InputLock(self._on_lock_swallowed, self._on_lock_insist,
+                                     lambda which: self._on_hotkey(which), cursor_xid=cursor_xid)
+            GLib.io_add_watch(self.lock.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, self._lock_readable)
+            sys.stderr.write("dobby.overlay: input lock ready (window)\n")
+        except Exception as exc:  # noqa: BLE001 - Dobby works without the lock
+            sys.stderr.write(f"dobby.overlay: input lock unavailable: {exc}\n")
+            self.lock = None
+
+    def _lock_readable(self, _fd, _cond) -> bool:
+        if self.lock is None:
+            return False
+        try:
+            self.lock.pump()
+        except Exception as exc:  # noqa: BLE001
+            sys.stderr.write(f"dobby.overlay: input lock: {exc}\n")
+        return self.lock is not None
+
+    def lock_armed(self) -> bool:
+        return inputlock.armed(
+            mode="window" if self.lock is not None else "off", working=self._working(),
+            paused=self.paused or self.lock_stopped, takeover=False,
+            confirming=self.pending_confirm is not None, has_target=self.lock_rect is not None)
+
+    def _lock_sync(self) -> None:
+        if self.lock is not None:
+            self.lock.update(self.lock_rect, self.track_found, self.lock_armed())
+
+    def _on_lock_swallowed(self, kind: str) -> None:
+        if self.bar is not None and self.bar.mode == "hidden":
+            self._refresh_bar()  # the way out (Take over) must be visible
+
+    def _on_lock_insist(self) -> None:
+        self.set_paused(True)  # clicked again and again: the person takes over
+
     def _track_tick(self) -> bool:
+        if self.lock is not None:
+            self.lock.tick()
         if self.track_wid is None and self.track_pid is None:
+            self.lock_rect = None
+            self._lock_sync()
             return True
         rect = self._tracked_rect()
+        self.lock_rect = rect
+        self._lock_sync()
         if rect != self.glow.rect:
             self.glow.place(rect)
             if not self._overlay_shown():
@@ -640,6 +711,7 @@ class X11Overlay:
             current_mode=self.bar.mode, bar_mode=self.bar_mode,
             owner=self.bar_owner.owned, awake=self._awake(), ai_waiting=self.ai_waiting > 0,
             handoff=self.handoff, other_waiting=self.others_waiting,
+            locked=self.lock is not None,
         )
         if view is None:
             self.bar.hide()
@@ -736,6 +808,7 @@ class X11Overlay:
             self.task_steps = 0
             self.current_step = ""
         self.last_action = now
+        self.lock_stopped = False
         self.wake_pointer = False  # Dobby drives the pointer now
         if self.awake_until:
             self._end_awake()
@@ -815,6 +888,7 @@ class X11Overlay:
             return
         self.paused = paused
         self.send_event("pause" if paused else "resume")
+        self._lock_sync()
         self._refresh_bar()
         self._layout_tag()
 
@@ -828,6 +902,8 @@ class X11Overlay:
         if self.pending_confirm is not None:
             self._answer_confirm(False)
         self.paused = False
+        self.lock_stopped = True
+        self._lock_sync()
         if self.awake_until:
             self.sleep()
         self.send_event("stop")
@@ -866,12 +942,14 @@ class X11Overlay:
         win.show_all()
         timer = GLib.timeout_add(int(max(secs, 1.0) * 1000), lambda: (self._answer_confirm(False), False)[1])
         self.pending_confirm = (msg_id, win, timer)
+        self._lock_sync()  # the person must be able to answer
 
     def _answer_confirm(self, ok: bool) -> None:
         if self.pending_confirm is None:
             return
         msg_id, win, timer = self.pending_confirm
         self.pending_confirm = None
+        GLib.idle_add(lambda: (self._lock_sync(), False)[1])
         try:
             GLib.source_remove(timer)
         except Exception:  # noqa: BLE001 - already fired
@@ -993,6 +1071,12 @@ class X11Overlay:
         elif op == "sleep.done":
             self._ai_wait(False)
             self.ack(msg_id)
+        elif op == "input.pass":
+            if self.lock is not None:
+                self.lock.set_pass(bool(msg["on"]))
+                if not msg["on"]:
+                    self._lock_sync()  # the window may have moved or changed
+            self.ack(msg_id)
         elif op == "ping":
             self.ack(msg_id)
         elif op == "bye":
@@ -1050,6 +1134,9 @@ class X11Overlay:
     def quit(self) -> bool:
         if self.pending_confirm is not None:
             self._answer_confirm(False)
+        if self.lock is not None:
+            self.lock.close()
+            self.lock = None
         self.bar_owner.release()
         mark_waiting(self.wait_dir, os.getpid(), False)
         if self.bar is not None:
