@@ -2263,7 +2263,7 @@ class OverlayController:
     def _own_rects(self) -> List[geometry.Rect]:
         """The overlay's clickable windows (bar, tag hotspot), global top-left."""
         rects: List[geometry.Rect] = []
-        if self.pill is not None and self.pill.visible:
+        if self.pill is not None and self.pill.visible and not self.pill.ducked:
             f = self.pill.window.frame()
             rects.append((float(f.origin.x), self.primary_h - float(f.origin.y) - float(f.size.height),
                           float(f.size.width), float(f.size.height)))

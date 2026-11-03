@@ -50,7 +50,10 @@ resumes.
 Input lock: ``DOBBY_INPUT_LOCK=window`` keeps the person's clicks (and keys,
 while it is in front) out of the window Dobby works in, like an agent browser
 locking its tab; other windows stay usable and the bar offers "Take over".
-Default off. See ``dobby.overlay.inputlock``.
+Default off. See ``dobby.overlay.inputlock``. With the lock on, plain clicks
+on buttons go through accessibility (``AXPress``) when the app supports it, so
+the person's pointer does not move (``DOBBY_BACKGROUND_CLICKS=0`` turns that
+off; see ``dobby.hal.background``).
 """
 
 from __future__ import annotations
@@ -146,6 +149,8 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         cfg["pill_in_recordings"] = True
     if lock_mode(env) != "off":
         cfg["input_lock"] = lock_mode(env)
+    if env.get("DOBBY_BACKGROUND_CLICKS", "").strip().lower() in _FALSE:
+        cfg["background_clicks"] = False
     if env.get("DOBBY_OVERLAY_SPEED"):
         try:
             cfg["speed"] = float(env["DOBBY_OVERLAY_SPEED"])

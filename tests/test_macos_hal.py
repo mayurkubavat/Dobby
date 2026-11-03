@@ -503,3 +503,14 @@ def test_ax_inspector_hit_test_maps_role_and_frame():
     assert hit == {"role": "dialog", "name": "Save changes?", "bbox": {"x": 0, "y": 0, "width": 400, "height": 200}}
     ax.AXUIElementCopyElementAtPosition = lambda el, x, y, _: (-25204, None)
     assert insp.hit_test(10, 10) is None
+
+
+def test_background_click_presses_in_the_windows_app_without_posting_events():
+    from tests.test_input_lock import FakeAX as TreeAX
+
+    ax = TreeAX({"b": {"AXRole": "AXButton", "actions": ["AXPress"]}}, "b")
+    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=FakeAppKit(), ax=ax, capture_fn=lambda r: None)
+    assert hal.background_click(100, 100, "7") is True
+    assert ax.app_pid == 42 and ax.pressed == [("b", "AXPress")]
+    assert hal.Q.posted == []  # the real mouse never moved
+    assert hal.background_click(100, 100, "404") is False  # unknown window: click normally

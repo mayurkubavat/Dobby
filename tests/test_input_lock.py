@@ -336,3 +336,125 @@ def test_x11_shield_blocks_person_passes_dobby_and_dies_with_the_helper():
         assert app_got(X.ButtonPress)  # nothing is left blocking
     finally:
         xvfb.terminate()
+
+
+# ------------------------------------------------------ background clicks
+class FakeAX:
+    """A tiny AX tree: element -> attributes; records presses."""
+
+    def __init__(self, tree, at, fail=False):
+        self.tree, self.at, self.fail = tree, at, fail
+        self.pressed = []
+        self.app_pid = None
+
+    def AXUIElementCreateApplication(self, pid):
+        self.app_pid = pid
+        return "app"
+
+    def AXUIElementSetMessagingTimeout(self, el, secs):
+        return 0
+
+    def AXUIElementCopyElementAtPosition(self, el, x, y, _):
+        return (0, self.at) if self.at else (-25204, None)
+
+    def AXUIElementCopyAttributeValue(self, el, name, _):
+        node = self.tree.get(el, {})
+        return (0, node[name]) if name in node else (-25205, None)
+
+    def AXUIElementCopyActionNames(self, el, _):
+        return 0, self.tree.get(el, {}).get("actions", [])
+
+    def AXUIElementPerformAction(self, el, action):
+        self.pressed.append((el, action))
+        return -25200 if self.fail else 0
+
+
+def test_ax_press_presses_a_button_under_its_label():
+    from dobby.hal.background import ax_press_at
+
+    tree = {"label": {"AXRole": "AXStaticText", "AXParent": "btn"},
+            "btn": {"AXRole": "AXButton", "actions": ["AXPress"], "AXParent": "win"}}
+    ax = FakeAX(tree, "label")
+    assert ax_press_at(ax, 42, 10, 20) == "AXButton"
+    assert ax.pressed == [("btn", "AXPress")] and ax.app_pid == 42
+
+
+@pytest.mark.parametrize("tree,at", [
+    ({"f": {"AXRole": "AXTextField", "actions": ["AXPress"]}}, "f"),         # typing needs a real click
+    ({"b": {"AXRole": "AXButton", "actions": ["AXPress"], "AXEnabled": False}}, "b"),
+    ({"b": {"AXRole": "AXButton", "actions": []}}, "b"),
+    ({"c": {"AXRole": "AXGroup", "AXParent": "w"}, "w": {"AXRole": "AXWindow"}}, "c"),
+    ({}, None),
+])
+def test_ax_press_refuses_what_is_not_a_plain_button(tree, at):
+    from dobby.hal.background import ax_press_at
+
+    ax = FakeAX(tree, at)
+    assert ax_press_at(ax, 42, 1, 1) is None
+    assert ax.pressed == []
+
+
+def test_ax_press_failure_is_none():
+    from dobby.hal.background import ax_press_at
+
+    ax = FakeAX({"b": {"AXRole": "AXButton", "actions": ["AXPress"]}}, "b", fail=True)
+    assert ax_press_at(ax, 42, 1, 1) is None
+
+
+class BgOverlay(LockOverlay):
+    background_on = True
+
+    def move(self, x, y, ms=None, wait=True, verb=None, probe=False):
+        self.calls.append(("move", x, y))
+        return True
+
+    def click(self, button="left", count=1):
+        self.calls.append(("ripple",))
+        return True
+
+
+class BgHAL(LockHAL):
+    pressable = True
+
+    def background_click(self, x, y, window_id):
+        self.calls.append(("hal.press", x, y, window_id))
+        return self.pressable
+
+
+def _bg(pressable=True, background=True):
+    ov = BgOverlay()
+    ov.background_on = background
+    inner = BgHAL(ov.calls, "w1")
+    inner.pressable = pressable
+    hal = OverlayHAL(inner, ov)
+    hal.focus_window("w1")
+    inner.active = "person-app"  # the person works in another app
+    ov.calls.clear()
+    return hal, ov.calls
+
+
+def test_background_click_leaves_the_person_alone():
+    hal, calls = _bg()
+    hal.mouse_click(5, 6)
+    assert calls == [("move", 5, 6), ("hal.press", 5, 6, "w1"), ("ripple",)]
+
+
+def test_background_click_falls_back_to_the_real_mouse():
+    hal, calls = _bg(pressable=False)
+    hal.mouse_click(5, 6)
+    assert ("hal.press", 5, 6, "w1") in calls
+    assert calls.index(("hal.focus", "w1")) < calls.index(("hal.click", 5, 6))
+
+
+@pytest.mark.parametrize("kw", [dict(button="right"), dict(click_count=2)])
+def test_only_plain_left_clicks_go_in_the_background(kw):
+    hal, calls = _bg()
+    hal.mouse_click(5, 6, **kw)
+    assert not any(c[0] == "hal.press" for c in calls)
+
+
+def test_background_clicks_can_be_turned_off():
+    hal, calls = _bg(background=False)
+    hal.mouse_click(5, 6)
+    assert not any(c[0] == "hal.press" for c in calls)
+    assert overlay_config({"DOBBY_INPUT_LOCK": "window", "DOBBY_BACKGROUND_CLICKS": "0"})["background_clicks"] is False

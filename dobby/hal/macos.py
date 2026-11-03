@@ -409,6 +409,24 @@ class MacHAL(IDesktopHAL):
                 return int(w.get("kCGWindowOwnerPID", -1))
         return None
 
+    def background_click(self, x: int, y: int, window_id: str) -> bool:
+        """Press the button at (x, y) in window ``window_id``'s app without the
+        real mouse (see ``dobby.hal.background``). False: click normally."""
+        pid = self.window_pid(window_id)
+        if pid is None or pid <= 0:
+            return False
+        try:
+            ax = self._ax if self._ax is not None else _load_ax()
+            self._ax = ax
+        except Exception:  # noqa: BLE001
+            return False
+        from .background import ax_press_at
+
+        if ax_press_at(ax, pid, x, y) is None:
+            return False
+        self._cooldown()
+        return True
+
     def focus_window(self, window_id: str) -> bool:
         """
         Activates the owning app, then checks that the window really is in front.

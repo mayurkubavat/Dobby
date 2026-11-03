@@ -68,6 +68,7 @@ class NullOverlay:
     pid: Optional[int] = None
     awake = False  # the user woke Dobby from the control bar
     lock_on = False  # the input lock (DOBBY_INPUT_LOCK) is enabled
+    background_on = False  # with the lock: press buttons without the real mouse
 
     def on_wake(self, cb: Callable[[], None]) -> None:
         """Call ``cb`` (on the reader thread) when the user wakes Dobby."""
@@ -535,6 +536,10 @@ class OverlayClient(NullOverlay):
     @property
     def lock_on(self) -> bool:  # type: ignore[override]
         return self.config.get("input_lock", "off") != "off"
+
+    @property
+    def background_on(self) -> bool:  # type: ignore[override]
+        return self.lock_on and bool(self.config.get("background_clicks", True))
 
     def input_pass(self, on: bool) -> bool:  # type: ignore[override]
         """Let Dobby's own input past the X11 input lock (shield + key grab).

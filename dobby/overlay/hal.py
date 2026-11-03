@@ -161,6 +161,30 @@ class OverlayHAL:
         except Exception:  # noqa: BLE001 - the step still runs; the AI looks again on failure
             pass
 
+    def _background_click(self, x: int, y: int, button: str, click_count: int, verb: str) -> bool:
+        """Input lock: press a button through accessibility, without the real mouse.
+
+        Only for a plain left click in Dobby's own window when the HAL can do
+        it (``background_click``). Dobby's drawn pointer still glides there and
+        ripples; the person's pointer and front app stay as they are. False:
+        nothing was pressed, click with the real mouse instead.
+        """
+        if not getattr(self.overlay, "background_on", False) or self._tracked is None:
+            return False
+        if button != "left" or click_count != 1:
+            return False
+        press = getattr(self._inner, "background_click", None)
+        if press is None:
+            return False
+        self._point_to(x, y, verb=verb, probe=True)
+        try:
+            done = bool(press(x, y, self._tracked))
+        except Exception:  # noqa: BLE001 - fall back to the real mouse
+            done = False
+        if done:
+            self.overlay.click(button=button, count=click_count)
+        return done
+
     def _after_keys(self) -> None:
         """Input lock: a key may switch windows (new window, app switch): follow it."""
         if getattr(self.overlay, "lock_on", False):
@@ -222,8 +246,10 @@ class OverlayHAL:
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1,
                     *args: Any, **kwargs: Any) -> Any:
         self.overlay.checkpoint()
-        self._reclaim_target()
         verb = _VERBS.get((button, click_count), "Click")
+        if self._background_click(x, y, button, click_count, verb):
+            return None
+        self._reclaim_target()
         self._point_to(x, y, verb=verb, probe=True)
         with self._passing():
             result = self._inner.mouse_click(x, y, button, click_count, *args, **kwargs)
