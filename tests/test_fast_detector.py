@@ -2,6 +2,7 @@
 Unit and Latency Benchmark Tests for Phase 4 Neural Fast-Path (FastONNXUIDetector).
 """
 
+import importlib.util
 import os
 import time
 import pytest
@@ -21,6 +22,12 @@ from dobby.vdom.fast_detector import (
 )
 from dobby.vdom.sidecar import LocalNeuralGrounder
 from dobby.vdom.fusion import VDOMFusionEngine
+
+# Building and running the bundled detector needs both onnx and onnxruntime.
+needs_onnx = pytest.mark.skipif(
+    not (importlib.util.find_spec("onnx") and importlib.util.find_spec("onnxruntime")),
+    reason="needs onnx and onnxruntime (pip install onnx onnxruntime)",
+)
 
 
 def test_letterbox_and_unletterbox():
@@ -76,6 +83,7 @@ def test_nms_vectorized():
     assert 1 not in kept  # Duplicate suppressed
 
 
+@needs_onnx
 def test_build_default_ui_detector_model(tmp_path):
     """Validates building, ONNX checking, and IR version compatibility."""
     import onnx
@@ -100,6 +108,7 @@ def test_build_default_ui_detector_model(tmp_path):
     assert sess.get_outputs()[0].name == "output0"
 
 
+@needs_onnx
 def test_fast_onnx_ui_detector_detection():
     """Validates end-to-end detection on synthetic UI elements."""
     detector = FastONNXUIDetector()
@@ -131,6 +140,7 @@ def test_fast_onnx_ui_detector_detection():
         assert p["source"] == "VISION_FAST"
 
 
+@needs_onnx
 def test_fast_onnx_latency_benchmark():
     """Validates sub-20ms inference latency benchmark on CPU."""
     detector = FastONNXUIDetector()
@@ -148,6 +158,7 @@ def test_fast_onnx_latency_benchmark():
     assert metrics["fps"] >= 50.0
 
 
+@needs_onnx
 def test_local_neural_grounder_integration():
     """Validates LocalNeuralGrounder integration and fallback grace."""
     img = Image.new("RGB", (800, 600), (245, 245, 245))

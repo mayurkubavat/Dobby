@@ -15,6 +15,7 @@ import time
 import uuid
 
 import pytest
+from conftest import live_desktop_allowed
 
 pytestmark = pytest.mark.skipif(
     not sys.platform.startswith("linux") or not os.environ.get("DISPLAY"),
@@ -251,6 +252,44 @@ def test_capture_matches_screen_size(hal):
     assert crop.size == (100, 50)
 
 
+def test_capture_of_a_window_past_the_screen_edge(hal):
+    """A window dragged partly off screen: X would refuse the grab (BadMatch)."""
+    w, h = hal.get_screen_size()
+    full = hal.capture_screen()
+    img = hal.capture_screen(region=(w - 60, h - 40, 100, 80))
+    assert img.size == (100, 80)  # still lines up with the region
+    assert img.crop((0, 0, 60, 40)).tobytes() == full.crop((w - 60, h - 40, w, h)).tobytes()
+    assert img.crop((60, 40, 100, 80)).getextrema() == ((0, 0), (0, 0), (0, 0))  # off screen: black
+    assert hal.capture_screen(region=(-30, -10, 50, 20)).size == (50, 20)
+    assert hal.capture_screen(region=(w + 10, 0, 20, 20)).size == (20, 20)
+
+
+def test_stop_hotkey_moves_when_ctrl_alt_esc_is_taken(hal, monkeypatch):
+    """GNOME/Metacity own Ctrl+Alt+Esc (cycle-panels); Stop must still get a key."""
+    from Xlib import X, XK, display as xdisplay
+
+    pytest.importorskip("gi")
+    from dobby.overlay import x11_helper
+
+    assert x11_helper._HOTKEYS["stop"] == ("Escape", "End")
+    # Keys of their own, so a desktop shortcut or another Dobby overlay cannot interfere.
+    monkeypatch.setattr(x11_helper, "_HOTKEYS", {"stop": ("bracketleft", "bracketright"), "pause": ("semicolon",)})
+    monkeypatch.setattr(x11_helper, "HOTKEY_LABELS", {})
+    squatter, helper = xdisplay.Display(), xdisplay.Display()
+    taken = squatter.keysym_to_keycode(XK.string_to_keysym("bracketleft"))
+    mods = X.ControlMask | X.Mod1Mask
+    squatter.screen().root.grab_key(taken, mods, True, X.GrabModeAsync, X.GrabModeAsync)
+    squatter.sync()
+    try:
+        keys = x11_helper.grab_hotkeys(helper, helper.screen().root)
+        assert taken not in keys
+        assert sorted(keys.values()) == ["pause", "stop"]
+        assert x11_helper.HOTKEY_LABELS["stop"] == "Ctrl+Alt+Bracketright"
+    finally:
+        helper.close()
+        squatter.close()
+
+
 def test_topology_and_ui_scale(hal):
     topo = hal.display_topology()
     assert topo.displays and topo.displays[0].scale == 1.0
@@ -323,24 +362,26 @@ def overlay(hal, tmp_path):
         pytest.skip("GTK 3 (python3-gi, gir1.2-gtk-3.0) not installed")
     from dobby.overlay.client import OverlayClient
 
-    client = OverlayClient(config={"speed": 0, "bar_lock": str(tmp_path / "bar.lock")}, log_path=None)
+    # Plain wording: these check the bar, test_personality checks the voice.
+    client = OverlayClient(config={"speed": 0, "bar_lock": str(tmp_path / "bar.lock"), "personality": "off"},
+                           log_path=None)
     yield client
     client.close()
 
 
 def test_overlay_pointer_glow_and_capture_hiding(hal, overlay, spawn):
     win, _ = spawn()
-    assert overlay.move(400, 300, verb="Click")
+    assert overlay.move(700, 500, verb="Click")  # clear of the dialog and its glow
     assert overlay.track(window_id=win.window_id)
     time.sleep(0.6)  # glow follows on the next track tick
     shot = hal.capture_screen()
     b = win.bbox
-    assert _near(shot.getpixel((404, 308)), VIOLET), "pointer not drawn"
+    assert _near(shot.getpixel((704, 508)), VIOLET), "pointer not drawn"
     assert _near(shot.getpixel((b.x + b.width // 2, b.y - 2)), VIOLET), "glow not drawn"
 
     assert overlay.hide()
     hidden = hal.capture_screen()
-    assert not _near(hidden.getpixel((404, 308)), VIOLET)
+    assert not _near(hidden.getpixel((704, 508)), VIOLET)
     assert not _near(hidden.getpixel((b.x + b.width // 2, b.y - 2)), VIOLET)
     assert overlay.show()
 
@@ -455,4 +496,5 @@ def test_control_bar_working_and_hidden_for_capture(hal, overlay):
     hidden = hal.capture_screen().crop((b.x, b.y, b.x + b.width, b.y + b.height))
     assert overlay.show()
     assert before.getextrema() != hidden.getextrema()
-    assert all(lo == hi for lo, hi in hidden.getextrema())  # plain background while hidden
+    if live_desktop_allowed():  # an empty test display: nothing but background behind the bar
+        assert all(lo == hi for lo, hi in hidden.getextrema())

@@ -104,7 +104,8 @@ class NullOCR(OCREngine):
 
 
 class RapidOCREngine(OCREngine):
-    """PP-OCRv4 via rapidocr_onnxruntime (models bundled in the wheel)."""
+    """PP-OCR via rapidocr_onnxruntime (Python <= 3.12, models bundled in the wheel) or
+    rapidocr 3.x + onnxruntime (Python 3.13+, models fetched once on first use)."""
 
     name = "rapidocr"
 
@@ -116,7 +117,10 @@ class RapidOCREngine(OCREngine):
     def _load(self):
         if self._engine is None and self._error is None:
             try:
-                from rapidocr_onnxruntime import RapidOCR  # type: ignore
+                try:
+                    from rapidocr_onnxruntime import RapidOCR  # type: ignore
+                except ImportError:
+                    from rapidocr import RapidOCR  # type: ignore
 
                 self._engine = RapidOCR()
             except Exception as e:  # not installed, or onnxruntime missing
@@ -132,7 +136,11 @@ class RapidOCREngine(OCREngine):
 
         engine = self._load()
         with self._lock:  # onnxruntime sessions are shared; keep calls serialized
-            result, _ = engine(np.array(image.convert("RGB")))
+            out = engine(np.array(image.convert("RGB")))
+        if isinstance(out, tuple):  # rapidocr_onnxruntime: ([[box, text, score], ...], timings)
+            result = out[0]
+        else:  # rapidocr 3.x: RapidOCROutput with parallel boxes / txts / scores
+            result = zip(out.boxes, out.txts, out.scores) if out.boxes is not None else []
         lines: List[OCRLine] = []
         for box, text, score in result or []:
             xs = [p[0] for p in box]

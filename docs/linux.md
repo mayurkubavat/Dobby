@@ -12,7 +12,7 @@ driver that explains what is missing instead of acting.
 | Windows | EWMH: `_NET_CLIENT_LIST_STACKING` (front to back), `_NET_ACTIVE_WINDOW`, `_NET_WM_PID`, `_NET_FRAME_EXTENTS` |
 | Accessibility tree | AT-SPI2 via PyGObject (`perception/atspi.py`) |
 | Settle signal | XDamage + XFixes cursor |
-| OCR | RapidOCR (ONNX) |
+| OCR | RapidOCR (ONNX): `rapidocr_onnxruntime` up to Python 3.12, `rapidocr` 3.x on 3.13+ (downloads its models once) |
 | Overlay | GTK 3 helper (`overlay/x11_helper.py`), same protocol as the macOS helper |
 
 ## Install (Ubuntu / Debian)
@@ -66,7 +66,9 @@ The control bar sits at the top centre: "Dobby is sleeping" with Pause and
 Stop, "working" while Dobby acts, "paused", "stopped". Click the bar itself to
 wake Dobby (it shows it is ready for a task) or put it back to sleep.
 `DOBBY_OVERLAY_PILL=auto` shows it only while working, `off` hides it.
-Ctrl+Alt+Esc stops Dobby, Ctrl+Alt+P pauses and resumes. Not yet on Linux:
+Ctrl+Alt+Esc stops Dobby, Ctrl+Alt+P pauses and resumes. GNOME and Metacity
+use Ctrl+Alt+Esc for cycle-panels, so there Stop moves to Ctrl+Alt+End; the
+Stop button's tooltip shows the key that is live. Not yet on Linux:
 the numbered step trail, the scan sweep, the tag menu and user take-over
 detection.
 

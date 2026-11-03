@@ -23,7 +23,8 @@ empty input shape, so clicks go straight through. Without a compositor the
 pointer and tag are cut to their drawn shape with XShape, and the frames use
 four thin edge windows, so nothing opaque covers the screen.
 
-Controls: Ctrl+Alt+Esc sends ``stop``; Ctrl+Alt+P toggles ``pause`` /
+Controls: Ctrl+Alt+Esc sends ``stop`` (Ctrl+Alt+End when another app, such as
+GNOME's cycle-panels, already grabs Esc); Ctrl+Alt+P toggles ``pause`` /
 ``resume`` (global key grabs on the root window).
 
 Not ported from macOS yet: the numbered step trail, the scan sweep, the menu
@@ -76,6 +77,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # Classic arrow, y down, tip at (0, 0) (same outline as the macOS helper).
 _ARROW = [(0, 0), (0, 18), (4.5, 14), (8, 21.5), (10.5, 20.5), (7, 13), (13, 13)]
 _STATE_ICON = {"idle": "", "thinking": "…", "typing": "⌨", "waiting_user": "?"}
+# Ctrl+Alt+<key> per action, first free key wins. GNOME/Metacity grabs Ctrl+Alt+Esc
+# (cycle-panels), so Stop falls back to Ctrl+Alt+End there.
+_HOTKEYS = {"stop": ("Escape", "End"), "pause": ("p",)}
+# The combo actually grabbed for each action, e.g. {"stop": "Ctrl+Alt+End"}; shown in tooltips.
+HOTKEY_LABELS: Dict[str, str] = {}
 
 
 def _rgb(value: str) -> Tuple[float, float, float]:
@@ -279,7 +285,11 @@ class _Bar:
             b = wanted.get(key)
             if b is not None:
                 btn.set_label(glyphs.get(b.icon or "", b.title))
-                btn.set_tooltip_text(b.tip or None)
+                tip = b.tip or ""
+                if b.icon == "stop.fill" and tip:
+                    keys = HOTKEY_LABELS.get("stop")
+                    tip = tip.replace("(⌃⌥⎋)", f"({keys})" if keys else "").strip()
+                btn.set_tooltip_text(tip or None)
         self.show(spec.mode, spec.text, "", "", rgb, dot_alpha=spec.dot_alpha)
         self.primary.set_visible("primary" in wanted)
         self.secondary.set_visible("secondary" in wanted)
@@ -1015,20 +1025,11 @@ class X11Overlay:
 
     def _hotkey_loop(self) -> None:
         try:
-            from Xlib import X, XK, display as xdisplay
+            from Xlib import X, display as xdisplay
 
             d = xdisplay.Display()
-            root = d.screen().root
+            keys = grab_hotkeys(d, d.screen().root)
             mods = X.ControlMask | X.Mod1Mask
-            keys = {
-                d.keysym_to_keycode(XK.string_to_keysym("Escape")): "stop",
-                d.keysym_to_keycode(XK.string_to_keysym("p")): "pause",
-            }
-            # Also grab with NumLock (Mod2) and CapsLock (Lock) on, which X counts as modifiers.
-            for code in keys:
-                for extra in (0, X.Mod2Mask, X.LockMask, X.Mod2Mask | X.LockMask):
-                    root.grab_key(code, mods | extra, True, X.GrabModeAsync, X.GrabModeAsync)
-            d.sync()
             while True:
                 ev = d.next_event()
                 if ev.type == X.KeyPress and (ev.state & mods) == mods and ev.detail in keys:
@@ -1055,6 +1056,40 @@ class X11Overlay:
             self.bar.hide()  # frees its row and "showing" marker
         Gtk.main_quit()
         return False
+
+
+def grab_hotkeys(d, root) -> Dict[int, str]:
+    """Grab Ctrl+Alt+<key> for each action in ``_HOTKEYS``; returns {keycode: action}.
+
+    A key another client already grabbed (BadAccess) is skipped for the next candidate,
+    and ``HOTKEY_LABELS`` records the combo that is live.
+    """
+    from Xlib import X, XK, error
+
+    mods = X.ControlMask | X.Mod1Mask
+    # Also grab with NumLock (Mod2) and CapsLock (Lock) on, which X counts as modifiers.
+    extras = (0, X.Mod2Mask, X.LockMask, X.Mod2Mask | X.LockMask)
+    keys: Dict[int, str] = {}
+    for action, names in _HOTKEYS.items():
+        for name in names:
+            code = d.keysym_to_keycode(XK.string_to_keysym(name))
+            if not code:
+                continue
+            catch = error.CatchError(error.BadAccess)
+            for extra in extras:
+                root.grab_key(code, mods | extra, True, X.GrabModeAsync, X.GrabModeAsync, onerror=catch)
+            d.sync()
+            if catch.get_error() is None:
+                keys[code] = action
+                HOTKEY_LABELS[action] = "Ctrl+Alt+" + {"Escape": "Esc"}.get(name, name.capitalize())
+                break
+            for extra in extras:
+                root.ungrab_key(code, mods | extra)
+            d.sync()
+            sys.stderr.write(f"dobby.overlay: Ctrl+Alt+{name} is taken by another app\n")
+    if "stop" in HOTKEY_LABELS:
+        sys.stderr.write(f"dobby.overlay: {HOTKEY_LABELS['stop']} stops Dobby\n")
+    return keys
 
 
 def _stdin_watch(overlay: X11Overlay) -> None:

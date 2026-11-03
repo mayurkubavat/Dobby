@@ -27,9 +27,12 @@ linux = [
 windows = [
     "pynput>=1.8.2; sys_platform == 'win32'",
 ]
-# Local OCR lane. Linux/Windows: PP-OCRv4 ONNX models bundled in the wheel (~16 MB).
+# Local OCR lane. Linux/Windows: PP-OCR ONNX models (bundled in the wheel up to Python 3.12).
 ocr = [
-    "rapidocr_onnxruntime>=1.3; sys_platform != 'darwin'",
+    "rapidocr_onnxruntime>=1.3; sys_platform != 'darwin' and python_version < '3.13'",
+    # rapidocr_onnxruntime has no wheels past 3.12; its successor downloads its models once.
+    "rapidocr>=3.0; sys_platform != 'darwin' and python_version >= '3.13'",
+    "onnxruntime>=1.20; sys_platform != 'darwin' and python_version >= '3.13'",
     "pyobjc-framework-Vision>=10.0; sys_platform == 'darwin'",
 ]
 # macOS backend: Quartz capture/input, Accessibility tree, AppKit window activation

@@ -141,11 +141,24 @@ class LinuxHAL(IDesktopHAL):
         """Captures full screen or region (x, y, width, height)."""
         if region:
             x, y, w, h = region
-            bbox = {"top": y, "left": x, "width": w, "height": h}
-            raw = self._sct.grab(bbox)
-        else:
-            mon = self._sct.monitors[1] if len(self._sct.monitors) > 1 else self._sct.monitors[0]
-            raw = self._sct.grab(mon)
+            # X refuses (BadMatch) a grab that leaves the root window, e.g. a window dragged
+            # partly off screen: grab the on-screen part and pad the rest black, so the image
+            # still lines up with ``region``.
+            root = self._sct.monitors[0]
+            x0, y0 = max(x, root["left"]), max(y, root["top"])
+            x1 = min(x + w, root["left"] + root["width"])
+            y1 = min(y + h, root["top"] + root["height"])
+            if x1 <= x0 or y1 <= y0:
+                return Image.new("RGB", (w, h))
+            raw = self._sct.grab({"top": y0, "left": x0, "width": x1 - x0, "height": y1 - y0})
+            img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
+            if img.size == (w, h):
+                return img
+            canvas = Image.new("RGB", (w, h))
+            canvas.paste(img, (x0 - x, y0 - y))
+            return canvas
+        mon = self._sct.monitors[1] if len(self._sct.monitors) > 1 else self._sct.monitors[0]
+        raw = self._sct.grab(mon)
 
         # Convert raw BGRA bytes to RGB PIL Image
         img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
@@ -417,7 +430,7 @@ class LinuxHAL(IDesktopHAL):
         geom = win.get_geometry()
         root = self._x_display.screen().root
         coords = root.translate_coords(win, 0, 0)
-        x, y, w, h = int(coords.x), int(coords.y), int(geom.width), int(geom.height)
+        x, y, w, h = self._without_csd_shadow(win, int(coords.x), int(coords.y), int(geom.width), int(geom.height))
         # Include the WM decoration (title bar, borders) so occlusion matches what is drawn.
         extents = self._prop(win, "_NET_FRAME_EXTENTS")
         if extents is not None and len(extents) == 4:
@@ -433,6 +446,19 @@ class LinuxHAL(IDesktopHAL):
             is_active=(win_id == active_id),
             app_name=app_name,
         )
+
+    def _without_csd_shadow(self, win, x: int, y: int, w: int, h: int) -> Tuple[int, int, int, int]:
+        """Drop the invisible shadow border a client-side-decorated (GTK) window draws around itself.
+
+        _GTK_FRAME_EXTENTS is (left, right, top, bottom). GTK 4 widget positions are relative
+        to the area inside it, and the shadow is not part of the window the person sees.
+        """
+        extents = self._prop(win, "_GTK_FRAME_EXTENTS")
+        if extents is not None and len(extents) == 4:
+            left, right, top, bottom = (int(v) for v in extents)
+            if w > left + right and h > top + bottom:
+                return x + left, y + top, w - left - right, h - top - bottom
+        return x, y, w, h
 
     def client_windows(self) -> List[dict]:
         """Front-to-back client areas (no WM frame) with pid and title.
@@ -455,12 +481,13 @@ class LinuxHAL(IDesktopHAL):
                     if name is None:
                         name = self._prop(win, "WM_NAME")
                     title = name.decode("utf-8", "ignore") if isinstance(name, bytes) else str(name or "")
+                    x, y, w, h = self._without_csd_shadow(
+                        win, int(coords.x), int(coords.y), int(geom.width), int(geom.height))
                     out.append({
                         "window_id": hex(win_id),
                         "pid": int(pid[0]) if pid is not None and len(pid) else None,
                         "title": title,
-                        "x": int(coords.x), "y": int(coords.y),
-                        "width": int(geom.width), "height": int(geom.height),
+                        "x": x, "y": y, "width": w, "height": h,
                     })
                 except (xlib_error.BadWindow, xlib_error.BadDrawable, xlib_error.BadMatch):
                     continue
@@ -542,7 +569,11 @@ class LinuxHAL(IDesktopHAL):
                     pass
             time.sleep(CONFIG.action_cooldown_ms / 1000.0)
             active = self._active_id()
-            return active == win_int or active is None
+            if active is not None:
+                return active == win_int
+            # No _NET_ACTIVE_WINDOW (no EWMH window manager): trust the direct focus only
+            # for a window that exists and is on screen.
+            return win.get_attributes().map_state == X.IsViewable
         except Exception:
             return False
 

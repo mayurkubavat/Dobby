@@ -228,7 +228,7 @@ last step the agent pointer and the "thinking" glow go away.
 
 | Shortcut | macOS | Linux |
 | --- | --- | --- |
-| Stop | Ctrl+Opt+Esc | Ctrl+Alt+Esc |
+| Stop | Ctrl+Opt+Esc | Ctrl+Alt+Esc (Ctrl+Alt+End on GNOME, which owns Esc) |
 | Pause / resume | Ctrl+Opt+P | Ctrl+Alt+P |
 | Hide / show the bar | Ctrl+Opt+H | |
 
