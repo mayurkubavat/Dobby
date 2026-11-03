@@ -56,9 +56,12 @@ class X11InputLock:
             event_mask=X.ButtonPressMask | X.ButtonReleaseMask,
         )
         self.shield.set_wm_name("Dobby Overlay lock")
+        # Same combos as the helper's global hotkeys (Ctrl+Alt+End is Stop
+        # where the desktop owns Ctrl+Alt+Esc); with the keyboard grabbed only
+        # this connection sees them.
         self.hotkeys = {
-            self.d.keysym_to_keycode(XK.string_to_keysym("Escape")): "stop",
-            self.d.keysym_to_keycode(XK.string_to_keysym("p")): "pause",
+            self.d.keysym_to_keycode(XK.string_to_keysym(name)): which
+            for name, which in (("Escape", "stop"), ("End", "stop"), ("p", "pause"))
         }
         self._active_atom = self.d.intern_atom("_NET_ACTIVE_WINDOW")
         self.rect: Optional[Rect] = None
