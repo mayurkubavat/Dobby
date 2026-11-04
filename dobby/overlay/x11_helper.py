@@ -565,9 +565,14 @@ class _Tray:
         if sig != self.icon_sig:
             self.icon_sig = sig
             if self.indicator is not None:
-                path = topbar.tray_icon_path(state, 44)  # a violet tile: reads on light and dark panels
+                # A violet tile: reads on light and dark panels. Handed over by name from an
+                # icon search path, so the panel scales it to its slot: a file path is drawn
+                # at its own size and cropped (GNOME Flashback gives it 16 px).
+                path = topbar.tray_icon_path(state, 64)
                 if path:
-                    self.indicator.set_icon_full(path, sig[2])
+                    folder, name = os.path.split(path)
+                    self.indicator.set_icon_theme_path(folder)
+                    self.indicator.set_icon_full(os.path.splitext(name)[0], sig[2])
                 self.indicator.set_label(topbar.icon_title(view), "99")
             else:
                 path = topbar.tray_icon_path(state, 44, count=count)
