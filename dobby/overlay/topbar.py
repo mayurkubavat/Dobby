@@ -357,6 +357,77 @@ def render_icon(state: str, size: int = 36, dark: bool = False, template: bool =
     return img.resize((size, size), Image.LANCZOS)
 
 
+def _gradient(size: int, top: str, bottom: str):
+    from PIL import Image
+
+    t, b = _rgba(top), _rgba(bottom)
+    col = Image.new("RGBA", (1, size))
+    for y in range(size):
+        f = y / max(1, size - 1)
+        col.putpixel((0, y), tuple(int(t[i] + (b[i] - t[i]) * f) for i in range(4)))
+    return col.resize((size, size))
+
+
+# The Dobby.app icon's tile (1024 canvas, 824 tile at 100,100, radius 186), mapped to a
+# tile that fills the whole tray icon: a pointer and spark as big as the icon allows.
+_APP_K, _APP_OFF = 1024 / 18 * 0.72, (225, 156)
+_TILE_RADIUS = 186 / 824
+
+
+def _tile_xy(x: float, y: float, s: float) -> Tuple[float, float]:
+    return ((_APP_OFF[0] + x * _APP_K - 100) / 824 * s, (_APP_OFF[1] + y * _APP_K - 100) / 824 * s)
+
+
+def render_tile_icon(state: str, size: int = 44, count: int = 0):
+    """The tray icon as a small Dobby.app tile: a rounded violet square with a
+    white pointer and a gold spark, square like the Claude app's chips. Reads on
+    light and dark panels alike. Status dot and count badge as in :func:`render_icon`."""
+    from PIL import Image, ImageDraw
+
+    scale = 4
+    s = size * scale
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    mask = Image.new("L", (s, s), 0)
+    inset = s * 0.03
+    ImageDraw.Draw(mask).rounded_rectangle([inset, inset, s - inset, s - inset], radius=_TILE_RADIUS * s, fill=255)
+    img.paste(_gradient(s, "#8E70FF", "#4A2FC8"), (0, 0), mask)
+    d = ImageDraw.Draw(img)
+    poly = [_tile_xy(x, y, s) for x, y in _POINTER]
+    white = (255, 255, 255, 255)
+    d.polygon(poly, fill=white)
+    w = max(1, int(round(34 / 824 * s)))
+    d.line(poly + [poly[0]], fill=white, width=w, joint="curve")
+    for x, y in poly:
+        d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=white)
+    sc, sr = ((722 - 100) / 824 * s, (318 - 100) / 824 * s), 122 / 824 * s * 1.15
+    if count > 1:
+        r = sr * 1.05
+        d.ellipse([sc[0] - r, sc[1] - r, sc[0] + r, sc[1] + r], fill=white)
+        _badge_text(d, sc, r, str(count) if count < 10 else "9+", _rgba(PALETTE["fill"]))
+    else:
+        spark = Image.new("L", (s, s), 0)
+        ImageDraw.Draw(spark).polygon(_spark_points(sc[0], sc[1], sr), fill=255)
+        img.paste(_gradient(s, "#FFD978", "#F5A524"), (0, 0), spark)
+    if state in ("working", "attention"):
+        d = ImageDraw.Draw(img)
+        dot = _rgba(PALETTE["caution"] if state == "attention" else PALETTE["ok"])
+        cx = cy = s * 0.83
+        r = s * 0.15
+        d.ellipse([cx - r * 1.3, cy - r * 1.3, cx + r * 1.3, cy + r * 1.3], fill=white)
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=dot)
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def _badge_text(d, centre: Tuple[float, float], r: float, text: str, color) -> None:
+    from PIL import ImageFont
+
+    try:
+        font = ImageFont.load_default(size=int(r * 1.5))  # Pillow 10.1+, needs FreeType
+    except (TypeError, OSError, AttributeError):
+        return
+    d.text(centre, text, fill=color, font=font, anchor="mm")
+
+
 def _badge(d, s: float, text: str) -> None:
     from PIL import ImageFont
 
@@ -449,6 +520,12 @@ def bar_icon_path(state: str, size: int = 36, dark: bool = False, template: bool
     return icon_file("bar-ps", state, size, "dark" if dark else "light", "t" if template else "c",
                      min(count, 10) if count > 1 else 0,
                      render=lambda: render_icon(state, size, dark, template, count), directory=directory)
+
+
+def tray_icon_path(state: str, size: int = 44, count: int = 0, directory: str = ICON_DIR) -> Optional[str]:
+    """The Linux tray's tile icon (see :func:`render_tile_icon`)."""
+    return icon_file("tray-tile", state, size, min(count, 10) if count > 1 else 0,
+                     render=lambda: render_tile_icon(state, size, count), directory=directory)
 
 
 def row_icon_path(color: str, shape: str, size: int = 52, directory: str = ICON_DIR) -> Optional[str]:

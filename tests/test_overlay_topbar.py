@@ -125,3 +125,12 @@ def test_view_exports_plain_json_for_a_native_shell():
     assert d["subtitle"] == v.subtitle and d["icon_state"] == "attention" and d["icon_title"] == "3"
     assert d["rows"][1]["actions"] == [["Pause", "pause_toggle"], ["Stop", "stop"]]
     assert d["palette"]["accent"] == "#7C5CFF"
+
+
+def test_tray_tile_icon(tmp_path):
+    img = topbar.render_tile_icon("working", 44)
+    assert img.size == (44, 44)
+    assert img.getpixel((22, 3))[3] > 200  # the tile reaches the edge: as big as the icon allows
+    assert img.getpixel((0, 0))[3] == 0  # rounded corners
+    p = topbar.tray_icon_path("idle", 44, count=2, directory=str(tmp_path))
+    assert os.path.isfile(p) and p != topbar.tray_icon_path("idle", 44, directory=str(tmp_path))

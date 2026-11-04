@@ -332,18 +332,32 @@ class _Frame:
             e.hide()
 
 
-def _bar_css(dark: bool) -> bytes:
+# The resting bar matches the macOS bar (mac_helper._Pill): a 34 px rectangle with
+# 12 px corners like the Claude chat box, no hard edge. Linux has no Liquid Glass, so
+# with a compositor it uses the Mac's no-glass fallback (translucent fill, thin
+# Dobby-colour border); without one the window cannot be see-through and the
+# fill is the theme's near-opaque one.
+BAR_HEIGHT, BAR_RADIUS, BAR_ROW_STEP = 34, 12, 40
+_BAR_GLASSLESS = {"light": (0.72, 0.55), "dark": (0.42, 0.70)}  # fill alpha, border alpha
+
+
+def _bar_css(dark: bool, composited: bool = True) -> bytes:
     """The bar in palette "Elf Violet, tuned", following the desktop theme."""
     t = style.bar_theme(dark)
     r, g, b = t["bg"]
-    br, bg_, bb, ba = t["border"]
+    fill_alpha, border_alpha = _BAR_GLASSLESS["dark" if dark else "light"]
+    if not composited:
+        fill_alpha = t["bg_alpha"]
+    ar, ag, ab = (int(v * 255) for v in style.hex_rgb01(str(t["accent"])))
     hr, hg, hb, ha = t["hover"]
     return f"""
-#dobby-bar {{ background-color: rgba({r}, {g}, {b}, {t['bg_alpha']}); border-radius: 14px;
-  border: 1px solid rgba({br}, {bg_}, {bb}, {ba}); }}
-#dobby-bar label {{ color: {t['text']}; font-weight: bold; }}
-#dobby-bar button {{ padding: 0 10px; min-height: 22px; background-image: none; box-shadow: none;
-  text-shadow: none; border-radius: 7px; background-color: {t['button']}; border-color: transparent; }}
+#dobby-bar {{ background-color: rgba({r}, {g}, {b}, {fill_alpha}); border-radius: {BAR_RADIUS}px;
+  border: 1px solid rgba({ar}, {ag}, {ab}, {border_alpha}); }}
+#dobby-bar label {{ color: {t['text']}; font-size: 12.5pt; font-weight: 500;
+  font-feature-settings: "tnum"; }}
+#dobby-bar button {{ padding: 0 6px; min-width: 28px; min-height: 24px; background-image: none;
+  box-shadow: none; text-shadow: none; border-radius: 7px; background-color: transparent;
+  border-color: transparent; }}
 #dobby-bar button:hover {{ background-color: rgba({hr}, {hg}, {hb}, {ha}); }}
 #dobby-bar button label {{ color: {t['text']}; }}
 #dobby-bar button.dobby-fill {{ background-color: {style.FILL_COLOR}; }}
@@ -375,8 +389,15 @@ class _Bar:
         self.win.set_name("dobby-bar")
         self.win.set_accept_focus(False)
         self.win.set_keep_above(True)
+        screen = Gdk.Screen.get_default()
+        visual = screen.get_rgba_visual() if screen is not None and screen.is_composited() else None
+        self.composited = visual is not None
+        if visual is not None:  # see-through corners and fill
+            self.win.set_visual(visual)
+        else:  # recut the rounded shape whenever the bar changes size
+            self.win.connect("size-allocate", lambda _w, alloc: self._round(alloc.width, alloc.height))
         provider = Gtk.CssProvider()
-        provider.load_from_data(_bar_css(_desktop_is_dark()))
+        provider.load_from_data(_bar_css(_desktop_is_dark(), self.composited))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
@@ -385,14 +406,18 @@ class _Bar:
             settings = Gtk.Settings.get_default()
             for prop in ("gtk-theme-name", "gtk-application-prefer-dark-theme"):
                 settings.connect(f"notify::{prop}",
-                                 lambda *_: self._css.load_from_data(_bar_css(_desktop_is_dark())))
+                                 lambda *_: self._css.load_from_data(
+                                     _bar_css(_desktop_is_dark(), self.composited)))
         except Exception:  # noqa: BLE001 - theme following is a nicety
             pass
-        row = Gtk.Box(spacing=8, margin_start=12, margin_end=8, margin_top=4, margin_bottom=4)
+        # Mac spacing: 12 left, dot, label, 10 to the buttons, 2 between them, 12 right.
+        row = Gtk.Box(spacing=0, margin_start=12, margin_end=12)
+        row.set_size_request(-1, BAR_HEIGHT)
         self.dot = Gtk.Label(label="●")
         self.text = Gtk.Label(label="")
         click = Gtk.EventBox()
-        inner = Gtk.Box(spacing=6)
+        click.set_visible_window(False)
+        inner = Gtk.Box(spacing=8)
         inner.pack_start(self.dot, False, False, 0)
         inner.pack_start(self.text, False, False, 0)
         click.add(inner)
@@ -403,17 +428,33 @@ class _Bar:
         self.secondary.set_can_focus(False)
         self.primary.connect("clicked", lambda *_: on_button("primary"))
         self.secondary.connect("clicked", lambda *_: on_button("secondary"))
+        buttons = Gtk.Box(spacing=2, margin_start=10)
+        buttons.set_valign(Gtk.Align.CENTER)
+        buttons.pack_start(self.primary, False, False, 0)
+        buttons.pack_start(self.secondary, False, False, 0)
         row.pack_start(click, True, True, 0)
-        row.pack_start(self.primary, False, False, 0)
-        row.pack_start(self.secondary, False, False, 0)
+        row.pack_start(buttons, False, False, 0)
         self.win.add(row)
         self.visible = False
 
     def _place(self) -> None:
         screen = Gdk.Screen.get_default()
-        w, _h = self.win.get_preferred_size()[1].width, 0
-        h = max(self.win.get_preferred_size()[1].height, 30)
-        self.win.move(max(0, (screen.get_width() - w) // 2), 8 + self.row * (h + 6))
+        size = self.win.get_preferred_size()[1]
+        self.win.move(max(0, (screen.get_width() - size.width) // 2), 8 + self.row * BAR_ROW_STEP)
+
+    def _round(self, w: int, h: int) -> None:
+        """No compositor: cut the corners off with XShape so they are not black squares."""
+        surf = cairo.ImageSurface(cairo.FORMAT_A1, max(w, 1), max(h, 1))
+        cr = cairo.Context(surf)
+        r = min(BAR_RADIUS, h / 2)
+        cr.new_sub_path()
+        cr.arc(w - r, r, r, -math.pi / 2, 0)
+        cr.arc(w - r, h - r, r, 0, math.pi / 2)
+        cr.arc(r, h - r, r, math.pi / 2, math.pi)
+        cr.arc(r, r, r, math.pi, 3 * math.pi / 2)
+        cr.close_path()
+        cr.fill()
+        self.win.shape_combine_region(Gdk.cairo_region_create_from_surface(surf))
 
     def _sync_presence(self) -> None:
         """Hold a screen row and the "showing" marker while visible; drop them when hidden."""
@@ -517,28 +558,19 @@ class _Tray:
         return None
 
     # ------------------------------------------------------------ icon
-    @staticmethod
-    def _dark_panel() -> bool:
-        """Draw for a dark panel? DOBBY_TRAY_THEME=light|dark overrides the desktop's setting
-        (some themes pair a light desktop with a dark top panel)."""
-        forced = os.environ.get("DOBBY_TRAY_THEME", "").strip().lower()
-        if forced in ("light", "dark"):
-            return forced == "dark"
-        return _desktop_is_dark()
-
     def update(self, view: topbar.View) -> None:
         self.view = view
-        state, count, dark = topbar.icon_state(view), view.running, self._dark_panel()
-        sig = (state, count, topbar.tooltip(view), dark)
+        state, count = topbar.icon_state(view), view.running
+        sig = (state, count, topbar.tooltip(view))
         if sig != self.icon_sig:
             self.icon_sig = sig
             if self.indicator is not None:
-                path = topbar.bar_icon_path(state, 44, dark=dark)
+                path = topbar.tray_icon_path(state, 44)  # a violet tile: reads on light and dark panels
                 if path:
                     self.indicator.set_icon_full(path, sig[2])
                 self.indicator.set_label(topbar.icon_title(view), "99")
             else:
-                path = topbar.bar_icon_path(state, 44, dark=dark, count=count)
+                path = topbar.tray_icon_path(state, 44, count=count)
                 if path:
                     self.status_icon.set_from_file(path)
                 self.status_icon.set_tooltip_text(sig[2])
