@@ -49,6 +49,15 @@ class OverlayDenied(OverlayStopped):
     """
 
 
+class OverlayBlocked(OverlayDenied):
+    """Dobby may not do this in this app (``~/.dobby/apps.json`` or a Deny
+    to "Let Dobby use …?"). No prompt is shown again this session."""
+
+    def __init__(self, message: str, app: str = "", tier: Optional[str] = None) -> None:
+        super().__init__(message)
+        self.app, self.tier = app, tier
+
+
 class OverlayPaused(OverlayStopped):
     """Dobby stayed paused (or taken over) longer than a step may wait.
 
@@ -74,7 +83,7 @@ class NullOverlay:
         """Call ``cb`` (on the reader thread) when the user wakes Dobby."""
 
     def move(self, x: float, y: float, ms: Optional[int] = None, wait: bool = True,
-             verb: Optional[str] = None, probe: bool = False) -> bool:
+             verb: Optional[str] = None, probe: bool = False, app: Optional[str] = None) -> bool:
         return True
 
     def click(self, button: str = "left", count: int = 1) -> bool:
@@ -104,7 +113,8 @@ class NullOverlay:
     def set_visible(self, on: bool) -> bool:
         return True
 
-    def confirm(self, text: str, secs: float = 30.0) -> bool:
+    def confirm(self, text: str, secs: float = 30.0, detail: str = "", allow: str = "Allow",
+                deny: str = "Deny", kind: str = "danger") -> bool:
         return True  # no overlay, no one to ask: keep the old behaviour
 
     def checkpoint(self, max_wait: float = 120.0) -> None:
@@ -479,23 +489,31 @@ class OverlayClient(NullOverlay):
         result["waited_s"] = round(time.monotonic() - t0, 2)
         return result
 
-    def confirm(self, text: str, secs: float = 30.0) -> bool:
-        """Ask the user Allow/Deny on the pill. False on deny or timeout."""
+    def confirm(self, text: str, secs: float = 30.0, detail: str = "", allow: str = "Allow",
+                deny: str = "Deny", kind: str = "danger") -> bool:
+        """Ask the user Allow/Deny on the pill. False on deny or timeout.
+
+        ``kind`` "access" asks whether Dobby may use an app (calm colours);
+        "danger" is a risky step. ``detail`` explains; ``allow``/``deny``
+        are the button titles.
+        """
         if not self._ensure_started():
             return True  # helper unusable: behave like NullOverlay
-        ok = self._send("confirm", wait=True, timeout=secs + 1.0, text=text, secs=secs)
+        extra = {"detail": detail or None, "allow": allow if allow != "Allow" else None,
+                 "deny": deny if deny != "Deny" else None, "kind": kind if kind != "danger" else None}
+        ok = self._send("confirm", wait=True, timeout=secs + 1.0, text=text, secs=secs, **extra)
         if not ok:
             self._send("confirm.cancel")
         return ok
 
     # ------------------------------------------------------------------- API
     def move(self, x: float, y: float, ms: Optional[int] = None, wait: bool = True,
-             verb: Optional[str] = None, probe: bool = False) -> bool:
+             verb: Optional[str] = None, probe: bool = False, app: Optional[str] = None) -> bool:
         # With ms=None the helper picks the glide time (<= 450 ms) and may
         # do an AX hit test first, so allow for that in the ack timeout.
         timeout = self.ack_timeout + (ms if ms is not None else 450) / 1000.0
         return self._send("cursor.move", wait=wait, timeout=timeout, x=x, y=y, ms=ms,
-                          verb=verb, probe=True if probe else None)
+                          verb=verb, probe=True if probe else None, app=app or None)
 
     def click(self, button: str = "left", count: int = 1) -> bool:
         return self._send("cursor.click", button=button, count=count)

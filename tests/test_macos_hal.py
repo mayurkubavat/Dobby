@@ -500,7 +500,8 @@ def test_ax_inspector_hit_test_maps_role_and_frame():
     ax.AXUIElementCopyElementAtPosition = lambda el, x, y, _: (0, sheet)
     insp = AXInspector(ax=ax, appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982))
     hit = insp.hit_test(10, 10)
-    assert hit == {"role": "dialog", "name": "Save changes?", "bbox": {"x": 0, "y": 0, "width": 400, "height": 200}}
+    assert hit == {"role": "dialog", "name": "Save changes?", "bbox": {"x": 0, "y": 0, "width": 400, "height": 200},
+                   "secure": False}
     ax.AXUIElementCopyElementAtPosition = lambda el, x, y, _: (-25204, None)
     assert insp.hit_test(10, 10) is None
 

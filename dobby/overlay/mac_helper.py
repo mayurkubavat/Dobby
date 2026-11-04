@@ -2143,7 +2143,8 @@ class OverlayController:
             self.stopped_until = time.monotonic() + 2.0
         self._refresh_menu()
 
-    def _start_confirm(self, msg_id: Any, text: str, secs: float) -> None:
+    def _start_confirm(self, msg_id: Any, text: str, secs: float, detail: str = "",
+                       allow: str = "Allow", deny: str = "Deny", kind: str = "danger") -> None:
         if self.pending_confirm is not None:
             self._answer_confirm(False)
         if self.turbo:
@@ -2154,7 +2155,9 @@ class OverlayController:
         if self.pill is None:
             self._answer_confirm(False)  # no way to ask: deny
             return
-        self.pill.show("confirm", _short(text, 70), "Allow", "Deny", self.colors["danger"])
+        spec = style.confirm_spec(_short(text, 70), allow=allow, deny=deny, kind=kind, detail=detail)
+        rgb = self.colors["ok"] if kind == "access" else self.colors["danger"]
+        self.pill.show_spec(spec, rgb)
 
     def _answer_confirm(self, ok: bool) -> None:
         if self.pending_confirm is None:
@@ -2468,7 +2471,7 @@ class OverlayController:
                 else:
                     self._clear_box()
                 if verb:
-                    text = f"{verb} ‘{_short(name, 32)}’" if name else verb
+                    text = style.action_text(verb, name, msg.get("app"))
                     self._set_intent(text)
                     self._add_step(text)
             elif verb and verb != "Move":
@@ -2539,7 +2542,9 @@ class OverlayController:
             self.ack(msg_id)
         elif op == "confirm":
             self._mark_active()
-            self._start_confirm(msg_id, msg["text"], float(msg.get("secs", 30.0)))
+            self._start_confirm(msg_id, msg["text"], float(msg.get("secs", 30.0)),
+                                detail=str(msg.get("detail") or ""), allow=str(msg.get("allow") or "Allow"),
+                                deny=str(msg.get("deny") or "Deny"), kind=str(msg.get("kind") or "danger"))
         elif op == "confirm.cancel":
             if self.pending_confirm is not None:
                 self._answer_confirm(False)

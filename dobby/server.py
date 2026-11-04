@@ -198,6 +198,22 @@ def _adopt_client_name(context: Any) -> None:
 mcp_server = DobbyServer("Dobby")
 hal = get_desktop_hal()
 controller = FeedbackLoopController(hal)
+
+
+def _wire_overlay_hit_test() -> None:
+    """Let the overlay name what a click lands on (bar text, Allow/Deny for Send/Delete…)."""
+    from dobby.overlay import find_overlay_hal
+
+    ov = find_overlay_hal(hal)
+    inspector = getattr(controller, "atspi_inspector", None)
+    if ov is not None and inspector is not None and getattr(inspector, "is_available", False):
+        ov.set_hit_test(getattr(inspector, "hit_test", None))
+
+
+try:
+    _wire_overlay_hit_test()
+except Exception:  # noqa: BLE001 - naming is cosmetic; never block startup
+    logging.getLogger(__name__).debug("overlay hit test not wired", exc_info=True)
 trajectory_engine = TrajectoryEngine(controller)
 
 toolset_manager = ToolSetManager(

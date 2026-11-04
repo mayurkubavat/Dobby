@@ -363,10 +363,12 @@ class ATSPIInspector:
     # ------------------------------------------------------------- walking
 
     def _describe(self, node: Any, box: Tuple[int, int, int, int]) -> dict:
+        role = node.get_role_name() or "unknown"
         return {
-            "role": node.get_role_name() or "unknown",
+            "role": role,
             "name": (node.get_name() or "").strip()[:120],
             "bbox": {"x": box[0], "y": box[1], "width": box[2], "height": box[3]},
+            "secure": role == "password text",
         }
 
     def _deepest_at(self, win: Any, x: int, y: int, origin: Optional[Tuple[int, int]]) -> Optional[dict]:

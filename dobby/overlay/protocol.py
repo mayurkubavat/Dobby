@@ -21,13 +21,14 @@ OVERLAY_WINDOW_TITLE = "Dobby Overlay"
 
 CURSOR_STATES = ("idle", "thinking", "typing", "waiting_user")
 RISK_LEVELS = ("ok", "caution", "danger")
+CONFIRM_KINDS = ("danger", "access")
 
 #: Events the helper sends unprompted: ``{"event": <name>, ...}``.
 EVENTS = ("stop", "pause", "resume", "user_input", "user_idle", "wake", "sleep")
 
 # op -> (required fields, optional fields)
 OPS: Dict[str, tuple] = {
-    "cursor.move": (("x", "y"), ("ms", "verb", "probe")),
+    "cursor.move": (("x", "y"), ("ms", "verb", "probe", "app")),
     "cursor.click": ((), ("button", "count")),
     "cursor.state": (("state",), ()),
     "cursor.hide": ((), ()),
@@ -37,7 +38,9 @@ OPS: Dict[str, tuple] = {
     "risk": (("level",), ()),
     "scan": ((), ("x", "y", "w", "h")),
     "trail.clear": ((), ()),
-    "confirm": (("text",), ("secs",)),
+    # kind "danger" (risky step, red) or "access" (may Dobby use this app?).
+    # detail: a second line; allow / deny: button titles.
+    "confirm": (("text",), ("secs", "detail", "allow", "deny", "kind")),
     "confirm.cancel": ((), ()),
     "overlay.visible": (("on",), ()),
     "glow.track": ((), ("window_id", "pid")),
@@ -79,12 +82,14 @@ def validate(msg: Dict[str, Any]) -> Dict[str, Any]:
     for k in ("x", "y", "w", "h", "ms", "secs"):
         if k in msg and (isinstance(msg[k], bool) or not isinstance(msg[k], (int, float))):
             raise ProtocolError(f"{op}: {k} must be a number")
-    for k in ("verb", "text", "reason"):
+    for k in ("verb", "text", "reason", "app", "detail", "allow", "deny"):
         if k in msg and not isinstance(msg[k], str):
             raise ProtocolError(f"{op}: {k} must be a string")
     for k in ("probe", "on"):
         if k in msg and not isinstance(msg[k], bool):
             raise ProtocolError(f"{op}: {k} must be true or false")
+    if op == "confirm" and msg.get("kind", "danger") not in CONFIRM_KINDS:
+        raise ProtocolError(f"confirm: unknown kind {msg['kind']!r}")
     if op == "risk" and msg["level"] not in RISK_LEVELS:
         raise ProtocolError(f"risk: unknown level {msg['level']!r}")
     if op == "scan" and 0 < len({"x", "y", "w", "h"} & set(msg)) < 4:

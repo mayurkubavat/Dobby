@@ -65,7 +65,7 @@ from typing import Any, Dict, Optional
 
 import contextlib
 
-from .client import NullOverlay, OverlayClient, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
+from .client import NullOverlay, OverlayBlocked, OverlayClient, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
 from .hal import OverlayHAL, unwrap
 from .inputlock import lock_mode
 from .protocol import OVERLAY_WINDOW_TITLE, PROTOCOL_VERSION
@@ -73,7 +73,7 @@ from ..personality import normalize_level
 
 __all__ = [
     "NullOverlay", "OverlayClient", "OverlayHAL", "OverlayStopped", "OverlayInterrupted",
-    "OverlayDenied", "OverlayPaused",
+    "OverlayDenied", "OverlayBlocked", "OverlayPaused",
     "unwrap", "make_overlay", "find_overlay_hal", "step",
     "wrap_hal", "overlay_enabled", "OVERLAY_WINDOW_TITLE", "PROTOCOL_VERSION",
 ]
@@ -179,6 +179,11 @@ def wrap_hal(hal: Any, overlay: Optional[NullOverlay] = None, **kwargs: Any) -> 
     if isinstance(overlay, OverlayClient) or overlay.__class__ is not NullOverlay:
         if isinstance(overlay, OverlayClient) and overlay.config.get("pill", "always") == "always":
             overlay.start_async()  # show the control bar as soon as Dobby runs
+        from .grants import AppGrants
+
+        kwargs.setdefault("grants", AppGrants())  # "Let Dobby use …?" once per app
+        kwargs.setdefault("confirm_clicks",
+                          os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE)
         return OverlayHAL(hal, overlay, **kwargs)
     return hal
 

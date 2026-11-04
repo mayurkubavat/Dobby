@@ -271,9 +271,12 @@ class AXInspector:
             if isinstance(v, str) and v.strip():
                 name = v.strip()[:120]
                 break
+        secure = ax_role == "AXSecureTextField" or subrole == "AXSecureTextField"
+        if secure:
+            name = str(self._attr(el, "AXTitle") or self._attr(el, "AXDescription") or "").strip()[:120]
         frame = self._frame(el)
         bbox = {"x": frame[0], "y": frame[1], "width": frame[2], "height": frame[3]} if frame else None
-        return {"role": role, "name": name, "bbox": bbox}
+        return {"role": role, "name": name, "bbox": bbox, "secure": secure}
 
     def inspect(self) -> List[UIElement]:
         """All elements (not just interactable) of the frontmost app."""

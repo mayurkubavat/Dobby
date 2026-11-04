@@ -224,10 +224,49 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
     return BarSpec(mode, text, buttons + (_HIDE, _MENU), color, dot_alpha)
 
 
-def confirm_spec(text: str) -> BarSpec:
-    """An Allow/Deny prompt: words, not icons, and no way to hide it."""
-    return BarSpec("confirm", text, (Button("primary", "Allow", None, "", "accent"),
-                                     Button("secondary", "Deny", None, "", "danger")), "danger", 1.0)
+def _clip(text: str, limit: int) -> str:
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def app_label(app: Optional[str]) -> str:
+    """A short display name for an app: "Vivado", not "vivado.bin" or "com.apple.Mail"."""
+    name = " ".join(str(app or "").split())
+    if not name:
+        return ""
+    low = name.lower()
+    for suffix in (".app", ".bin", ".exe", "-bin", "-server"):
+        if low.endswith(suffix) and len(name) > len(suffix):
+            name, low = name[: -len(suffix)], low[: -len(suffix)]
+    if "." in name and " " not in name and name.count(".") >= 2:  # bundle id
+        name = name.rsplit(".", 1)[-1]
+    if name.islower():
+        name = name[:1].upper() + name[1:]
+    return _clip(name, 18)
+
+
+def action_text(verb: str, name: Optional[str] = None, app: Optional[str] = None) -> str:
+    """What Dobby does, and to what: "Click ‘Run Synthesis’ in Vivado".
+
+    The element's name comes from the accessibility hit test, the app from
+    the window under the point. Either may be missing.
+    """
+    text = f"{verb} ‘{_clip(name, 32)}’" if name else verb
+    where = app_label(app)
+    return f"{text} in {where}" if where else text
+
+
+def confirm_spec(text: str, allow: str = "Allow", deny: str = "Deny", kind: str = "danger",
+                 detail: str = "") -> BarSpec:
+    """An Allow/Deny prompt: words, not icons, and no way to hide it.
+
+    ``kind`` "danger" is a risky step (red); "access" asks whether Dobby may
+    use an app at all, so it uses Dobby's own colour, not alarm red.
+    ``detail`` is the longer explanation, shown as the bar's tooltip.
+    """
+    return BarSpec("confirm", text, (Button("primary", allow or "Allow", None, "", "accent"),
+                                     Button("secondary", deny or "Deny", None, "", "danger")),
+                   "ok" if kind == "access" else "danger", 1.0, tip=detail or None)
 
 
 def agent_busy(agent: Mapping[str, object]) -> bool:

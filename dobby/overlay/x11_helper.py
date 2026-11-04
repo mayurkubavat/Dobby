@@ -94,6 +94,88 @@ def _rgb(value: str) -> Tuple[float, float, float]:
     return tuple(int(v[i:i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
 
 
+_CONFIRM_CSS = b"""
+#dobby-confirm { background-color: #1f2023; border-radius: 14px; }
+#dobby-confirm .dobby-who { color: @dobby_accent; font-weight: bold; font-size: 11px; letter-spacing: 1px; }
+#dobby-confirm .dobby-title { color: #ffffff; font-weight: bold; font-size: 15px; }
+#dobby-confirm .dobby-detail { color: #c9cbd1; font-size: 12px; }
+#dobby-confirm .dobby-count { color: #8b8e96; font-size: 10px; }
+#dobby-confirm button { border-radius: 8px; padding: 4px 16px; min-height: 26px; }
+#dobby-confirm button:not(.suggested-action):not(.destructive-action) {
+  background-image: none; background-color: #3a3c42; color: #ffffff; border-color: #4a4c52; }
+#dobby-confirm button:not(.suggested-action):not(.destructive-action):hover { background-color: #45474e; }
+"""
+
+
+def _confirm_window(text: str, detail: str, allow: str, deny: str, kind: str, who: str, accent: str,
+                    on_answer) -> Tuple[Any, Any]:
+    """The Allow / Deny card: who asks, what, why, two clear buttons.
+
+    Enter answers with the default button and Escape always denies. The
+    default is Deny for a risky step and Allow for an app-access request.
+    Returns (window, countdown label).
+    """
+    win = Gtk.Window(title=protocol.OVERLAY_WINDOW_TITLE)
+    win.set_name("dobby-confirm")
+    win.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+    win.set_keep_above(True)
+    win.set_resizable(False)
+    win.set_decorated(False)
+    win.set_skip_taskbar_hint(True)
+    win.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
+    screen = win.get_screen()
+    if screen is not None and screen.is_composited() and screen.get_rgba_visual() is not None:
+        win.set_visual(screen.get_rgba_visual())  # round corners without black wedges
+        win.set_app_paintable(False)
+    provider = Gtk.CssProvider()
+    provider.load_from_data(b"@define-color dobby_accent " + accent.encode() + b";" + _CONFIRM_CSS)
+    win.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    def styled(widget, cls):
+        widget.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        if cls:
+            widget.get_style_context().add_class(cls)
+        return widget
+
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=20)
+    head = styled(Gtk.Label(label=(who or "Dobby").upper(), xalign=0), "dobby-who")
+    title = styled(Gtk.Label(label=text, xalign=0), "dobby-title")
+    title.set_line_wrap(True)
+    title.set_max_width_chars(44)
+    box.pack_start(head, False, False, 0)
+    box.pack_start(title, False, False, 0)
+    if detail:
+        body = styled(Gtk.Label(label=detail, xalign=0), "dobby-detail")
+        body.set_line_wrap(True)
+        body.set_max_width_chars(52)
+        box.pack_start(body, False, False, 2)
+    row = Gtk.Box(spacing=8, margin_top=12)
+    countdown = styled(Gtk.Label(label="", xalign=0), "dobby-count")
+    row.pack_start(countdown, True, True, 0)
+    deny_btn = styled(Gtk.Button(label=deny), "destructive-action" if kind == "danger" else None)
+    allow_btn = styled(Gtk.Button(label=allow), "suggested-action")
+    deny_btn.connect("clicked", lambda *_: on_answer(False))
+    allow_btn.connect("clicked", lambda *_: on_answer(True))
+    row.pack_end(allow_btn, False, False, 0)
+    row.pack_end(deny_btn, False, False, 0)
+    box.pack_start(row, False, False, 0)
+    win.add(box)
+    default = allow_btn if kind == "access" else deny_btn
+    default.set_can_default(True)
+    win.set_default(default)
+    win.connect("show", lambda *_: default.grab_focus())
+
+    def on_key(_w, event) -> bool:
+        if event.keyval == Gdk.KEY_Escape:
+            on_answer(False)
+            return True
+        return False
+
+    win.connect("key-press-event", on_key)
+    win.connect("delete-event", lambda *_: (on_answer(False), True)[1])
+    return win, countdown
+
+
 def _short(text: str, n: int = 48) -> str:
     text = " ".join(str(text).split())
     return text if len(text) <= n else text[: n - 1] + "…"
@@ -914,33 +996,31 @@ class X11Overlay:
             self.stopped_until = time.monotonic() + 2.0
 
     # ------------------------------------------------------------- confirm
-    def _start_confirm(self, msg_id: Any, text: str, secs: float) -> None:
+    def _start_confirm(self, msg_id: Any, text: str, secs: float, detail: str = "",
+                       allow: str = "Allow", deny: str = "Deny", kind: str = "danger") -> None:
         if self.cfg.get("turbo"):
             self.ack(msg_id, True)
             return
         if self.pending_confirm is not None:
             self._answer_confirm(False)
-        win = Gtk.Window(title=protocol.OVERLAY_WINDOW_TITLE)
-        win.set_keep_above(True)
-        win.set_resizable(False)
-        win.set_position(Gtk.WindowPosition.CENTER)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=16)
-        label = Gtk.Label(label=f"{self.cfg['label']} wants to: {text}")
-        label.set_line_wrap(True)
-        label.set_max_width_chars(48)
-        box.pack_start(label, True, True, 0)
-        row = Gtk.Box(spacing=8)
-        deny = Gtk.Button(label="Deny")
-        allow = Gtk.Button(label="Allow")
-        deny.connect("clicked", lambda *_: self._answer_confirm(False))
-        allow.connect("clicked", lambda *_: self._answer_confirm(True))
-        row.pack_end(allow, False, False, 0)
-        row.pack_end(deny, False, False, 0)
-        box.pack_start(row, False, False, 0)
-        win.add(box)
-        win.connect("delete-event", lambda *_: (self._answer_confirm(False), True)[1])
+        win, countdown = _confirm_window(
+            text, detail, allow or "Allow", deny or "Deny", kind, str(self.cfg["label"]),
+            self.cfg["color"] if kind == "access" else self.cfg["danger_color"],
+            on_answer=self._answer_confirm)
+        deadline = time.monotonic() + max(secs, 1.0)
+
+        def tick() -> bool:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                self._answer_confirm(False)
+                return False
+            countdown.set_text(f"No answer in {int(left + 0.99)} s counts as {deny or 'Deny'}")
+            return True
+
+        tick()
+        timer = GLib.timeout_add(250, tick)
         win.show_all()
-        timer = GLib.timeout_add(int(max(secs, 1.0) * 1000), lambda: (self._answer_confirm(False), False)[1])
+        win.present()
         self.pending_confirm = (msg_id, win, timer)
         self._lock_sync()  # the person must be able to answer
 
@@ -987,7 +1067,7 @@ class X11Overlay:
                 else:
                     self.box.place(None)
                 if verb:
-                    self._set_intent(f"{verb} ‘{_short(name, 32)}’" if name else verb)
+                    self._set_intent(style.action_text(verb, name, msg.get("app")))
             elif verb and verb != "Move":
                 self._set_intent(verb)
             if self.cursor is None:
@@ -1037,7 +1117,9 @@ class X11Overlay:
             self.ack(msg_id)  # not drawn on Linux yet
         elif op == "confirm":
             self._mark_active()
-            self._start_confirm(msg_id, msg["text"], float(msg.get("secs", 30.0)))
+            self._start_confirm(msg_id, msg["text"], float(msg.get("secs", 30.0)),
+                                detail=str(msg.get("detail") or ""), allow=str(msg.get("allow") or "Allow"),
+                                deny=str(msg.get("deny") or "Deny"), kind=str(msg.get("kind") or "danger"))
         elif op == "confirm.cancel":
             self._answer_confirm(False)
             self.ack(msg_id)

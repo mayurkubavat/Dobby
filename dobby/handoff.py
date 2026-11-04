@@ -17,6 +17,8 @@ Kinds:
 * ``stopped``      the person pressed Stop. End the task; do not retry.
 * ``denied``       the person said Deny (or did not answer) to a risky step.
                    Do not do that step another way; ask the person.
+* ``blocked``      Dobby may not act in that app (apps.json, or the person
+                   said no to "Let Dobby use …?"). Ask the person.
 * ``interrupted``  the person used the mouse or keyboard mid-task. The step
                    was skipped; look at the screen again, then decide.
 * ``paused``       the person paused Dobby and did not resume in time. Wait
@@ -33,11 +35,12 @@ from typing import Any, Dict, Optional, Tuple, Type
 def _types() -> Tuple[Tuple[Type[BaseException], str], ...]:
     # Imported lazily: dobby.overlay and dobby.control import optional bits.
     from dobby.control.controller import ControlBusy, ControlChanged, ControlStopped
-    from dobby.overlay.client import OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
+    from dobby.overlay.client import OverlayBlocked, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
 
     # Most specific first: OverlayDenied / OverlayInterrupted / OverlayPaused
     # are OverlayStopped subclasses.
     return (
+        (OverlayBlocked, "blocked"),
         (OverlayDenied, "denied"),
         (OverlayInterrupted, "interrupted"),
         (OverlayPaused, "paused"),
@@ -56,6 +59,10 @@ _ADVICE: Dict[str, Tuple[bool, bool, str]] = {
     "denied": (False, False,
                "The person denied this step. Do not do it again or reach the same result another way. "
                "Explain what you wanted to do and ask them how to go on."),
+    "blocked": (False, False,
+                "Dobby is not allowed to do this in that app. Do not try it another way (another tool, "
+                "the shell, a shortcut). Tell the person what you wanted to do there; they can allow it in "
+                "~/.dobby/apps.json or do that step themselves."),
     "interrupted": (True, True,
                     "The person used the mouse or keyboard while Dobby worked, so this step was skipped. "
                     "Take a fresh look at the screen, then decide the next step. Do not replay old coordinates."),
