@@ -308,6 +308,26 @@ After updating from an older checkout, run `pip install -e .` again so the
 `~/.dobby/logs/daemon.log`), and `dobby stdio` runs a private one.
 `control_status` lists every connected client.
 
+### Dobby.app (macOS)
+
+`apps/macos` is a small native Swift app that owns the shared Dobby. Build
+and install it with:
+
+```bash
+apps/macos/build.sh --install   # needs the Xcode command line tools
+```
+
+Once it is installed, `dobby` opens Dobby.app instead of starting the engine
+itself. The app starts `dobby serve` as its own child, so macOS asks for
+Screen Recording and Accessibility for **Dobby** once, whichever AI client
+or terminal you use. Its menu bar icon lists each connected AI with Pause,
+Resume and Stop, and has Pause / Stop all, permission shortcuts, Open at
+Login, Show Log, Restart and Quit. Links such as `dobby://pause-all`,
+`dobby://stop-all` or `dobby://stop?pid=4242` do the same from Shortcuts or a
+script. `DOBBY_APP=0` skips the app; `DOBBY_APP=/path/Dobby.app` picks one.
+Set `DOBBY_SIGN_IDENTITY` when building to keep permissions across rebuilds
+(ad-hoc builds may need Screen Recording granted again).
+
 ### Taking turns
 
 If you run Dobby from two clients at once (say Claude Code and Antigravity),

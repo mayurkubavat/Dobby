@@ -106,7 +106,8 @@ final class Engine {
     }
 
     func restart() {
-        queue.async {
+        queue.async { [weak self] in
+            guard let self else { return }
             self.restarts = 0
             if let p = self.process {
                 p.terminationHandler = { [weak self] _ in
