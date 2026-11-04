@@ -29,7 +29,38 @@ STYLES = ("modern", "classic")
 
 # One colour per running Dobby, in the order they start. Violet first so a
 # single Dobby looks as before. No amber or red: those mean caution/danger.
-AGENT_PALETTE: Tuple[str, ...] = ("#7C5CFF", "#14B8A6", "#EC4899", "#3B82F6", "#84CC16", "#A855F7")
+# Palette "Elf Violet, tuned" (chosen 2026-11-04). Brown replaces a second
+# purple so no two Dobbys look alike.
+AGENT_PALETTE: Tuple[str, ...] = ("#7C5CFF", "#14B8A6", "#EC4899", "#3B82F6", "#84CC16", "#B07A4F")
+
+# Filled buttons (Take over, Allow) and the pointer tag: white text on
+# #7C5CFF is only 4.3:1, so fills use the deeper #5B3FE0.
+FILL_COLOR = "#5B3FE0"
+FILL_TITLES = frozenset({"Take over", "Allow"})
+
+# The bar follows the desktop's light or dark theme.
+BAR_THEMES: Dict[str, Dict[str, object]] = {
+    "light": {"bg": (251, 250, 255), "bg_alpha": 0.94, "text": "#1E1A2E", "dim": "#4A4560",
+              "border": (124, 92, 255, 0.28), "accent": "#7C5CFF", "hover": (0, 0, 0, 0.07),
+              "button": "#ECE8FA"},
+    "dark": {"bg": (27, 24, 38), "bg_alpha": 0.92, "text": "#F3F0FF", "dim": "#C9C3E0",
+             "border": (155, 130, 255, 0.35), "accent": "#9B82FF", "hover": (255, 255, 255, 0.16),
+             "button": "#3A3550"},
+}
+
+
+def bar_theme(dark: bool) -> Dict[str, object]:
+    return BAR_THEMES["dark" if dark else "light"]
+
+
+def hex_rgb01(value: str) -> Tuple[float, float, float]:
+    v = value.lstrip("#")
+    return tuple(int(v[i:i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
+
+
+def is_filled(button: "Button") -> bool:
+    """Take over and Allow are filled #5B3FE0 buttons with white text."""
+    return button.role == "accent" or button.title in FILL_TITLES
 
 
 def normalize_style(value: Optional[str]) -> str:

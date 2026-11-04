@@ -96,7 +96,7 @@ from AppKit import (
     NSWindowStyleMaskNonactivatingPanel,
     NSWorkspace,
 )
-from Foundation import NSNotificationCenter, NSObject, NSTimer
+from Foundation import NSNotificationCenter, NSObject, NSTimer, NSUserDefaults
 from PyObjCTools import AppHelper
 from Quartz import (
     CABasicAnimation,
@@ -511,12 +511,17 @@ class _PillButton(NSButton):
 
     def mouseEntered_(self, event):
         if getattr(self, "dobby_hover", False) and self.layer() is not None:
-            self.layer().setBackgroundColor_(_cg((1, 1, 1), 0.16))
+            if getattr(self, "dobby_fill", False):
+                self.layer().setBackgroundColor_(_cg(_FILL_HOVER_RGB, 1.0))
+            else:
+                r, g, b, a = getattr(self, "dobby_hover_rgba", (1, 1, 1, 0.16))
+                self.layer().setBackgroundColor_(_cg((r, g, b), a))
         objc.super(_PillButton, self).mouseEntered_(event)
 
     def mouseExited_(self, event):
         if getattr(self, "dobby_hover", False) and self.layer() is not None:
-            self.layer().setBackgroundColor_(None)
+            fill = getattr(self, "dobby_fill", False)
+            self.layer().setBackgroundColor_(_cg(_FILL_RGB, 1.0) if fill else None)
         objc.super(_PillButton, self).mouseExited_(event)
 
 
@@ -911,7 +916,19 @@ def _dots_image(dots, caption: str = ""):
     return img
 
 
-_DANGER_RGB = (1.0, 0.42, 0.42)
+_DANGER_RGB = (1.0, 0.42, 0.42)  # on the dark bar
+_DANGER_LIGHT_RGB = style.hex_rgb01("#F04438")  # on the light bar
+_FILL_RGB = style.hex_rgb01(style.FILL_COLOR)  # Take over, Allow: white text passes 4.5:1
+_FILL_HOVER_RGB = style.hex_rgb01("#6A50EA")
+
+
+def _desktop_dark() -> bool:
+    """macOS Dark Mode. Read from defaults: the helper app is never active,
+    so its own effectiveAppearance does not follow the system."""
+    try:
+        return str(NSUserDefaults.standardUserDefaults().stringForKey_("AppleInterfaceStyle") or "") == "Dark"
+    except Exception:  # noqa: BLE001
+        return True
 
 
 class _Pill:
@@ -945,7 +962,7 @@ class _Pill:
         _configure_overlay_window(win, cfg, click_through=False)
         if not cfg.get("pill_in_recordings"):
             win.setSharingType_(NSWindowSharingNone)  # never in screenshots, so no capture blink
-        win.setAppearance_(NSAppearance.appearanceNamed_(NSAppearanceNameDarkAqua))
+        self.dark = _desktop_dark()
         view = _PillView.alloc().initWithFrame_(((0, 0), (300, self.H)))
         view.dobby_target = target
         view.setWantsLayer_(True)
@@ -971,17 +988,13 @@ class _Pill:
                 sys.stderr.write(f"dobby.overlay: no glass: {exc}\n")
             tint = NSView.alloc().initWithFrame_(((0, 0), (300, self.H)))
             tint.setWantsLayer_(True)
-            tint.layer().setBackgroundColor_(_cg((0.08, 0.06, 0.13), 0.42 if self.backdrop else 0.94))
             tint.layer().setMasksToBounds_(True)
             tint.setAutoresizingMask_(18)
             view.addSubview_(tint)
             self.tint = tint
             backdrops.append(tint)
-        else:
-            layer.setBackgroundColor_(_cg((0.11, 0.09, 0.16), 0.94))
         view.dobby_backdrops = tuple(backdrops)
         self.label = NSTextField.labelWithString_("")
-        self.label.setTextColor_(NSColor.whiteColor())
         if self.modern:
             self.label.setFont_(NSFont.monospacedDigitSystemFontOfSize_weight_(12.5, 0.23))  # medium
         else:
@@ -1023,19 +1036,61 @@ class _Pill:
         self.spec: Optional[style.BarSpec] = None
         self.ducked = False
         self.user_hidden = False
+        self._apply_theme(self.dark)
+
+    # ------------------------------------------------------------- theme
+    def _apply_theme(self, dark: bool) -> None:
+        """Palette "Elf Violet, tuned": light or dark bar, following macOS."""
+        self.dark = dark
+        t = style.bar_theme(dark)
+        name = NSAppearanceNameDarkAqua if dark else "NSAppearanceNameAqua"
+        self.window.setAppearance_(NSAppearance.appearanceNamed_(name))
+        bg = tuple(c / 255.0 for c in t["bg"])
+        if self.tint is not None:
+            alpha = (0.42 if dark else 0.72) if self.backdrop is not None else float(t["bg_alpha"])
+            self.tint.layer().setBackgroundColor_(_cg(bg, alpha))
+        else:
+            self.view.layer().setBackgroundColor_(_cg(bg, float(t["bg_alpha"])))
+        if self.backdrop is not None:
+            try:
+                self.backdrop.setMaterial_(13 if dark else 6)  # HUD window / popover
+            except Exception:  # noqa: BLE001
+                pass
+        self.text_rgb = style.hex_rgb01(str(t["text"]))
+        self.danger_rgb = _DANGER_RGB if dark else _DANGER_LIGHT_RGB
+        self.label.setTextColor_(_ns_color(self.text_rgb))
+        hover = t["hover"]
+        for b in self._btns.values():
+            b.dobby_hover_rgba = (hover[0] / 255.0, hover[1] / 255.0, hover[2] / 255.0, hover[3])
+        self._symbols.clear()
+        self.menu_glyph = _white_symbol("chevron.down", 10.0, self.text_rgb)
+        if self.menu_glyph is not None:
+            self.menu_btn.setImage_(self.menu_glyph)
+
+    def _follow_theme(self) -> None:
+        dark = _desktop_dark()
+        if dark != self.dark:
+            self._apply_theme(dark)
 
     # ------------------------------------------------------------- drawing
-    def _symbol(self, name: str, role: str):
-        key = (name, role)
+    def _symbol(self, name: str, role: str, filled: bool = False):
+        key = (name, role, filled)
         if key not in self._symbols:
-            rgb = _DANGER_RGB if role == "danger" else None
+            rgb = (1.0, 1.0, 1.0) if filled else (self.danger_rgb if role == "danger" else self.text_rgb)
             self._symbols[key] = _white_symbol(name, 13.0 if self.modern else 10.0, rgb)
         return self._symbols[key]
 
     def _dress(self, btn, spec_btn: style.Button) -> None:
         icon = None
+        filled = style.is_filled(spec_btn) and spec_btn.key in ("primary", "secondary")
+        btn.dobby_fill = filled
+        if filled and btn.layer() is None:
+            btn.setWantsLayer_(True)
+        if btn.layer() is not None:
+            btn.layer().setBackgroundColor_(_cg(_FILL_RGB, 1.0) if filled else None)
+            btn.layer().setCornerRadius_(7.0)
         if spec_btn.icon and (self.modern or spec_btn.key == "menu"):
-            icon = self._symbol(spec_btn.icon, spec_btn.role)
+            icon = self._symbol(spec_btn.icon, spec_btn.role, filled)
         if icon is not None:
             btn.setImage_(icon)
             btn.setImagePosition_(NSImageOnly)
@@ -1048,9 +1103,17 @@ class _Pill:
         else:
             btn.setImage_(None)
             btn.setImagePosition_(0)  # NSNoImage
-            btn.setBordered_(True)
-            btn.set_label(spec_btn.title, _DANGER_RGB if (self.modern and spec_btn.role == "danger") else None)
-            btn.sizeToFit()
+            if filled:
+                btn.setBordered_(False)
+                btn.set_label(spec_btn.title, (1.0, 1.0, 1.0))
+                btn.sizeToFit()
+                size = btn.frame().size
+                btn.setFrameSize_((size.width + 18.0, max(size.height, 22.0)))
+            else:
+                btn.setBordered_(True)
+                danger = self.modern and spec_btn.role == "danger"
+                btn.set_label(spec_btn.title, self.danger_rgb if danger else self.text_rgb)
+                btn.sizeToFit()
         if spec_btn.tip:
             btn.setToolTip_(spec_btn.tip)
 
@@ -1077,6 +1140,7 @@ class _Pill:
             mark_waiting(self.show_dir, os.getpid(), showing)
 
     def show_spec(self, spec: style.BarSpec, rgb, dots=(), tip: Optional[str] = None) -> None:
+        self._follow_theme()
         self.mode = spec.mode
         self.spec = spec
         self._sync_presence()
@@ -1092,7 +1156,7 @@ class _Pill:
             btn.setHidden_(b is None)
             if b is not None:
                 self._dress(btn, b)
-            if btn.layer() is not None and self.modern:
+            if btn.layer() is not None and self.modern and not getattr(btn, "dobby_fill", False):
                 btn.layer().setBackgroundColor_(None)
         # The compact capsule's round ends make the dot side look wider.
         x = 12.0 if spec.compact else 14.0

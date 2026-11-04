@@ -108,6 +108,18 @@ _CONFIRM_FILL, _CONFIRM_DANGER = "#5B3FE0", "#F04438"
 
 
 def _desktop_is_dark() -> bool:
+    if ":dark" in os.environ.get("GTK_THEME", "").lower():
+        return True
+    try:  # GNOME 42+ and others: the desktop-wide light/dark switch
+        from gi.repository import Gio
+
+        source = Gio.SettingsSchemaSource.get_default()
+        if source is not None and source.lookup("org.gnome.desktop.interface", True) is not None:
+            schema = Gio.Settings.new("org.gnome.desktop.interface")
+            if "color-scheme" in schema.list_keys() and schema.get_string("color-scheme") == "prefer-dark":
+                return True
+    except Exception:  # noqa: BLE001
+        pass
     try:
         settings = Gtk.Settings.get_default()
         if settings.get_property("gtk-application-prefer-dark-theme"):
@@ -315,12 +327,32 @@ class _Frame:
             e.hide()
 
 
-_BAR_CSS = b"""
-#dobby-bar { background-color: rgba(28, 28, 32, 0.92); border-radius: 14px; }
-#dobby-bar label { color: #ffffff; font-weight: bold; }
-#dobby-bar button { padding: 0 10px; min-height: 22px; }
-#dobby-bar button label { color: #1c1c20; }
-"""
+def _bar_css(dark: bool) -> bytes:
+    """The bar in palette "Elf Violet, tuned", following the desktop theme."""
+    t = style.bar_theme(dark)
+    r, g, b = t["bg"]
+    br, bg_, bb, ba = t["border"]
+    hr, hg, hb, ha = t["hover"]
+    return f"""
+#dobby-bar {{ background-color: rgba({r}, {g}, {b}, {t['bg_alpha']}); border-radius: 14px;
+  border: 1px solid rgba({br}, {bg_}, {bb}, {ba}); }}
+#dobby-bar label {{ color: {t['text']}; font-weight: bold; }}
+#dobby-bar button {{ padding: 0 10px; min-height: 22px; background-image: none; box-shadow: none;
+  text-shadow: none; border-radius: 7px; background-color: {t['button']}; border-color: transparent; }}
+#dobby-bar button:hover {{ background-color: rgba({hr}, {hg}, {hb}, {ha}); }}
+#dobby-bar button label {{ color: {t['text']}; }}
+#dobby-bar button.dobby-fill {{ background-color: {style.FILL_COLOR}; }}
+#dobby-bar button.dobby-fill:hover {{ background-color: #6A50EA; }}
+#dobby-bar button.dobby-fill label {{ color: #ffffff; }}
+""".encode()
+
+
+def _set_fill(button: Any, filled: bool) -> None:
+    ctx = button.get_style_context()
+    if filled:
+        ctx.add_class("dobby-fill")
+    else:
+        ctx.remove_class("dobby-fill")
 
 
 class _Bar:
@@ -339,10 +371,18 @@ class _Bar:
         self.win.set_accept_focus(False)
         self.win.set_keep_above(True)
         provider = Gtk.CssProvider()
-        provider.load_from_data(_BAR_CSS)
+        provider.load_from_data(_bar_css(_desktop_is_dark()))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
+        self._css = provider
+        try:  # follow the desktop when it switches between light and dark
+            settings = Gtk.Settings.get_default()
+            for prop in ("gtk-theme-name", "gtk-application-prefer-dark-theme"):
+                settings.connect(f"notify::{prop}",
+                                 lambda *_: self._css.load_from_data(_bar_css(_desktop_is_dark())))
+        except Exception:  # noqa: BLE001 - theme following is a nicety
+            pass
         row = Gtk.Box(spacing=8, margin_start=12, margin_end=8, margin_top=4, margin_bottom=4)
         self.dot = Gtk.Label(label="●")
         self.text = Gtk.Label(label="")
@@ -386,8 +426,10 @@ class _Bar:
         self.text.set_text(text)
         if primary:
             self.primary.set_label(primary)
+            _set_fill(self.primary, primary in style.FILL_TITLES)
         if secondary:
             self.secondary.set_label(secondary)
+            _set_fill(self.secondary, secondary in style.FILL_TITLES)
         r, g, b = (int(v * 255) for v in rgb)
         self.dot.set_markup(f'<span foreground="#{r:02x}{g:02x}{b:02x}" alpha="{int(dot_alpha * 100)}%">●</span>')
         self.visible = True
@@ -407,6 +449,7 @@ class _Bar:
             b = wanted.get(key)
             if b is not None:
                 btn.set_label(glyphs.get(b.icon or "", b.title))
+                _set_fill(btn, style.is_filled(b))
                 tip = b.tip or ""
                 if b.icon == "stop.fill" and tip:
                     keys = HOTKEY_LABELS.get("stop")
@@ -521,6 +564,13 @@ class X11Overlay:
         key = {"caution": "caution_color", "danger": "danger_color"}.get(self.risk, "color")
         return _rgb(self.cfg[key])
 
+    def _tag_color(self) -> Tuple[float, float, float]:
+        """The pointer tag carries white text: Dobby violet #7C5CFF is too light
+        for that (4.3:1), so the tag uses the deeper #5B3FE0."""
+        if self.risk not in ("caution", "danger") and str(self.cfg["color"]).upper() == "#7C5CFF":
+            return _rgb(style.FILL_COLOR)
+        return self._color()
+
     def _apply_colors(self) -> None:
         c = self._color()
         self.glow.set_color(c)
@@ -561,11 +611,14 @@ class X11Overlay:
         cr.arc(w - r, r, r, -math.pi / 2, math.pi / 2)
         cr.arc(r, r, r, math.pi / 2, 3 * math.pi / 2)
         cr.close_path()
-        cr.set_source_rgb(*self._color())
+        cr.set_source_rgb(*self._tag_color())
         cr.fill()
         cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
         cr.set_font_size(12)
-        cr.set_source_rgb(1, 1, 1)
+        if self.risk == "caution":
+            cr.set_source_rgb(*_rgb("#241A00"))  # white on amber is unreadable
+        else:
+            cr.set_source_rgb(1, 1, 1)
         cr.move_to(10, h / 2.0 + 4.5)
         cr.show_text(self._tag_text())
 
