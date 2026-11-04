@@ -263,6 +263,7 @@ it. Settings go in the client's `env`:
 | --- | --- |
 | `DOBBY_OVERLAY=0` | Turn the overlay off |
 | `DOBBY_OVERLAY_STYLE=classic` | Use the older, larger look |
+| `DOBBY_OVERLAY_GLASS=0` | On macOS 26 and later, keep the frosted bar instead of Liquid Glass |
 | `DOBBY_OVERLAY_NARRATE=0` | Quieter modern look: no "Dobby is working" text, the tag shows each action only briefly, unnumbered trail dots, a dot for every running Dobby |
 | `DOBBY_MODE=secure` | Same as `dobby --secure`: app grants, Allow/Deny prompts, no typing into password fields, pause on take-over. Default `turbo` |
 | `DOBBY_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |

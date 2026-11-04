@@ -887,3 +887,10 @@ def test_overlay_config_awake_secs():
     assert overlay_config({"DOBBY_OVERLAY_AWAKE_SECS": "30"})["awake_secs"] == 30.0
     assert overlay_config({"DOBBY_OVERLAY_AWAKE_SECS": "1"})["awake_secs"] == 5.0
     assert "awake_secs" not in overlay_config({"DOBBY_OVERLAY_AWAKE_SECS": "soon"})
+
+
+def test_glass_env_turns_liquid_glass_off():
+    from dobby.overlay import overlay_config
+
+    assert overlay_config({}).get("liquid_glass", "auto") == "auto"
+    assert overlay_config({"DOBBY_OVERLAY_GLASS": "0"})["liquid_glass"] == "off"
