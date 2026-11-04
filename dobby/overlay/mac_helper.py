@@ -184,8 +184,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # edges) or "classic" (the look before those).
     "style": "modern",
     # Modern bar on macOS 26+: Liquid Glass (NSGlassEffectView) instead of the
-    # frosted HUD material. "auto" uses it where the OS has it; "off" never.
-    "liquid_glass": "auto",
+    # frosted HUD material. "clear" (default) or "regular" where the OS has it; "off" never.
+    "liquid_glass": "clear",
     # One colour per running Dobby (from the agent registry). Off when
     # DOBBY_OVERLAY_COLOR fixes the colour ("color_fixed").
     "agent_colors": True,
@@ -948,11 +948,15 @@ def _desktop_dark() -> bool:
 # Palette tint laid over Liquid Glass; the glass stays readable without a dark slab.
 _GLASS_TINT_DARK = 0.18
 _GLASS_TINT_LIGHT = 0.10
+# Modern bar corners: a rounded rectangle like the Claude app's chat box, not a capsule.
+_BAR_RADIUS = 12.0
+_GLASS_STYLES = {"clear": 1, "regular": 0}  # NSGlassEffectViewStyle
 
 
 def _liquid_glass(cfg: Dict[str, Any], height: float):
-    """A capsule NSGlassEffectView (macOS 26+ Liquid Glass), or None where unavailable or turned off."""
-    if str(cfg.get("liquid_glass", "auto")).lower() in ("off", "false", "0", "no"):
+    """A clear (or regular) NSGlassEffectView (macOS 26+ Liquid Glass), or None where unavailable or off."""
+    choice = str(cfg.get("liquid_glass", "clear")).lower()
+    if choice in ("off", "false", "0", "no"):
         return None
     try:
         glass_cls = objc.lookUpClass("NSGlassEffectView")
@@ -960,7 +964,8 @@ def _liquid_glass(cfg: Dict[str, Any], height: float):
         return None
     try:
         glass = glass_cls.alloc().initWithFrame_(((0, 0), (300, height)))
-        glass.setCornerRadius_(height / 2)
+        glass.setCornerRadius_(min(_BAR_RADIUS, height / 2))
+        glass.setStyle_(_GLASS_STYLES.get(choice, _GLASS_STYLES["clear"]))
         glass.setAutoresizingMask_(18)  # width + height follow the bar
         return glass
     except Exception as exc:  # noqa: BLE001 - fall back to the frosted bar
@@ -1004,7 +1009,7 @@ class _Pill:
         view.dobby_target = target
         view.setWantsLayer_(True)
         layer = view.layer()
-        layer.setCornerRadius_(self.H / 2)
+        layer.setCornerRadius_(_BAR_RADIUS if self.modern else self.H / 2)
         layer.setBorderWidth_(1.0)
         win.setContentView_(view)
         self.backdrop = None

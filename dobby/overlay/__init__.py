@@ -24,8 +24,8 @@ Allow/Deny prompts for risky steps and no pause when you touch the mouse or
 keyboard; only Stop / Pause halt Dobby.
 
 Look: ``DOBBY_OVERLAY_STYLE=modern`` (default: compact sleeping bar that
-grows on hover, icon buttons, Liquid Glass on macOS 26+ (frosted glass
-before that; ``DOBBY_OVERLAY_GLASS=0`` keeps the frosted bar), live step and timer while
+grows on hover, icon buttons, clear Liquid Glass on macOS 26+ (frosted
+glass before that; ``DOBBY_OVERLAY_GLASS=regular`` or ``0`` for the frosted bar), live step and timer while
 working, one colour per running Dobby, a glow that follows Dobby's state and
 the window's corners, a short fading trail, a tag that flips away from screen
 edges) or ``classic`` (the earlier look). ``DOBBY_OVERLAY_AGENT_COLORS=0``
@@ -164,8 +164,11 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         cfg["menu_bar"] = False
     if env.get("DOBBY_OVERLAY_PILL_RECORD", "").strip().lower() in _TRUE:
         cfg["pill_in_recordings"] = True
-    if env.get("DOBBY_OVERLAY_GLASS", "").strip().lower() in _FALSE:
+    glass = env.get("DOBBY_OVERLAY_GLASS", "").strip().lower()
+    if glass in _FALSE:
         cfg["liquid_glass"] = "off"
+    elif glass in ("clear", "regular"):
+        cfg["liquid_glass"] = glass
     if lock_mode(env) != "off":
         cfg["input_lock"] = lock_mode(env)
     if env.get("DOBBY_BACKGROUND_CLICKS", "").strip().lower() in _FALSE:
