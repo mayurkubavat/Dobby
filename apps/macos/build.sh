@@ -68,4 +68,11 @@ if [[ "${1:-}" == "--install" ]]; then
   rm -rf "$HOME/Applications/Dobby.app"
   cp -R "$APP" "$HOME/Applications/Dobby.app"
   echo "Installed ~/Applications/Dobby.app"
+  # A running Dobby is still the old build (and the old signature): restart it.
+  if pgrep -f "Dobby.app/Contents/MacOS/Dobby" >/dev/null; then
+    osascript -e 'quit app "Dobby"' >/dev/null 2>&1 || true
+    for _ in $(seq 1 50); do pgrep -f "Dobby.app/Contents/MacOS/Dobby" >/dev/null || break; sleep 0.1; done
+    open "$HOME/Applications/Dobby.app"
+    echo "Restarted Dobby"
+  fi
 fi
