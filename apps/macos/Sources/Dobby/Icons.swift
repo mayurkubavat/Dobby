@@ -25,57 +25,65 @@ enum Palette {
 }
 
 enum Icons {
-    /// Dobby's mark: a rounded head with two long pointed ears, eyes cut out.
-    static func mark(in rect: NSRect) -> NSBezierPath {
-        let cx = rect.midX, s = min(rect.width, rect.height)
-        // AppKit is y-up: the Python drawing's y grows downward, so flip it.
-        let cy = rect.midY - s * 0.05
-        let r = s * 0.27
+    // Dobby's mark: a macOS pointer with a spark at its tip ("it uses your
+    // computer, with a bit of magic"). Coordinates are in an 18 x 18 box,
+    // y down, like the SVG in the icon study.
+    static func pointer(scale k: CGFloat, dx: CGFloat = 0, dy: CGFloat = 0) -> NSBezierPath {
+        let pts: [(CGFloat, CGFloat)] = [(3.6, 2.6), (3.6, 14.2), (6.5, 11.4), (8.6, 15.9), (10.7, 15.0), (8.7, 10.6), (12.8, 10.6)]
         let path = NSBezierPath()
-        func p(_ dx: CGFloat, _ dy: CGFloat) -> NSPoint { NSPoint(x: cx + dx * r, y: cy - dy * r) }
-        for side: CGFloat in [-1, 1] {
-            path.move(to: p(side * 0.55, -0.25))
-            path.line(to: p(side * 1.55, -0.75))
-            path.line(to: p(side * 0.75, 0.35))
-            path.close()
+        for (i, p) in pts.enumerated() {
+            let pt = NSPoint(x: dx + p.0 * k, y: dy + p.1 * k)
+            if i == 0 { path.move(to: pt) } else { path.line(to: pt) }
         }
-        path.appendOval(in: NSRect(x: cx - r * 0.82, y: cy - r * 0.95, width: r * 1.64, height: r * 1.85))
+        path.close()
+        path.lineJoinStyle = .round
         return path
     }
 
-    static func eyes(in rect: NSRect) -> NSBezierPath {
-        let s = min(rect.width, rect.height)
-        let er = s * 0.05
-        let y = rect.midY
+    /// A four-point spark: centre (cx, cy), half-size r, pinched by quadratic curves.
+    static func spark(cx: CGFloat, cy: CGFloat, r: CGFloat, pinch: CGFloat = 0.16) -> NSBezierPath {
+        let q = r * pinch
+        let tips = [NSPoint(x: cx, y: cy - r), NSPoint(x: cx + r, y: cy), NSPoint(x: cx, y: cy + r), NSPoint(x: cx - r, y: cy)]
+        let ctrls = [NSPoint(x: cx + q, y: cy - q), NSPoint(x: cx + q, y: cy + q), NSPoint(x: cx - q, y: cy + q), NSPoint(x: cx - q, y: cy - q)]
         let path = NSBezierPath()
-        for x in [rect.minX + s * 0.42, rect.minX + s * 0.58] {
-            path.appendOval(in: NSRect(x: x - er, y: y - er, width: er * 2, height: er * 2))
+        path.move(to: tips[0])
+        for i in 0..<4 {
+            let p0 = tips[i], c = ctrls[i], p1 = tips[(i + 1) % 4]
+            // quadratic -> cubic
+            path.curve(to: p1,
+                       controlPoint1: NSPoint(x: p0.x + 2 / 3 * (c.x - p0.x), y: p0.y + 2 / 3 * (c.y - p0.y)),
+                       controlPoint2: NSPoint(x: p1.x + 2 / 3 * (c.x - p1.x), y: p1.y + 2 / 3 * (c.y - p1.y)))
         }
+        path.close()
         return path
     }
 
-    /// The menu bar icon. Idle is a template (macOS tints it); working adds a
-    /// green dot and attention an amber one.
+    /// The menu bar icon. Idle is a template (macOS tints it for light and
+    /// dark bars); working adds a green dot and attention an amber one.
     static func statusIcon(state: String, palette: [String: String]) -> NSImage {
-        let size = NSSize(width: 20, height: 18)
+        let size = NSSize(width: 18, height: 18)
         let dot: NSColor? = state == "working" ? Palette.color("ok", in: palette, fallback: Palette.ok)
             : state == "attention" ? Palette.color("caution", in: palette, fallback: Palette.caution) : nil
-        let image = NSImage(size: size, flipped: false) { rect in
-            let body = NSRect(x: 0, y: 0, width: rect.height, height: rect.height)
-            NSGraphicsContext.current?.cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
-            (dot == nil ? NSColor.black : NSColor.labelColor).setFill()
-            mark(in: body).fill()
-            NSGraphicsContext.current?.compositingOperation = .clear
-            eyes(in: body).fill()
+        let image = NSImage(size: size, flipped: true) { _ in
+            guard let ctx = NSGraphicsContext.current else { return false }
+            ctx.cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
+            let ink = dot == nil ? NSColor.black : NSColor.labelColor
+            ink.setFill()
+            ink.setStroke()
+            let arrow = pointer(scale: 1)
+            arrow.lineWidth = 0.9
+            arrow.fill()
+            arrow.stroke()
+            spark(cx: 14, cy: 3.8, r: 2.9).fill()
             if let dot {
-                let r: CGFloat = 3.6
-                let c = NSPoint(x: body.maxX - 2.5, y: body.minY + 4)
+                let c = NSPoint(x: 14.6, y: 14.4), r: CGFloat = 3.0
+                ctx.compositingOperation = .clear
                 NSBezierPath(ovalIn: NSRect(x: c.x - r - 1.2, y: c.y - r - 1.2, width: (r + 1.2) * 2, height: (r + 1.2) * 2)).fill()
-                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                ctx.compositingOperation = .sourceOver
                 dot.setFill()
                 NSBezierPath(ovalIn: NSRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)).fill()
             }
-            NSGraphicsContext.current?.cgContext.endTransparencyLayer()
+            ctx.cgContext.endTransparencyLayer()
             return true
         }
         image.isTemplate = dot == nil
@@ -111,19 +119,47 @@ enum Icons {
         return image
     }
 
-    /// The app icon (Dobby.icns is generated from this by build.sh).
+    /// The app icon (Dobby.icns is generated from this by build.sh): the
+    /// macOS icon grid (824 of 1024 with a soft shadow), a violet tile, a
+    /// white pointer and an amber spark.
     static func appIcon(size: CGFloat) -> NSImage {
-        NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-            let inset = rect.insetBy(dx: size * 0.1, dy: size * 0.1)
-            let bg = NSBezierPath(roundedRect: inset, xRadius: size * 0.2, yRadius: size * 0.2)
-            NSGradient(starting: NSColor(hex: "#7C5CFF"), ending: NSColor(hex: "#4A2FC8"))?.draw(in: bg, angle: -90)
-            NSGraphicsContext.current?.cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
+        NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
+            guard let ctx = NSGraphicsContext.current else { return false }
+            let u = size / 1024
+            let tile = NSRect(x: 100 * u, y: 100 * u, width: 824 * u, height: 824 * u)
+            let shape = NSBezierPath(roundedRect: tile, xRadius: 186 * u, yRadius: 186 * u)
+            // tile with a drop shadow
+            NSGraphicsContext.saveGraphicsState()
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
+            shadow.shadowBlurRadius = 24 * u
+            shadow.shadowOffset = NSSize(width: 0, height: 10 * u)  // flipped: +y is down
+            shadow.set()
+            NSColor(hex: "#4A2FC8").setFill()
+            shape.fill()
+            NSGraphicsContext.restoreGraphicsState()
+            NSGradient(starting: NSColor(hex: "#8E70FF"), ending: NSColor(hex: "#4A2FC8"))?.draw(in: shape, angle: 90)
+            NSGradient(colors: [NSColor.white.withAlphaComponent(0.28), NSColor.white.withAlphaComponent(0)],
+                       atLocations: [0, 0.5], colorSpace: .sRGB)?.draw(in: shape, angle: 90)
+            // glyphs, lifted with a violet-black shadow
+            NSGraphicsContext.saveGraphicsState()
+            let lift = NSShadow()
+            lift.shadowColor = NSColor(hex: "#14082E").withAlphaComponent(0.35)
+            lift.shadowBlurRadius = 32 * u
+            lift.shadowOffset = NSSize(width: 0, height: 14 * u)
+            lift.set()
+            ctx.cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
+            let k = 1024 / 18 * u * 0.72          // the 18-pt pointer, scaled into the tile
+            let arrow = pointer(scale: k, dx: 225 * u, dy: 156 * u)
+            arrow.lineWidth = 34 * u
             NSColor.white.setFill()
-            let markRect = inset.insetBy(dx: size * 0.08, dy: size * 0.08)
-            mark(in: markRect).fill()
-            NSGraphicsContext.current?.compositingOperation = .clear
-            eyes(in: markRect).fill()
-            NSGraphicsContext.current?.cgContext.endTransparencyLayer()
+            NSColor.white.setStroke()
+            arrow.fill()
+            arrow.stroke()
+            let star = spark(cx: 722 * u, cy: 318 * u, r: 122 * u)
+            NSGradient(starting: NSColor(hex: "#FFD978"), ending: NSColor(hex: "#F5A524"))?.draw(in: star, angle: 45)
+            ctx.cgContext.endTransparencyLayer()
+            NSGraphicsContext.restoreGraphicsState()
             return true
         }
     }
