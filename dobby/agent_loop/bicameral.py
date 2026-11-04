@@ -93,6 +93,9 @@ class BicameralStepController:
         cloud_vlm_client: Optional[Any] = None,
         min_local_confidence: float = 0.82,
         text_reader: Optional[Any] = None,
+        settle_timeout_s: float = 1.5,
+        settle_poll_s: float = 0.15,
+        min_change_ratio: float = 0.002,
     ) -> None:
         self.hal = hal
         # read_screen_text(contains=...) -> {"available", "count", ...}. The controller passes
@@ -101,6 +104,43 @@ class BicameralStepController:
         self.local_gemma = local_gemma_client
         self.cloud_vlm = cloud_vlm_client
         self.min_local_confidence = min_local_confidence
+        # Pixel fallback for expect_ax_change where the platform has no accessibility diff (macOS).
+        self.settle_timeout_s = settle_timeout_s
+        self.settle_poll_s = settle_poll_s
+        self.min_change_ratio = min_change_ratio
+
+    def _grab(self) -> Any:
+        if not hasattr(self.hal, "capture_screen"):
+            return None
+        try:
+            return self.hal.capture_screen()
+        except Exception:
+            return None
+
+    def _screen_change(self, before: Any) -> float:
+        """Largest pixel change against ``before`` seen within the settle window."""
+        import time
+
+        from dobby.perception.capture import CapturePipeline
+
+        def small(img: Any) -> Any:
+            # compute_image_delta walks every pixel in Python; a thumbnail keeps each poll fast.
+            thumb = img.convert("RGB")
+            thumb.thumbnail((480, 480))
+            return thumb
+
+        base = small(before)
+        deadline = time.monotonic() + self.settle_timeout_s
+        ratio = 0.0
+        while True:
+            after = self._grab()
+            if after is not None:
+                ratio = max(ratio, CapturePipeline.compute_image_delta(base, small(after)))
+                if ratio >= self.min_change_ratio:
+                    return ratio
+            if time.monotonic() >= deadline:
+                return ratio
+            time.sleep(self.settle_poll_s)
 
     def _hard_escalation(
         self,
@@ -198,6 +238,7 @@ class BicameralStepController:
             expected_outcome: optional verification targets (assert_screen_text, expect_modal, etc.)
         """
         expected_outcome = expected_outcome or {}
+        before = self._grab() if expected_outcome.get("expect_ax_change") else None
 
         # 1. Dispatch action physically via HAL
         dispatch_res = self.dispatch_hal_action(action_name, action_args)
@@ -247,6 +288,34 @@ class BicameralStepController:
                     )
             except Exception:
                 pass
+
+        if expected_outcome.get("expect_ax_change") and ax_diff.get("available") is False and before is not None:
+            # No accessibility diff here, so "the UI changed" is checked on pixels instead of
+            # asking the local model a vague "did it succeed?" about a single frame.
+            ratio = self._screen_change(before)
+            if ratio >= self.min_change_ratio:
+                return StepExecutionVerdict(
+                    success=True,
+                    tier_used=VerificationTier.TIER0_DETERMINISTIC,
+                    confidence=0.9,
+                    reason=f"Tier 0 match: screen changed ({ratio:.1%} of pixels); no accessibility diff on this platform.",
+                    tokens_consumed=0,
+                    action_result=dispatch_res,
+                )
+            ax_diff = {**ax_diff, "pixel_change": ratio}
+            if "visual_question" not in expected_outcome:
+                return StepExecutionVerdict(
+                    success=False,
+                    tier_used=VerificationTier.TIER2_CLOUD_VLM,
+                    escalated_to_cloud=True,
+                    confidence=0.0,
+                    reason=(
+                        f"Not verified: the screen did not change within {self.settle_timeout_s:.1f}s "
+                        "and this platform has no accessibility diff. Look at the screen before the next step."
+                    ),
+                    tokens_consumed=0,
+                    action_result=dispatch_res,
+                )
 
         hard = self._hard_escalation(expected_outcome, ax_diff)
         local_eval: Optional[Dict[str, Any]] = None
