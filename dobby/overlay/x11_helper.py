@@ -517,19 +517,28 @@ class _Tray:
         return None
 
     # ------------------------------------------------------------ icon
+    @staticmethod
+    def _dark_panel() -> bool:
+        """Draw for a dark panel? DOBBY_TRAY_THEME=light|dark overrides the desktop's setting
+        (some themes pair a light desktop with a dark top panel)."""
+        forced = os.environ.get("DOBBY_TRAY_THEME", "").strip().lower()
+        if forced in ("light", "dark"):
+            return forced == "dark"
+        return _desktop_is_dark()
+
     def update(self, view: topbar.View) -> None:
         self.view = view
-        state, count = topbar.icon_state(view), view.running
-        sig = (state, count, topbar.tooltip(view))
+        state, count, dark = topbar.icon_state(view), view.running, self._dark_panel()
+        sig = (state, count, topbar.tooltip(view), dark)
         if sig != self.icon_sig:
             self.icon_sig = sig
             if self.indicator is not None:
-                path = topbar.bar_icon_path(state, 44, dark=True)
+                path = topbar.bar_icon_path(state, 44, dark=dark)
                 if path:
                     self.indicator.set_icon_full(path, sig[2])
                 self.indicator.set_label(topbar.icon_title(view), "99")
             else:
-                path = topbar.bar_icon_path(state, 44, dark=True, count=count)
+                path = topbar.bar_icon_path(state, 44, dark=dark, count=count)
                 if path:
                     self.status_icon.set_from_file(path)
                 self.status_icon.set_tooltip_text(sig[2])

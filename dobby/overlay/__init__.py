@@ -45,6 +45,8 @@ The bar's ▾ button opens Dobby's menu. A Dobby icon in the top bar (the
 macOS menu bar, or the Linux panel's tray) shows how many Dobbys run and, in
 a Focus-style dropdown, what each one does, with Pause / Resume / Stop
 (see ``dobby.overlay.topbar``). ``DOBBY_OVERLAY_MENU_BAR=0`` hides it.
+The Linux tray icon follows the desktop's light/dark setting;
+``DOBBY_TRAY_THEME=light|dark`` overrides it for a panel that differs.
 
 Hotkeys while Dobby runs: Ctrl+Option+Esc stops, Ctrl+Option+P pauses or
 resumes.
