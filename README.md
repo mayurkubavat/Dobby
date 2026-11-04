@@ -61,7 +61,7 @@ read the screen nor click.
 
 ```bash
 sudo apt install python3-gi python3-gi-cairo gir1.2-atspi-2.0 gir1.2-gtk-3.0 \
-    at-spi2-core x11-utils
+    gir1.2-ayatanaappindicator3-0.1 at-spi2-core x11-utils   # ayatana: Dobby's tray icon
 python3 -m venv --system-site-packages .venv   # recreate the venv: PyGObject comes from the system
 source .venv/bin/activate
 pip install -e ".[linux,ocr]"

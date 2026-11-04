@@ -497,6 +497,10 @@ class _Tray:
             self.indicator.set_status(self.ai.IndicatorStatus.ACTIVE)
             self.indicator.set_title("Dobby")
         else:
+            # Most panels today (GNOME Flashback's indicator applet, Ubuntu, KDE) only take
+            # AppIndicator icons; the legacy icon needs a notification-area applet.
+            sys.stderr.write("dobby.overlay: no AppIndicator binding (install gir1.2-ayatanaappindicator3-0.1); "
+                             "using the legacy tray icon, which shows only with a notification-area applet\n")
             self.status_icon = Gtk.StatusIcon()
             self.status_icon.set_title("Dobby")
             self.status_icon.connect("activate", self._popup)
