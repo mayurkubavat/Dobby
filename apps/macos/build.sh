@@ -68,6 +68,11 @@ if [[ "${1:-}" == "--install" ]]; then
   rm -rf "$HOME/Applications/Dobby.app"
   cp -R "$APP" "$HOME/Applications/Dobby.app"
   echo "Installed ~/Applications/Dobby.app"
+  # Only the installed copy should exist for macOS: a second Dobby.app (this
+  # build folder) shows up in Spotlight and can catch the permission grants.
+  LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  rm -rf "$APP"
+  [[ -x "$LSREG" ]] && "$LSREG" -u "$PWD/$APP" >/dev/null 2>&1 || true
   # A running Dobby is still the old build (and the old signature): restart it.
   if pgrep -f "Dobby.app/Contents/MacOS/Dobby" >/dev/null; then
     osascript -e 'quit app "Dobby"' >/dev/null 2>&1 || true
