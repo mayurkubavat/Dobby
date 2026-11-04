@@ -84,8 +84,65 @@ def daemon_env(env: Dict[str, str]) -> Dict[str, str]:
     return {k: v for k, v in env.items() if k not in PER_CLIENT_ENV}
 
 
-def start_daemon(env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
-    """Start ``dobby serve`` detached from this client (it outlives it)."""
+# --------------------------------------------------------------- Dobby.app
+APP_ID = "dev.dobby.app"
+# What the Dobby app needs to start ``dobby serve`` itself: this Python, and
+# the settings that shape the engine (never secrets the client happens to have).
+_APP_ENV_KEYS = ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "OLLAMA_HOST", "HF_HOME", "LANG")
+
+
+def find_app(env: Optional[Dict[str, str]] = None, platform: str = sys.platform) -> Optional[Path]:
+    """Dobby.app on macOS: ``DOBBY_APP``, ~/Applications, /Applications, or the
+    checkout's own build. ``DOBBY_APP=0`` never uses it."""
+    env = os.environ if env is None else env
+    if platform != "darwin":
+        return None
+    choice = env.get("DOBBY_APP", "").strip()
+    if choice.lower() in _FALSE:
+        return None
+    root = Path(__file__).resolve().parents[2]
+    candidates = [Path(os.path.expanduser(choice))] if choice else [
+        Path.home() / "Applications" / "Dobby.app",
+        Path("/Applications/Dobby.app"),
+        root / "apps" / "macos" / "build" / "Dobby.app",
+    ]
+    return next((c for c in candidates if (c / "Contents" / "MacOS").is_dir()), None)
+
+
+def app_config(env: Optional[Dict[str, str]] = None) -> Dict[str, object]:
+    env = os.environ if env is None else env
+    keep = {k: v for k, v in daemon_env(dict(env)).items() if k.startswith("DOBBY_") or k in _APP_ENV_KEYS}
+    keep.pop("DOBBY_APP", None)
+    return {"python": sys.executable, "cwd": str(Path(__file__).resolve().parents[2]), "env": keep,
+            "written_by": os.getpid()}
+
+
+def write_app_config(env: Optional[Dict[str, str]] = None) -> Path:
+    path = paths.app_config_path()
+    paths.ensure_private_dir(path.parent)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(app_config(env), indent=2), encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+    return path
+
+
+def start_app(app: Path) -> bool:
+    """Open Dobby.app in the background; it starts ``dobby serve`` as its own
+    child, so macOS asks for Screen Recording / Accessibility for Dobby."""
+    try:
+        write_app_config()
+        return subprocess.run(["open", "-g", "-a", str(app)], capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def start_daemon(env: Optional[Dict[str, str]] = None) -> Optional[subprocess.Popen]:
+    """Start the shared Dobby: through Dobby.app on macOS when it is
+    installed, else ``dobby serve`` detached from this client (it outlives it)."""
+    app = find_app(env)
+    if app is not None and start_app(app):
+        return None
     log = paths.daemon_log()
     log.parent.mkdir(parents=True, exist_ok=True)
     out = open(log, "ab", buffering=0)

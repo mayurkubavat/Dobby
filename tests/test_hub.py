@@ -123,3 +123,83 @@ def test_two_clients_share_one_dobby(tmp_path):
     finally:
         daemon.terminate()
         daemon.wait(timeout=10)
+
+
+# ------------------------------------------------------------ the app's control connection
+def test_control_actions_reach_the_command_files(tmp_path, monkeypatch):
+    from dobby.control import commands
+    from dobby.hub import control
+
+    monkeypatch.setenv("DOBBY_CONTROL_DIR", str(tmp_path))
+    monkeypatch.setattr(control, "agents", lambda: [{"pid": 11}, {"pid": 12}])
+    assert control.handle({"id": 1, "op": "action", "key": "pause_toggle", "pid": 11})["paused"] is True
+    assert commands.read(tmp_path, 11)["paused"] and not commands.read(tmp_path, 12)["paused"]
+    control.handle({"id": 2, "op": "action", "key": "stop_all"})
+    assert commands.read(tmp_path, 12)["stop"] == 1
+    bad = control.handle({"id": 3, "op": "action", "key": "stop"})
+    assert bad == {"id": 3, "ok": False, "error": "stop needs a pid"}
+    assert control.handle({"id": 4, "op": "nope"})["ok"] is False
+
+
+def test_topbar_shows_shared_sessions(monkeypatch):
+    from dobby.hub import control
+
+    info = sessions.open_session("Claude Code", 4242, "secure")
+    info.last_call, info.last_tool = time.time(), "click"
+    try:
+        monkeypatch.setattr(control, "agents", lambda: [
+            {"pid": 4242, "name": "Claude Code", "paused": False, "waiting": False, "holding": True}])
+        view = control.handle({"id": 1, "op": "topbar"})["view"]
+    finally:
+        sessions.close_session(info)
+    row = view["rows"][0]
+    assert row["pid"] == 4242 and row["state"] == "working" and "click" in row["detail"]
+    assert view["icon_state"] == "working" and view["palette"]["fill"] == "#5B3FE0"
+
+
+def test_app_is_only_used_on_macos(tmp_path):
+    app = tmp_path / "Dobby.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    assert connector.find_app({"DOBBY_APP": str(app)}, platform="darwin") == app
+    assert connector.find_app({"DOBBY_APP": str(app)}, platform="linux") is None
+    assert connector.find_app({"DOBBY_APP": "0"}, platform="darwin") is None
+
+
+def test_app_config_keeps_dobby_settings_not_secrets():
+    cfg = connector.app_config({"DOBBY_MODEL_VISION": "q", "DOBBY_AGENT_NAME": "Cursor", "OPENAI_API_KEY": "x",
+                                "PATH": "/bin", "DOBBY_APP": "/A.app"})
+    assert cfg["env"] == {"DOBBY_MODEL_VISION": "q", "PATH": "/bin"}
+    assert cfg["python"] == sys.executable
+
+
+@pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
+def test_control_connection_end_to_end(tmp_path):
+    sock_path = tmp_path / "run" / "dobby.sock"
+    env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
+           "HOME": str(tmp_path), "DOBBY_CONTROL_DIR": str(tmp_path / "control")}
+    root = Path(__file__).resolve().parents[1]
+    daemon = subprocess.Popen([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        client, _ = _client(sock_path, "Claude Code", "turbo")
+        app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        app.connect(str(sock_path))
+        app.sendall(b'{"dobby_control": 1}\n')
+        buf = [b""]
+        while b"\n" not in buf[0]:
+            buf[0] += app.recv(4096)
+        ready, buf[0] = buf[0].split(b"\n", 1)
+        assert json.loads(ready)["control"] == 1
+        status = _rpc(app, buf, {"id": 1, "op": "status"})
+        assert [s["name"] for s in status["sessions"]] == ["Claude Code"]
+        view = _rpc(app, buf, {"id": 2, "op": "topbar"})["view"]
+        assert view["header"] == "Dobby" and isinstance(view["rows"], list)
+        assert _rpc(app, buf, {"id": 3, "op": "quit"})["quitting"] is True
+        daemon.wait(timeout=20)
+        assert not sock_path.exists()
+        client.close()
+        app.close()
+    finally:
+        if daemon.poll() is None:
+            daemon.terminate()
+            daemon.wait(timeout=10)

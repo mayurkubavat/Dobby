@@ -75,6 +75,8 @@ class Hub:
     def __init__(self, server: Any) -> None:
         self.server = server  # dobby.server module
         self.last_client = time.monotonic()
+        self.task_group: Any = None
+        self.quitting = False
 
     async def handle(self, stream: Any) -> None:
         from dobby.control import new_session_controller, session_controller
@@ -92,6 +94,9 @@ class Hub:
                 hello = json.loads(line.decode() or "{}")
             except Exception:  # noqa: BLE001
                 await stream.send(b'{"dobby_ready": 0, "error": "expected a hello line"}\n')
+                return
+            if hello.get("dobby_control") == 1:  # the Dobby app (menu bar / tray)
+                await self._serve_control(buffered, stream)
                 return
             if hello.get("dobby_hello") != 1:
                 await stream.send(b'{"dobby_ready": 0, "error": "unknown hello version"}\n')
@@ -121,6 +126,39 @@ class Hub:
             self.last_client = time.monotonic()
             with contextlib.suppress(Exception):
                 await stream.aclose()
+
+    async def _serve_control(self, buffered: BufferedByteReceiveStream, stream: Any) -> None:
+        """The Dobby app's connection: status, menu content, Pause/Stop, quit."""
+        from . import control
+
+        await stream.send((json.dumps({"dobby_ready": 1, "control": 1, "server_pid": os.getpid()}) + "\n").encode())
+        while True:
+            try:
+                line = await buffered.receive_until(b"\n", 1024 * 1024)
+            except (anyio.IncompleteRead, anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError):
+                return
+            if not line.strip():
+                continue
+            quit_asked: list = []
+            try:
+                request = json.loads(line)
+                if not isinstance(request, dict):
+                    raise ValueError("expected an object")
+            except ValueError as exc:
+                reply = {"ok": False, "error": f"bad request: {exc}"}
+            else:
+                reply = await anyio.to_thread.run_sync(lambda: control.handle(request, lambda: quit_asked.append(1)))
+            await stream.send((json.dumps(reply) + "\n").encode())
+            if quit_asked:
+                self.quit()
+                return
+
+    def quit(self) -> None:
+        """Ask the shared Dobby to exit (from the app's Quit)."""
+        log.info("quit requested by the Dobby app")
+        self.quitting = True
+        if self.task_group is not None:
+            self.task_group.cancel_scope.cancel()
 
     async def _serve_mcp(self, buffered: BufferedByteReceiveStream, stream: Any) -> None:
         import mcp_types as types
@@ -227,9 +265,17 @@ def serve() -> int:
         finally:
             os.umask(old_umask)
         async with anyio.create_task_group() as tg:
+            hub.task_group = tg
             tg.start_soon(hub.idle_watch, tg)
             await listener.serve(hub.handle, task_group=tg)
 
+    import signal
+
+    def _on_term(_sig: int, _frame: Any) -> None:
+        raise KeyboardInterrupt  # the app quits us with SIGTERM: clean up the socket
+
+    with contextlib.suppress(ValueError):
+        signal.signal(signal.SIGTERM, _on_term)
     try:
         anyio.run(run)
     except KeyboardInterrupt:

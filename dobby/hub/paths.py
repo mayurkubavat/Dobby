@@ -41,3 +41,8 @@ def ensure_private_dir(path: Path) -> None:
         os.chmod(path, 0o700)
     except OSError:
         pass
+
+
+def app_config_path() -> Path:
+    """Written by the connector, read by Dobby.app: how to start ``dobby serve``."""
+    return Path(os.path.expanduser("~/.dobby/app.json"))
