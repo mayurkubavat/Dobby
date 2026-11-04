@@ -191,9 +191,11 @@ class DobbyServer(MCPServer):
 def _adopt_client_name(context: Any) -> None:
     try:
         params = context.session.client_params  # type: ignore[union-attr]
-        name = params.clientInfo.name if params is not None else None
-    except AttributeError:
+    except (AttributeError, ValueError, LookupError):
         return
+    # mcp 2.x names it client_info; 1.x used clientInfo
+    info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
+    name = getattr(info, "name", None)
     if name:
         adopt_client_name(name)
         from dobby.hub import sessions as _sessions

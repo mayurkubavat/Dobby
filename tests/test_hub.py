@@ -73,7 +73,7 @@ def _rpc(sock, buf, msg):
             return reply
 
 
-def _client(path, name, mode):
+def _client(path, name, mode, info_name=None):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     for _ in range(300):
         try:
@@ -90,7 +90,7 @@ def _client(path, name, mode):
     ready, buf[0] = buf[0].split(b"\n", 1)
     assert json.loads(ready)["dobby_ready"] == 1
     init = _rpc(sock, buf, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": name, "version": "1"}}})
+        "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": info_name or name, "version": "1"}}})
     assert "result" in init, init
     _rpc(sock, buf, {"jsonrpc": "2.0", "method": "notifications/initialized"})
     return sock, buf
@@ -181,7 +181,9 @@ def test_control_connection_end_to_end(tmp_path):
     daemon = subprocess.Popen([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        client, _ = _client(sock_path, "Claude Code", "turbo")
+        client, cbuf = _client(sock_path, "Python", "turbo", info_name="Claude Code")
+        _rpc(client, cbuf, {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                            "params": {"name": "control_status", "arguments": {}}})  # adopts clientInfo.name
         app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         app.connect(str(sock_path))
         app.sendall(b'{"dobby_control": 1}\n')
