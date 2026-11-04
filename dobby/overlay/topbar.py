@@ -286,45 +286,71 @@ def _rgba(hex_color: str, alpha: int = 255) -> Tuple[int, int, int, int]:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha
 
 
-def _mark(draw, cx: float, cy: float, r: float, fill) -> None:
-    """Dobby's mark: a rounded head with two long pointed ears."""
-    # ears (triangles reaching out and up)
-    draw.polygon([(cx - r * 0.55, cy - r * 0.25), (cx - r * 1.55, cy - r * 0.75),
-                  (cx - r * 0.75, cy + r * 0.35)], fill=fill)
-    draw.polygon([(cx + r * 0.55, cy - r * 0.25), (cx + r * 1.55, cy - r * 0.75),
-                  (cx + r * 0.75, cy + r * 0.35)], fill=fill)
-    draw.ellipse([cx - r * 0.82, cy - r * 0.9, cx + r * 0.82, cy + r * 0.95], fill=fill)
+# Pointer and spark (same geometry as apps/macos/Sources/Dobby/Icons.swift),
+# in an 18 x 18 box, y down.
+_POINTER = [(3.6, 2.6), (3.6, 14.2), (6.5, 11.4), (8.6, 15.9), (10.7, 15.0), (8.7, 10.6), (12.8, 10.6)]
+_SPARK_C, _SPARK_R = (14.0, 3.8), 2.9
+_DOT_C, _DOT_R, _DOT_RING = (14.6, 14.4), 3.0, 1.2
+
+
+def _spark_points(cx: float, cy: float, r: float, steps: int = 10) -> List[Tuple[float, float]]:
+    """A pinched four-point star: tips joined by quadratic curves whose
+    control points sit at centre ± 0.16·r."""
+    tips = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+    k = 0.16 * r
+    ctrls = [(cx + k, cy - k), (cx + k, cy + k), (cx - k, cy + k), (cx - k, cy - k)]
+    pts: List[Tuple[float, float]] = []
+    for i in range(4):
+        (x0, y0), (x1, y1), (qx, qy) = tips[i], tips[(i + 1) % 4], ctrls[i]
+        for j in range(steps):
+            t = j / steps
+            u = 1 - t
+            pts.append((u * u * x0 + 2 * u * t * qx + t * t * x1, u * u * y0 + 2 * u * t * qy + t * t * y1))
+    return pts
+
+
+def _mark(d, s: float, pointer, spark, spark_shown: bool = True) -> None:
+    """Dobby's mark, scaled to an ``s`` px square: a pointer with a spark."""
+    k = s / 18.0
+    poly = [(x * k, y * k) for x, y in _POINTER]
+    d.polygon(poly, fill=pointer)
+    w = max(1, int(round(0.9 * k)))
+    d.line(poly + [poly[0]], fill=pointer, width=w, joint="curve")  # the 0.9 round-joined stroke
+    for x, y in poly:
+        d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=pointer)
+    if spark_shown:
+        d.polygon(_spark_points(_SPARK_C[0] * k, _SPARK_C[1] * k, _SPARK_R * k), fill=spark)
 
 
 def render_icon(state: str, size: int = 36, dark: bool = False, template: bool = False, count: int = 0):
     """The top-bar icon as a Pillow RGBA image (``size`` px square).
 
-    ``template``: plain black (macOS tints it to the menu bar); otherwise
-    violet with an amber or green status dot. ``count`` > 1 adds a number
-    badge (for trays that cannot show text beside the icon).
+    ``template``: plain black (macOS tints it to the menu bar). Otherwise the
+    pointer is ink on a light bar or near-white on a dark one, and the spark
+    is Dobby violet. A green dot means working, amber means a Dobby needs
+    you. ``count`` > 1 puts a number badge where the spark is (for trays that
+    cannot show text beside the icon).
     """
     from PIL import Image, ImageDraw
 
     scale = 4  # draw big, shrink: smooth edges without antialiasing support
     s = size * scale
+    k = s / 18.0
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     if template:
-        body = (0, 0, 0, 255)
+        pointer = spark = (0, 0, 0, 255)
     else:
-        body = _rgba(PALETTE["accent_dark"] if dark else PALETTE["accent"])
-        if state == "idle":
-            body = _rgba(PALETTE["accent_dark"] if dark else PALETTE["accent"], 170)
-    _mark(d, s * 0.5, s * 0.55, s * 0.27, body)
-    # eyes cut out of the head
-    eye = (0, 0, 0, 0)
-    er = s * 0.045
-    for ex in (s * 0.42, s * 0.58):
-        d.ellipse([ex - er, s * 0.5 - er, ex + er, s * 0.5 + er], fill=eye)
+        pointer = _rgba(PALETTE["surface_light"] if dark else PALETTE["surface_dark"])
+        spark = _rgba(PALETTE["accent_dark"] if dark else PALETTE["accent"])
+    _mark(d, s, pointer, spark, spark_shown=count <= 1)
     if state in ("working", "attention"):
         dot = (0, 0, 0, 255) if template else _rgba(PALETTE["caution"] if state == "attention" else PALETTE["ok"])
-        cx, cy, r = s * 0.8, s * 0.8, s * 0.13
-        d.ellipse([cx - r - s * 0.04, cy - r - s * 0.04, cx + r + s * 0.04, cy + r + s * 0.04], fill=(0, 0, 0, 0))
+        cx, cy, r, ring = _DOT_C[0] * k, _DOT_C[1] * k, _DOT_R * k, _DOT_RING * k
+        clear = Image.new("L", (s, s), 0)
+        ImageDraw.Draw(clear).ellipse([cx - r - ring, cy - r - ring, cx + r + ring, cy + r + ring], fill=255)
+        img.paste((0, 0, 0, 0), (0, 0), clear)  # clear the ring first
+        d = ImageDraw.Draw(img)
         d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=dot)
     if count > 1:
         _badge(d, s, str(count) if count < 10 else "9+")
@@ -334,7 +360,8 @@ def render_icon(state: str, size: int = 36, dark: bool = False, template: bool =
 def _badge(d, s: float, text: str) -> None:
     from PIL import ImageFont
 
-    cx, cy, r = s * 0.78, s * 0.24, s * 0.22
+    k = s / 18.0
+    cx, cy, r = _SPARK_C[0] * k, _SPARK_C[1] * k, 3.4 * k  # where the spark sits
     d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=_rgba(PALETTE["fill"]))
     try:
         font = ImageFont.load_default(size=int(r * 1.5))  # Pillow 10.1+, needs FreeType
@@ -418,7 +445,8 @@ def icon_file(kind: str, *parts: object, render=None, directory: str = ICON_DIR)
 
 def bar_icon_path(state: str, size: int = 36, dark: bool = False, template: bool = False,
                   count: int = 0, directory: str = ICON_DIR) -> Optional[str]:
-    return icon_file("bar", state, size, "dark" if dark else "light", "t" if template else "c",
+    # "bar-ps": pointer and spark. A new look needs a new file name (icons are cached).
+    return icon_file("bar-ps", state, size, "dark" if dark else "light", "t" if template else "c",
                      min(count, 10) if count > 1 else 0,
                      render=lambda: render_icon(state, size, dark, template, count), directory=directory)
 

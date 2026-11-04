@@ -106,7 +106,8 @@ def test_dobby_mode_priority():
 def test_icons_render_and_cache(tmp_path):
     img = topbar.render_icon("working", 36)
     assert img.size == (36, 36) and img.mode == "RGBA"
-    assert img.getpixel((18, 20))[3] > 0  # the mark is drawn
+    assert img.getpixel((10, 14))[3] > 0  # the pointer is drawn
+    assert img.getpixel((28, 8))[3] > 0  # and the spark
     row = topbar.render_row_icon("#7C5CFF", "spark", 52)
     assert row.size == (52, 52) and row.getpixel((2, 2))[3] == 0  # round, clear corners
     for shape in ("spark", "moon", "pause", "stop", "alert", "hand", "clock"):
