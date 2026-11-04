@@ -31,7 +31,7 @@ class SessionInfo:
     step: Optional[int] = None
     steps: Optional[int] = None
     elapsed: Optional[float] = None
-    first_name: str = ""  # "Hermione": shown as "Hermione · <client>"
+    first_name: str = ""  # "Tibble": shown as "Tibble · <client>"
     client: str = ""
 
     @property

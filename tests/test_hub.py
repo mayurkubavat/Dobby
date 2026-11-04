@@ -114,7 +114,7 @@ def test_two_clients_share_one_dobby(tmp_path):
         assert ra["mode"] == "turbo" and rb["mode"] == "secure"
         assert ra["session"] != rb["session"]
         assert sorted(c["client"] for c in ra["clients"]) == ["Antigravity", "Claude Code"]
-        assert sorted(c["name"] for c in ra["clients"]) == ["Hermione · Claude Code", "Ron · Antigravity"]
+        assert sorted(c["name"] for c in ra["clients"]) == ["Pip · Antigravity", "Tibble · Claude Code"]
         # a second shared Dobby refuses to start while this one runs
         second = subprocess.run([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
                                 capture_output=True, text=True, timeout=60)
@@ -212,8 +212,8 @@ def test_control_connection_end_to_end(tmp_path):
 def test_each_dobby_gets_its_own_name(tmp_path):
     from dobby.control import names
 
-    assert names.pick([], 1) == "Hermione"
-    assert names.pick(["Hermione", "Ron"], 1) == "Harry"
+    assert names.pick([], 1) == "Tibble"
+    assert names.pick(["Tibble", "Pip"], 1) == "Mopsy"
     assert names.pick(["A"], 1, names=["A"]) == "A 2"
     assert names.pick([], 7, names=[]) == "Dobby-7"
     assert names.display("Luna", "Claude Code") == "Luna · Claude Code"

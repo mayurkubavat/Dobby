@@ -123,7 +123,7 @@ _HAL_FOR_SESSIONS: Any = None
 
 
 def pick_first_name(pid: int) -> str:
-    """A Harry Potter name no running Dobby uses yet (see :mod:`dobby.control.names`)."""
+    """An elf name no running Dobby uses yet (see :mod:`dobby.control.names`)."""
     try:
         from . import registry
 

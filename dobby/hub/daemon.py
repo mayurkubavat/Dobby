@@ -108,7 +108,7 @@ class Hub:
             from dobby.control.names import display
 
             # Pick the name and reserve it before any await, so two clients
-            # connecting at once never both get "Hermione".
+            # connecting at once never both get "Tibble".
             first = pick_first_name(pid or 0)
             info = sessions.open_session(display(first, name), pid, mode)
             info.first_name, info.client = first, name
