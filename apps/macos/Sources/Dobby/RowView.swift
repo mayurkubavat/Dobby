@@ -97,7 +97,8 @@ final class CircleButton: NSButton {
     override func mouseExited(with event: NSEvent) { hovering = false }
 
     override func draw(_ dirtyRect: NSRect) {
-        let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5))
+        // Rounded square, 7 pt corners like the bar's buttons (not a circle).
+        let circle = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 7, yRadius: 7)
         let fill: NSColor
         if hovering {
             fill = isStop ? NSColor(hex: Palette.danger) : NSColor(hex: Palette.fill)

@@ -109,7 +109,7 @@ def test_icons_render_and_cache(tmp_path):
     assert img.getpixel((10, 14))[3] > 0  # the pointer is drawn
     assert img.getpixel((28, 8))[3] > 0  # and the spark
     row = topbar.render_row_icon("#7C5CFF", "spark", 52)
-    assert row.size == (52, 52) and row.getpixel((2, 2))[3] == 0  # round, clear corners
+    assert row.size == (52, 52) and row.getpixel((1, 1))[3] == 0 and row.getpixel((26, 2))[3] > 200  # rounded square
     for shape in ("spark", "moon", "pause", "stop", "alert", "hand", "clock"):
         topbar.render_row_icon("#9A98A6", shape, 26)
     p1 = topbar.bar_icon_path("idle", 36, directory=str(tmp_path))

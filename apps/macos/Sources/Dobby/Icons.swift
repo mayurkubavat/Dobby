@@ -91,8 +91,8 @@ enum Icons {
         return image
     }
 
-    /// Row icons: a filled circle in the row's colour with a white glyph, like
-    /// the Focus menu.
+    /// Row icons: a rounded square in the row's colour with a white glyph (the
+    /// squarer look of the Claude app, rather than Focus's circles).
     static let glyphs: [String: String] = [
         "spark": "sparkles", "moon": "moon.fill", "pause": "pause.fill", "alert": "exclamationmark",
         "hand": "hand.raised.fill", "stop": "stop.fill", "clock": "clock.fill",
@@ -108,7 +108,7 @@ enum Icons {
             .withSymbolConfiguration(config)
         let image = NSImage(size: size, flipped: false) { rect in
             fill.setFill()
-            NSBezierPath(ovalIn: rect).fill()
+            NSBezierPath(roundedRect: rect, xRadius: rect.width * 0.28, yRadius: rect.height * 0.28).fill()
             if let glyph {
                 let g = glyph.size
                 glyph.draw(in: NSRect(x: rect.midX - g.width / 2, y: rect.midY - g.height / 2, width: g.width, height: g.height))

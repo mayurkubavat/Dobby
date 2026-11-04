@@ -479,14 +479,14 @@ def _glyph(d, shape: str, s: float, color) -> None:
 
 
 def render_row_icon(color: str, shape: str, size: int = 52, filled: bool = True):
-    """A Focus-style round icon: a coloured disc with a white glyph."""
+    """A row icon: a rounded square in the row's colour with a white glyph."""
     from PIL import Image, ImageDraw
 
     scale = 4
     s = size * scale
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.ellipse([0, 0, s - 1, s - 1], fill=_rgba(color, 255 if filled else 90))
+    d.rounded_rectangle([0, 0, s - 1, s - 1], radius=s * 0.28, fill=_rgba(color, 255 if filled else 90))
     glyph = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     _glyph(ImageDraw.Draw(glyph), shape, s, (255, 255, 255, 255))
     img.alpha_composite(glyph)
@@ -529,7 +529,7 @@ def tray_icon_path(state: str, size: int = 44, count: int = 0, directory: str = 
 
 
 def row_icon_path(color: str, shape: str, size: int = 52, directory: str = ICON_DIR) -> Optional[str]:
-    return icon_file("row", color, shape, size, render=lambda: render_row_icon(color, shape, size),
+    return icon_file("row-sq", color, shape, size, render=lambda: render_row_icon(color, shape, size),
                      directory=directory)
 
 
