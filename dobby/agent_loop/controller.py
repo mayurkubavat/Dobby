@@ -53,6 +53,13 @@ from dobby.plugins.base import BaseUIAppPlugin
 
 logger = logging.getLogger(__name__)
 
+# Smallest "active window" worth cropping to; anything thinner is a bar or tooltip.
+_MIN_CLIP_SIDE = 80
+
+
+def _is_sliver(bbox: Any) -> bool:
+    return bbox.width < _MIN_CLIP_SIDE or bbox.height < _MIN_CLIP_SIDE
+
 
 class FeedbackLoopController:
     """
@@ -183,6 +190,9 @@ class FeedbackLoopController:
         target_win = None
         if window_id or clip_to_active_window or CONFIG.clip_to_active_window:
             target_win = self.window_clipper.resolve_target_window(window_id=window_id)
+            if target_win and not window_id and _is_sliver(target_win.bbox):
+                # A bar, tooltip or overlay reported as "active" would crop to a useless strip.
+                target_win = None
             if target_win and not region:
                 screen_size = self.hal.get_screen_size()
                 region = self.window_clipper.clip_region_to_screen(target_win.bbox, screen_size)
@@ -231,6 +241,16 @@ class FeedbackLoopController:
         self.last_screenshot_meta = (orig_w, orig_h, scale_factor)
         b64 = self.pipeline.encode_image(img, format="JPEG", quality=compress_quality)
 
+        # Where the image sits on screen, so a point read off a cropped image maps to click coordinates.
+        if region:
+            origin_x, origin_y, area_w, area_h = (int(v) for v in region)
+        else:
+            origin_x, origin_y = 0, 0
+            try:
+                area_w, area_h = (int(v) for v in self.hal.get_screen_size())
+            except Exception:  # noqa: BLE001 - fall back to the raw capture size
+                area_w, area_h = orig_w, orig_h
+
         return ScreenshotResult(
             image_base64=b64,
             mime_type="image/jpeg",
@@ -240,6 +260,10 @@ class FeedbackLoopController:
             original_height=orig_h,
             scale_factor=scale_factor,
             zoom_factor=zoom_factor,
+            origin_x=origin_x,
+            origin_y=origin_y,
+            area_width=area_w,
+            area_height=area_h,
             marks=marks_list,
             cursor_position=cursor_pos,
         )

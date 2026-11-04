@@ -176,7 +176,7 @@ class DobbyServer(MCPServer):
         is_error = bool(getattr(result, "is_error", getattr(result, "isError", False)))
         tool_log.log(logging.ERROR if is_error else logging.INFO, "%s %s %.2fs",
                      name, "error" if is_error else "ok", time.monotonic() - started)
-        return result
+        return _image_as_content(result)
 
     async def _call_in_scope(self, name, arguments, context):
         ctl = get_controller(create=False)
@@ -186,6 +186,38 @@ class DobbyServer(MCPServer):
         # stays busy until the tool returns, so another agent never cuts in between.
         with ctl.tool_scope():
             return await super().call_tool(name, arguments, context)
+
+
+def _image_as_content(result: Any) -> Any:
+    """Send an inlined screenshot as an MCP image block, not as base64 inside the JSON text.
+
+    A tool that returns ``image_base64`` (take_screenshot with include_image=True) would
+    otherwise reach the client as hundreds of kilobytes of text, which clients cut off
+    or refuse. The client gets the header as JSON text plus one image block instead.
+    """
+    import json
+
+    from mcp.types import CallToolResult, ImageContent, TextContent
+
+    if not isinstance(result, CallToolResult) or result.is_error:
+        return result
+    structured = result.structured_content
+    if not isinstance(structured, dict):
+        return result
+    wrapped = set(structured) == {"result"} and isinstance(structured["result"], dict)
+    payload = structured["result"] if wrapped else structured
+    image = payload.get("image_base64")
+    if not image:
+        return result
+    header = {key: value for key, value in payload.items() if key != "image_base64"}
+    header["image"] = "attached as an image block"
+    return CallToolResult(
+        content=[
+            TextContent(type="text", text=json.dumps(header, indent=2, default=str)),
+            ImageContent(type="image", data=image, mime_type=payload.get("mime_type") or "image/jpeg"),
+        ],
+        structured_content={"result": header} if wrapped else header,
+    )
 
 
 def _adopt_client_name(context: Any) -> None:
@@ -404,6 +436,12 @@ def _screenshot_summary(payload: Dict[str, Any], include_image: bool) -> Dict[st
         "marks_count": len(marks),
         "mime_type": payload.get("mime_type", "image/jpeg"),
     }
+    area_w = payload.get("area_width") or 0
+    if area_w and payload["width"]:
+        # Mark centers are already screen coordinates; raw image pixels need this mapping.
+        summary["origin"] = [payload.get("origin_x", 0), payload.get("origin_y", 0)]
+        summary["screen_per_pixel"] = round(area_w / payload["width"], 4)
+        summary["to_click"] = "screen x = origin[0] + image x * screen_per_pixel (same for y)"
     image_body = {
         "image_base64": payload.get("image_base64", ""),
         "mime_type": payload.get("mime_type", "image/jpeg"),
