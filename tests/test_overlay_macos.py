@@ -19,3 +19,23 @@ def test_panel_sits_above_menus():
         assert panel.window.level() == AppKit.NSScreenSaverWindowLevel
     finally:
         panel.close()
+
+
+def test_liquid_glass_capsule_where_the_os_has_it():
+    objc = pytest.importorskip("objc")
+    from dobby.overlay import mac_helper
+
+    try:
+        objc.lookUpClass("NSGlassEffectView")
+    except objc.nosuchclass_error:
+        assert mac_helper._liquid_glass({"liquid_glass": "auto"}, 34.0) is None  # older macOS: frosted bar
+        return
+    glass = mac_helper._liquid_glass({"liquid_glass": "auto"}, 34.0)
+    assert glass is not None
+    assert glass.cornerRadius() == 17.0
+
+
+def test_liquid_glass_can_be_turned_off():
+    from dobby.overlay import mac_helper
+
+    assert mac_helper._liquid_glass({"liquid_glass": "off"}, 34.0) is None

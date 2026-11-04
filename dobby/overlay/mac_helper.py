@@ -183,6 +183,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # timer, per-Dobby colours, state glow, light trail, tag flips at screen
     # edges) or "classic" (the look before those).
     "style": "modern",
+    # Modern bar on macOS 26+: Liquid Glass (NSGlassEffectView) instead of the
+    # frosted HUD material. "auto" uses it where the OS has it; "off" never.
+    "liquid_glass": "auto",
     # One colour per running Dobby (from the agent registry). Off when
     # DOBBY_OVERLAY_COLOR fixes the colour ("color_fixed").
     "agent_colors": True,
@@ -942,6 +945,29 @@ def _desktop_dark() -> bool:
         return True
 
 
+# Palette tint laid over Liquid Glass; the glass stays readable without a dark slab.
+_GLASS_TINT_DARK = 0.18
+_GLASS_TINT_LIGHT = 0.10
+
+
+def _liquid_glass(cfg: Dict[str, Any], height: float):
+    """A capsule NSGlassEffectView (macOS 26+ Liquid Glass), or None where unavailable or turned off."""
+    if str(cfg.get("liquid_glass", "auto")).lower() in ("off", "false", "0", "no"):
+        return None
+    try:
+        glass_cls = objc.lookUpClass("NSGlassEffectView")
+    except objc.nosuchclass_error:
+        return None
+    try:
+        glass = glass_cls.alloc().initWithFrame_(((0, 0), (300, height)))
+        glass.setCornerRadius_(height / 2)
+        glass.setAutoresizingMask_(18)  # width + height follow the bar
+        return glass
+    except Exception as exc:  # noqa: BLE001 - fall back to the frosted bar
+        sys.stderr.write(f"dobby.overlay: no liquid glass: {exc}\n")
+        return None
+
+
 class _Pill:
     """Small clickable bar at the top of the main screen.
 
@@ -982,10 +1008,20 @@ class _Pill:
         layer.setBorderWidth_(1.0)
         win.setContentView_(view)
         self.backdrop = None
+        self.glass = None
         self.tint = None
         backdrops = []
         if self.modern:
             layer.setMasksToBounds_(True)
+            self.glass = _liquid_glass(cfg, self.H)
+        if self.glass is not None:
+            # Liquid Glass draws its own rim and edge light, so no coloured border;
+            # a soft window shadow lifts it off the desktop like a system control.
+            layer.setBorderWidth_(0.0)
+            win.setHasShadow_(True)
+            view.addSubview_(self.glass)
+            backdrops.append(self.glass)
+        elif self.modern:
             try:
                 fx = NSVisualEffectView.alloc().initWithFrame_(((0, 0), (300, self.H)))
                 fx.setMaterial_(13)  # HUD window
@@ -997,6 +1033,8 @@ class _Pill:
                 backdrops.append(fx)
             except Exception as exc:  # noqa: BLE001 - glass is a nicety
                 sys.stderr.write(f"dobby.overlay: no glass: {exc}\n")
+        if self.modern:
+            # Over Liquid Glass this stays clear and only hosts the status dot.
             tint = NSView.alloc().initWithFrame_(((0, 0), (300, self.H)))
             tint.setWantsLayer_(True)
             tint.layer().setMasksToBounds_(True)
@@ -1057,7 +1095,15 @@ class _Pill:
         name = NSAppearanceNameDarkAqua if dark else "NSAppearanceNameAqua"
         self.window.setAppearance_(NSAppearance.appearanceNamed_(name))
         bg = tuple(c / 255.0 for c in t["bg"])
-        if self.tint is not None:
+        if self.glass is not None:
+            # A faint palette tint on the glass keeps Dobby's colour without hiding the lensing.
+            try:
+                self.glass.setTintColor_(_ns_color(bg, _GLASS_TINT_DARK if dark else _GLASS_TINT_LIGHT))
+            except Exception:  # noqa: BLE001
+                pass
+            if self.tint is not None:
+                self.tint.layer().setBackgroundColor_(None)
+        elif self.tint is not None:
             alpha = (0.42 if dark else 0.72) if self.backdrop is not None else float(t["bg_alpha"])
             self.tint.layer().setBackgroundColor_(_cg(bg, alpha))
         else:
@@ -1188,7 +1234,8 @@ class _Pill:
             self.dot.setCornerRadius_(4)
             x += 14.0
         self.dot.setBackgroundColor_(_cg(rgb, spec.dot_alpha))
-        self.view.layer().setBorderColor_(_cg(rgb, 0.55 if (self.modern and spec.compact) else 0.7))
+        if self.glass is None:  # Liquid Glass draws its own edge
+            self.view.layer().setBorderColor_(_cg(rgb, 0.55 if (self.modern and spec.compact) else 0.7))
         lh = self.label.frame().size.height
         self.label.setFrameOrigin_((x, (H - lh) / 2))
         x += self.label.frame().size.width
