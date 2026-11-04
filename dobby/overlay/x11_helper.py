@@ -12,6 +12,10 @@ What it draws:
 * a glow frame around the tracked window and a thinner box around the target
   element (from the AT-SPI hit test when a move asks for a probe);
 * an Allow / Deny window for ``confirm``;
+* a tray icon in the top panel (``topbar``, AppIndicator / Ayatana when
+  available, else the legacy notification area): Dobby's mark, the number of
+  running Dobbys and a menu with one row per Dobby (what it does, Pause /
+  Resume / Stop); only the bar owner shows it;
 * the control bar at the top of the screen (same states as macOS, from
   ``menu.bar_view``): "Dobby is sleeping" with Pause / Stop, "working",
   "paused", "stopped"; click the bar itself to wake Dobby or put it back to
@@ -32,7 +36,7 @@ a shield with the "not-allowed" cursor covers its window and swallows the
 person's clicks there; other windows stay usable.
 
 Not ported from macOS yet: the numbered step trail, the scan sweep, the menu
-bar icon / tag menu and user take-over detection. Their ops are accepted and acked so the
+tag menu and user take-over detection. Their ops are accepted and acked so the
 server behaves the same.
 """
 
@@ -53,7 +57,7 @@ gi.require_version("Gdk", "3.0")
 import cairo  # noqa: E402
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-from . import geometry, inputlock, protocol, style  # noqa: E402
+from . import geometry, inputlock, protocol, style, topbar  # noqa: E402
 from ..personality import Voice  # noqa: E402
 from .barlock import (BAR_LOCK, BarOwner, BarRow, mark_waiting, others_showing, others_waiting,  # noqa: E402
                       showing_dir, waiting_dir)
@@ -77,6 +81,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "pill": "always",     # control bar: "always", "auto" (only while working) or "off"
     "narrate": True,      # modern look: say what Dobby does on the bar and the tag
     "input_lock": "off",  # "window": shield Dobby's window while it works (inputlock)
+    "menu_bar": True,     # tray icon in the panel listing every Dobby (topbar); bar owner only
 }
 
 # Classic arrow, y down, tip at (0, 0) (same outline as the macOS helper).
@@ -468,6 +473,147 @@ class _Bar:
         self.win.hide()
 
 
+class _Tray:
+    """The panel tray icon and its menu (``topbar``).
+
+    AppIndicator (Ayatana or the older libappindicator) exports the menu over
+    D-Bus, so it is built ahead of time and its labels are updated in place;
+    the legacy ``Gtk.StatusIcon`` builds it when clicked.
+    """
+
+    def __init__(self, overlay: "X11Overlay") -> None:
+        self.ov = overlay
+        self.indicator = None
+        self.status_icon = None
+        self.menu: Optional[Gtk.Menu] = None
+        self.items: Dict[str, Any] = {}
+        self.shape: Optional[tuple] = None
+        self.icon_sig: Optional[tuple] = None
+        self.view: Optional[topbar.View] = None
+        self.ai = self._appindicator()
+        if self.ai is not None:
+            self.indicator = self.ai.Indicator.new("dobby", "dialog-information",
+                                                   self.ai.IndicatorCategory.APPLICATION_STATUS)
+            self.indicator.set_status(self.ai.IndicatorStatus.ACTIVE)
+            self.indicator.set_title("Dobby")
+        else:
+            self.status_icon = Gtk.StatusIcon()
+            self.status_icon.set_title("Dobby")
+            self.status_icon.connect("activate", self._popup)
+            self.status_icon.connect("popup-menu", lambda _i, button, t: self._popup(None, button, t))
+
+    @staticmethod
+    def _appindicator():
+        for name in ("AyatanaAppIndicator3", "AppIndicator3"):
+            try:
+                gi.require_version(name, "0.1")
+                return __import__("gi.repository", fromlist=[name]).__dict__[name]
+            except (ValueError, ImportError, KeyError, AttributeError):
+                continue
+        return None
+
+    # ------------------------------------------------------------ icon
+    def update(self, view: topbar.View) -> None:
+        self.view = view
+        state, count = topbar.icon_state(view), view.running
+        sig = (state, count, topbar.tooltip(view))
+        if sig != self.icon_sig:
+            self.icon_sig = sig
+            if self.indicator is not None:
+                path = topbar.bar_icon_path(state, 44, dark=True)
+                if path:
+                    self.indicator.set_icon_full(path, sig[2])
+                self.indicator.set_label(topbar.icon_title(view), "99")
+            else:
+                path = topbar.bar_icon_path(state, 44, dark=True, count=count)
+                if path:
+                    self.status_icon.set_from_file(path)
+                self.status_icon.set_tooltip_text(sig[2])
+        if self.indicator is not None:
+            self._sync_menu(view)
+
+    # ------------------------------------------------------------ menu
+    def _shape(self, view: topbar.View) -> tuple:
+        return (tuple((r.pid, tuple(r.actions)) for r in view.rows), tuple(view.all_actions),
+                bool(self.ov.cfg.get("turbo")))
+
+    @staticmethod
+    def _row_label(row: topbar.Row) -> str:
+        return f"{row.title}  ·  {row.detail}"
+
+    def _sync_menu(self, view: topbar.View) -> None:
+        shape = self._shape(view)
+        if self.menu is None or shape != self.shape:
+            self.shape = shape
+            self.menu = self._build(view)
+            self.indicator.set_menu(self.menu)
+            return
+        self.items["header"].set_label(f"{view.header} · {view.subtitle}")
+        for row in view.rows:  # same rows and actions: relabel in place
+            item = self.items.get(f"row{row.pid}")
+            if item is None:
+                continue
+            item.set_label(self._row_label(row))
+            path = topbar.row_icon_path(row.color, row.shape, 32)
+            if path and getattr(item, "_dobby_icon", None) != path:
+                item.set_image(Gtk.Image.new_from_file(path))
+                item._dobby_icon = path
+
+    def _item(self, menu: Gtk.Menu, label: str, action=None, icon: Optional[str] = None,
+              check: Optional[bool] = None):
+        if check is not None:
+            item = Gtk.CheckMenuItem.new_with_label(label)
+            item.set_active(check)
+        elif icon:
+            item = Gtk.ImageMenuItem.new_with_label(label)
+            item.set_image(Gtk.Image.new_from_file(icon))
+            item.set_always_show_image(True)
+            item._dobby_icon = icon
+        else:
+            item = Gtk.MenuItem.new_with_label(label)
+        if action is None:
+            item.set_sensitive(False)
+        else:
+            item.connect("activate", lambda _i: action())
+        menu.append(item)
+        return item
+
+    def _build(self, view: topbar.View) -> Gtk.Menu:
+        menu = Gtk.Menu()
+        self.items = {"header": self._item(menu, f"{view.header} · {view.subtitle}")}
+        menu.append(Gtk.SeparatorMenuItem())
+        for row in view.rows:
+            item = self._item(menu, self._row_label(row), icon=topbar.row_icon_path(row.color, row.shape, 32))
+            item.set_sensitive(True)
+            sub = Gtk.Menu()
+            for title, action in row.actions:
+                self._item(sub, title, lambda a=action, pid=row.pid: self.ov.topbar_action(a, pid))
+            item.set_submenu(sub)
+            self.items[f"row{row.pid}"] = item
+        if view.all_actions:
+            menu.append(Gtk.SeparatorMenuItem())
+            for title, action in view.all_actions:
+                self._item(menu, title, lambda a=action: self.ov.topbar_action(a, 0))
+        menu.append(Gtk.SeparatorMenuItem())
+        self._item(menu, "Turbo mode (no prompts)", lambda: self.ov.topbar_action("turbo", 0),
+                   check=bool(self.ov.cfg.get("turbo")))
+        menu.show_all()
+        return menu
+
+    def _popup(self, _icon, button: int = 1, when: Optional[int] = None) -> None:
+        view = self.ov.topbar_view()
+        self.update(view)
+        self.menu = self._build(view)
+        self.menu.popup(None, None, Gtk.StatusIcon.position_menu, self.status_icon, button,
+                        when if when is not None else Gtk.get_current_event_time())
+
+    def close(self) -> None:
+        if self.indicator is not None:
+            self.indicator.set_status(self.ai.IndicatorStatus.PASSIVE)
+        if self.status_icon is not None:
+            self.status_icon.set_visible(False)
+
+
 class X11Overlay:
     def __init__(self, cfg: Dict[str, Any], out=None) -> None:
         self.cfg = dict(DEFAULT_CONFIG)
@@ -515,6 +661,9 @@ class X11Overlay:
         self.wait_dir = waiting_dir(self.cfg.get("bar_lock", BAR_LOCK))
         self.bar = None if self.bar_mode == "off" else _Bar(self.on_bar_label, self.on_bar,
                                                            self.cfg.get("bar_lock", BAR_LOCK))
+        self.tray: Optional[_Tray] = None
+        self.tray_next = 0.0
+        self.publish_next = 0.0
 
         self.pointer = _Panel(self.composited, 26, 28, painter=self._paint_pointer)
         self.tag = _Panel(self.composited, 120, 26, painter=self._paint_tag)
@@ -864,11 +1013,100 @@ class X11Overlay:
     def _awake(self) -> bool:
         return bool(self.awake_until) and time.monotonic() < self.awake_until
 
+    def _wants_owner(self) -> bool:
+        return self.bar is not None or bool(self.cfg.get("menu_bar"))
+
     def _claim_bar(self) -> None:
-        if self.bar is not None and not self.bar_owner.owned:
+        if self._wants_owner() and not self.bar_owner.owned:
             self.bar_owner.try_acquire()
+        if self.bar_owner.owned and self.cfg.get("menu_bar") and self.tray is None:
+            try:
+                self.tray = _Tray(self)
+            except Exception as exc:  # noqa: BLE001 - no panel tray on this desktop
+                sys.stderr.write(f"dobby.overlay: no tray icon: {exc}\n")
+                self.cfg["menu_bar"] = False
+            self._refresh_topbar(force=True)
+
+    # ------------------------------------------------- tray item (topbar)
+    def _app_name(self) -> str:
+        if not self.track_pid:
+            return ""
+        try:
+            with open(f"/proc/{int(self.track_pid)}/comm", encoding="utf-8") as fh:
+                return fh.read().strip()
+        except (OSError, ValueError):
+            return ""
+
+    def _publish_status(self) -> None:
+        if not self.server_pid:
+            return
+        now = time.monotonic()
+        working = self._working()
+        mode = topbar.dobby_mode(paused=self.paused, takeover=False, confirming=self.pending_confirm is not None,
+                                 stopped=now < self.stopped_until, working=working, awake=self._awake())
+        topbar.publish(self.server_pid, mode=mode, step=self.current_step if working else "",
+                       steps=self.task_steps if working else 0,
+                       elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
+                       turbo=bool(self.cfg.get("turbo")), app=self._app_name() if working else "")
+        self.publish_next = now + 5.0
+
+    def topbar_view(self) -> "topbar.View":
+        try:
+            from dobby.control import commands, control_root
+
+            agents = commands.overview(control_root())
+        except Exception:  # noqa: BLE001
+            agents = []
+        return topbar.topbar_view(agents, topbar.read_states(), self.server_pid)
+
+    def _refresh_topbar(self, force: bool = False) -> None:
+        if self.tray is None:
+            return
+        now = time.monotonic()
+        if not force and now < self.tray_next:
+            return
+        self.tray_next = now + 1.0
+        try:
+            self.tray.update(self.topbar_view())
+        except Exception as exc:  # noqa: BLE001 - never break the helper over the tray
+            sys.stderr.write(f"dobby.overlay: tray: {exc}\n")
+
+    def topbar_action(self, action: str, pid: int) -> None:
+        """A tray menu click: Pause / Resume / Stop one Dobby or all, or Turbo."""
+        from dobby.control import commands, control_root
+
+        root = control_root()
+        if action == "turbo":
+            self.cfg["turbo"] = not self.cfg.get("turbo")
+            self._refresh_bar()
+        elif action in ("pause_toggle", "stop"):
+            if pid == self.server_pid:
+                if action == "stop":
+                    self.request_stop()
+                elif self.paused:
+                    self.resume()
+                else:
+                    self.set_paused(True)
+            elif action == "stop":
+                commands.request_stop(root, pid)
+            else:
+                commands.set_paused(root, pid, not commands.read(root, pid)["paused"])
+        elif action in ("pause_all", "resume_all", "stop_all"):
+            for agent in commands.overview(root):
+                if agent["pid"] == self.server_pid:
+                    if action == "stop_all":
+                        self.request_stop()
+                    elif self.paused != (action == "pause_all"):
+                        self.set_paused(action == "pause_all")
+                elif action == "stop_all":
+                    commands.request_stop(root, agent["pid"])
+                else:
+                    commands.set_paused(root, agent["pid"], action == "pause_all")
+        self._publish_status()
+        self._refresh_topbar(force=True)
 
     def _refresh_bar(self) -> None:
+        self._publish_status()
         if self.bar is None:
             return
         if self.capture_hidden:
@@ -947,10 +1185,14 @@ class X11Overlay:
                 self._refresh_bar()
         if self.voice.refresh_due():
             self._refresh_bar()  # the "Dobby did it!" cheer is over
-        if self.bar is not None and not self.bar_owner.owned and now >= self.bar_owner_retry:
+        if self._wants_owner() and not self.bar_owner.owned and now >= self.bar_owner_retry:
             self.bar_owner_retry = now + 2.0
-            if self.bar_owner.try_acquire():
+            self._claim_bar()
+            if self.bar_owner.owned:
                 self._refresh_bar()
+        if now >= self.publish_next:
+            self._publish_status()  # heartbeat, and the timer for the tray's menu
+        self._refresh_topbar()
         if self.awake_until and now >= self.awake_until:
             self.sleep()
         self._put_away_when_done(now)
@@ -1311,6 +1553,11 @@ class X11Overlay:
         if self.lock is not None:
             self.lock.close()
             self.lock = None
+        if self.tray is not None:
+            self.tray.close()
+            self.tray = None
+        if self.server_pid:
+            topbar.clear(self.server_pid)
         self.bar_owner.release()
         mark_waiting(self.wait_dir, os.getpid(), False)
         if self.bar is not None:

@@ -139,10 +139,10 @@ def test_overlay_config_narration_is_on_unless_turned_off():
     assert "narrate" not in overlay_config({"DOBBY_OVERLAY_NARRATE": "1"})
 
 
-def test_overlay_config_menu_bar_icon_is_opt_in():
-    assert "menu_bar" not in overlay_config({})
+def test_overlay_config_menu_bar_item_on_unless_turned_off():
+    assert "menu_bar" not in overlay_config({})  # the helpers default to on
     assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "1", "DOBBY_MODE": "secure"}) == {"menu_bar": True}
-    assert "menu_bar" not in overlay_config({"DOBBY_OVERLAY_MENU_BAR": "0"})
+    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "0", "DOBBY_MODE": "secure"}) == {"menu_bar": False}
 
 
 def test_wrap_hal_is_noop_when_disabled():

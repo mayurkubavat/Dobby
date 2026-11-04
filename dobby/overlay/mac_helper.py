@@ -27,8 +27,10 @@ What it shows:
   their bar only while they work;
 * Dobby's menu (status, Wake / Sleep, recent steps, Pause / Stop, Turbo,
   show/hide toggles), opened from the bar's ▾ button. Optional extras open
-  the same menu: a menu bar icon (``menu_bar``, off by default) and a
-  clickable ▾ on the name tag (``chip_menu``, off by default).
+  the same menu: a clickable ▾ on the name tag (``chip_menu``, off by default);
+* the menu bar item (``menu_bar``, on by default; see ``topbar``): a Dobby
+  icon with the number of running Dobbys and a Focus-style dropdown with one
+  row per Dobby (what it does, Pause / Resume / Stop) and Dobby's settings.
 
 It also watches for real user input while Dobby works (take-over) and the
 hotkeys Ctrl+Option+Esc (stop), Ctrl+Option+P (pause / resume) and
@@ -79,6 +81,7 @@ from AppKit import (
     NSMenu,
     NSMenuItem,
     NSPanel,
+    NSRunningApplication,
     NSScreen,
     NSScreenSaverWindowLevel,
     NSStatusBar,
@@ -127,7 +130,7 @@ from Quartz import (
     kCGWindowListOptionOnScreenOnly,
 )
 
-from . import geometry, inputlock, protocol, style
+from . import geometry, inputlock, protocol, style, topbar
 from ..personality import Voice
 
 _kCGEventSourceUserData = 42
@@ -168,9 +171,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # need not hide it and it never blinks). True: visible in recordings, but
     # it hides for a moment during each of Dobby's captures.
     "pill_in_recordings": False,
-    # Extra ways to open Dobby's menu besides the bar's ▾ button: a menu bar
-    # icon, and a ▾ on the name tag that opens the menu when clicked.
-    "menu_bar": False,
+    # The menu bar item (``topbar``): a Dobby icon in the menu bar with a
+    # Focus-style dropdown listing every running Dobby. Only the bar owner
+    # shows it. ``chip_menu``: a ▾ on the name tag opens Dobby's menu.
+    "menu_bar": True,
     "chip_menu": False,
     # Turbo: no Allow/Deny prompts and no take-over pause; only Stop/Pause
     # (bar, menu, hotkeys) halt Dobby. Risky steps still flash red.
@@ -391,6 +395,13 @@ class _Target(NSObject):
 
     def menuAllResume_(self, _sender):
         self.owner.all_paused(False)
+
+    def menuAllStop_(self, _sender):
+        self.owner.all_stop()
+
+    @objc.typedSelector(b"v@:@")
+    def menuNeedsUpdate_(self, menu):  # NSMenuDelegate: the top-bar menu is built as it opens
+        self.owner.fill_topbar_menu(menu)
 
 
 class _HotspotView(NSView):
@@ -1388,6 +1399,11 @@ class OverlayController:
         self.pill_show_dir = showing_dir(self.cfg.get("bar_lock", BAR_LOCK))
         self.interactive = interactive
         self.status_item = None
+        self.topbar_menu = None
+        self.topbar_sig: Optional[tuple] = None
+        self.topbar_next = 0.0
+        self.publish_next = 0.0
+        self.app_names: Dict[int, str] = {}
         self.rebuild_panels()
         NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(
             self.target, "screensChanged:", NSApplicationDidChangeScreenParametersNotification, None
@@ -1876,6 +1892,9 @@ class OverlayController:
         now = time.monotonic()
         if self.interactive:
             self._refresh_agents()
+            if now >= self.publish_next:
+                self._publish_status()  # heartbeat, and the timer for other helpers' menus
+            self._refresh_topbar()
         if self.style == "modern" and self.trail_points:
             fresh = [t for t in self.trail_points if now - t[2] < float(self.cfg["trail_secs"])]
             if len(fresh) != len(self.trail_points):
@@ -2367,7 +2386,12 @@ class OverlayController:
     def _install_status_item(self) -> None:
         try:
             self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(-1.0)
-            self._refresh_menu()
+            self.topbar_menu = NSMenu.alloc().init()
+            self.topbar_menu.setAutoenablesItems_(False)
+            self.topbar_menu.setDelegate_(self.target)  # filled in menuNeedsUpdate_
+            self.status_item.setMenu_(self.topbar_menu)
+            self.topbar_sig = None
+            self._refresh_topbar(force=True)
         except Exception as exc:  # noqa: BLE001
             sys.stderr.write(f"dobby.overlay: no menu bar item: {exc}\n")
             self.status_item = None
@@ -2466,15 +2490,152 @@ class OverlayController:
                 commands.set_paused(root, agent["pid"], paused)
 
     def _refresh_menu(self) -> None:
+        """Our state changed: tell the top-bar item (ours, or another helper's)."""
+        self._publish_status()
+        self._refresh_topbar(force=True)
+
+    # ------------------------------------------------- menu bar item (topbar)
+    def _app_name(self) -> str:
+        pid = self.track_pid
+        if not pid:
+            return ""
+        if pid not in self.app_names:
+            try:
+                app = NSRunningApplication.runningApplicationWithProcessIdentifier_(int(pid))
+                self.app_names[pid] = str(app.localizedName() or "") if app is not None else ""
+            except Exception:  # noqa: BLE001
+                self.app_names[pid] = ""
+        return self.app_names[pid]
+
+    def _publish_status(self) -> None:
+        """Write what this Dobby does for whichever helper owns the menu bar item."""
+        if not self.interactive or not self.server_pid:
+            return
+        now = time.monotonic()
+        working = now - self.last_action <= float(self.cfg["active_secs"])
+        mode = topbar.dobby_mode(paused=self.paused, takeover=self.takeover,
+                                 confirming=self.pending_confirm is not None,
+                                 stopped=now < self.stopped_until, working=working, awake=self._awake())
+        topbar.publish(self.server_pid, mode=mode, step=self.current_step if working else "",
+                       steps=self.task_steps if working else 0,
+                       elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
+                       turbo=self.turbo, app=self._app_name() if working else "")
+        self.publish_next = now + 5.0
+
+    def _topbar_view(self) -> "topbar.View":
+        return topbar.topbar_view(self._agents(), topbar.read_states(), self.server_pid)
+
+    def _dark_menu_bar(self) -> bool:
+        try:
+            name = self.status_item.button().effectiveAppearance().name()
+            return "Dark" in str(name)
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _refresh_topbar(self, force: bool = False) -> None:
+        """Update the menu bar icon, its count and tooltip (about once a second)."""
         if self.status_item is None:
             return
-        status, title = self._status()
+        now = time.monotonic()
+        if not force and now < self.topbar_next:
+            return
+        self.topbar_next = now + 1.0
         try:
-            self.status_item.button().setTitle_(title)
-            self.status_item.button().setToolTip_(f"Dobby: {status}")
-            self.status_item.setMenu_(self._build_menu(status))
+            view = self._topbar_view()
+            dark = self._dark_menu_bar()
+            sig = (topbar.icon_state(view), topbar.icon_title(view), topbar.tooltip(view), dark)
+            if sig == self.topbar_sig:
+                return
+            self.topbar_sig = sig
+            button = self.status_item.button()
+            path = topbar.bar_icon_path(sig[0], 36, dark=dark)
+            image = NSImage.alloc().initWithContentsOfFile_(path) if path else None
+            if image is not None:
+                image.setSize_((18, 18))
+                button.setImage_(image)
+                button.setImagePosition_(2)  # NSImageLeft: the count sits to its right
+                button.setTitle_(sig[1])
+            else:
+                button.setImage_(None)
+                button.setTitle_("◆ " + sig[1] if sig[1] else "◆")
+            button.setToolTip_(sig[2])
         except Exception as exc:  # noqa: BLE001
-            sys.stderr.write(f"dobby.overlay: menu: {exc}\n")
+            sys.stderr.write(f"dobby.overlay: menu bar item: {exc}\n")
+
+    def _row_image(self, color: str, shape: str):
+        path = topbar.row_icon_path(color, shape, 52)
+        image = NSImage.alloc().initWithContentsOfFile_(path) if path else None
+        if image is not None:
+            image.setSize_((26, 26))
+        return image
+
+    @staticmethod
+    def _two_lines(first: str, second: str, bold: bool = False):
+        """Attributed menu title: a name over a smaller grey line (Focus style)."""
+        from AppKit import NSColor, NSMutableAttributedString
+
+        text = NSMutableAttributedString.alloc().initWithString_attributes_(
+            first, {NSFontAttributeName: NSFont.boldSystemFontOfSize_(13.0) if bold
+                    else NSFont.menuFontOfSize_(13.0)})
+        if second:
+            text.appendAttributedString_(NSAttributedString.alloc().initWithString_attributes_(
+                "\n" + second, {NSFontAttributeName: NSFont.systemFontOfSize_(11.0),
+                                 NSForegroundColorAttributeName: NSColor.secondaryLabelColor()}))
+        return text
+
+    def fill_topbar_menu(self, menu) -> None:
+        """Build the dropdown as it opens: header, one row per Dobby, settings."""
+        try:
+            self._publish_status()
+            view = self._topbar_view()
+            menu.removeAllItems()
+            header = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(view.header, None, "")
+            header.setAttributedTitle_(self._two_lines(view.header, view.subtitle, bold=True))
+            header.setEnabled_(False)
+            menu.addItem_(header)
+            menu.addItem_(NSMenuItem.separatorItem())
+            for row in view.rows:
+                item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(row.title, None, "")
+                item.setAttributedTitle_(self._two_lines(row.title + ("  (this bar)" if row.own and
+                                                                    len(view.rows) > 1 else ""), row.detail))
+                image = self._row_image(row.color, row.shape)
+                if image is not None:
+                    item.setImage_(image)
+                sub = NSMenu.alloc().initWithTitle_(row.title)
+                sub.setAutoenablesItems_(False)
+                for title, action in row.actions:
+                    selector = {"pause_toggle": "menuAgentPauseToggle:", "stop": "menuAgentStop:"}[action]
+                    self._menu_item(sub, title, selector).setRepresentedObject_(row.pid)
+                item.setSubmenu_(sub)
+                item.setEnabled_(True)
+                menu.addItem_(item)
+            if view.all_actions:
+                menu.addItem_(NSMenuItem.separatorItem())
+                for title, action in view.all_actions:
+                    self._menu_item(menu, title, {"pause_all": "menuAllPause:", "resume_all": "menuAllResume:",
+                                                  "stop_all": "menuAllStop:"}[action])
+            menu.addItem_(NSMenuItem.separatorItem())
+            settings = NSMenu.alloc().initWithTitle_("Dobby Settings")
+            settings.setAutoenablesItems_(False)
+            self._menu_item(settings, "Turbo mode (no prompts, ignores take-over)", "menuToggleTurbo:", self.turbo)
+            self._menu_item(settings, "Show overlay", "menuToggleOverlay:", self.user_visible)
+            if self.pill is not None:
+                self._menu_item(settings, "Show control bar (⌃⌥H)", "menuTogglePill:", not self.pill_user_hidden)
+            self._menu_item(settings, "Show step trail", "menuToggleTrail:", self.trail_on)
+            self._menu_item(settings, "Clear step trail", "menuClearTrail:")
+            parent = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Dobby Settings", None, "")
+            parent.setSubmenu_(settings)
+            menu.addItem_(parent)
+        except Exception as exc:  # noqa: BLE001 - never break the menu bar
+            sys.stderr.write(f"dobby.overlay: menu bar menu: {exc}\n")
+
+    def all_stop(self) -> None:
+        commands, root = self._commands()
+        for agent in commands.overview(root):
+            if agent["pid"] == self.server_pid:
+                self.request_stop()
+            else:
+                commands.request_stop(root, agent["pid"])
 
     def toggle_overlay(self) -> None:
         self.user_visible = not self.user_visible
@@ -2690,6 +2851,8 @@ class OverlayController:
                 NSStatusBar.systemStatusBar().removeStatusItem_(self.status_item)
             except Exception:  # noqa: BLE001
                 pass
+        if self.interactive and self.server_pid:
+            topbar.clear(self.server_pid)
         self.bar_owner.release()
         mark_waiting(self.wait_dir, os.getpid(), False)
         AppHelper.stopEventLoop()

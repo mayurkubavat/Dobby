@@ -1,0 +1,444 @@
+"""Dobby's top-bar item: the macOS menu bar icon and the Linux panel tray icon.
+
+Styled like the macOS Focus menu: an icon in the top bar, and a dropdown
+with a header ("Dobby" · "2 running · 1 working"), one row per running Dobby
+(a round coloured icon, its name, what it is doing) with Pause / Resume /
+Stop, and Dobby's settings at the bottom.
+
+This module is pure (no AppKit, no GTK) so it is tested anywhere:
+
+* :data:`PALETTE`: palette A, "Elf Violet, tuned".
+* :func:`publish` / :func:`read_states`: each overlay helper writes what its
+  Dobby is doing to ``~/.dobby/overlay/status/<server pid>.json`` so the one
+  helper that owns the top-bar item (the bar owner, see ``barlock``) can show
+  every Dobby, not only its own.
+* :func:`topbar_view`: the dropdown's content.
+* :func:`render_icon` / :func:`render_row_icon`: PNG icons drawn with Pillow,
+  shared by both platforms (no fonts needed except the optional count).
+
+``DOBBY_OVERLAY_MENU_BAR=0`` turns the top-bar item off (on by default).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+
+STATUS_DIR = os.path.expanduser("~/.dobby/overlay/status")
+ICON_DIR = os.path.expanduser("~/.dobby/overlay/icons")
+
+# Palette A, "Elf Violet, tuned" (chosen Nov 2026).
+PALETTE: Dict[str, str] = {
+    "accent": "#7C5CFF",       # glow and icon on a light desktop
+    "accent_dark": "#9B82FF",  # the same on a dark desktop
+    "fill": "#5B3FE0",         # filled buttons and tags, white text
+    "on_fill": "#FFFFFF",
+    "ok": "#22A365",
+    "caution": "#F5A524",      # paused, needs you
+    "danger": "#F04438",       # stopped
+    "idle": "#9A98A6",         # sleeping / paused grey
+    "surface_light": "#FBFAFF",
+    "surface_dark": "#1B1826",
+    "text_secondary": "#8A8799",
+}
+
+# ------------------------------------------------------- per-Dobby status
+_FRESH_SECS = 30.0  # a helper republishes at least this often while it runs
+
+
+def publish(server_pid: int, *, mode: str, step: str = "", steps: int = 0, elapsed: float = 0.0,
+            turbo: bool = False, app: str = "", directory: str = STATUS_DIR) -> None:
+    """Write this helper's Dobby status (cheap; called on every bar refresh)."""
+    if not server_pid:
+        return
+    rec = {"pid": int(server_pid), "helper": os.getpid(), "mode": str(mode), "step": str(step)[:120],
+           "steps": int(steps), "elapsed": float(elapsed), "turbo": bool(turbo), "app": str(app)[:60],
+           "at": time.time()}
+    try:
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, f"{int(server_pid)}.json")
+        tmp = os.path.join(directory, f".{int(server_pid)}.{os.getpid()}.tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(rec, fh)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def clear(server_pid: int, directory: str = STATUS_DIR) -> None:
+    try:
+        os.unlink(os.path.join(directory, f"{int(server_pid)}.json"))
+    except OSError:
+        pass
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True  # alive, owned by someone else
+    return True
+
+
+def read_states(directory: str = STATUS_DIR, now: Optional[float] = None) -> Dict[int, dict]:
+    """Published statuses by server pid. Drops files whose helper has exited."""
+    now = time.time() if now is None else now
+    out: Dict[int, dict] = {}
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return out
+    for name in names:
+        if not name.endswith(".json") or name.startswith("."):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                rec = json.load(fh)
+            pid = int(rec.get("pid", 0))
+            helper = int(rec.get("helper", 0))
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+        if helper and not _alive(helper):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            continue
+        if now - float(rec.get("at", 0) or 0) > _FRESH_SECS and rec.get("mode") == "working":
+            rec["mode"] = "ready"  # a stale "working" (helper hung) reads as idle
+        out[pid] = rec
+    return out
+
+
+# ------------------------------------------------------------- the view
+# Row states, most urgent first. (key, label, icon shape, colour key)
+_STATES = {
+    "confirm": ("Needs you · Allow or Deny", "alert", "caution"),
+    "stopped": ("Stopped", "stop", "danger"),
+    "paused": ("Paused", "pause", "caution"),
+    "takeover": ("You're in control", "hand", "caution"),
+    "working": ("Working", "spark", "agent"),
+    "awake": ("Awake · handing back to the AI", "spark", "agent"),
+    "waiting": ("Waiting for its turn", "clock", "idle"),
+    "ready": ("Sleeping", "moon", "idle"),
+}
+_ORDER = list(_STATES)
+
+
+@dataclass
+class Row:
+    pid: int
+    name: str
+    state: str          # a key of _STATES
+    title: str          # "Mail Dobby"
+    detail: str         # "Working · Click ‘Send’ · step 7 · 0:42"
+    color: str          # icon fill (hex)
+    shape: str          # icon glyph: spark, moon, pause, alert, hand, stop, clock
+    own: bool           # the Dobby whose helper draws this menu
+    actions: List[Tuple[str, str]] = field(default_factory=list)  # (title, action key)
+
+
+@dataclass
+class View:
+    header: str
+    subtitle: str
+    rows: List[Row]
+    running: int
+    working: int
+    attention: bool     # some Dobby is paused, stopped or asks Allow/Deny
+    all_actions: List[Tuple[str, str]] = field(default_factory=list)
+
+    def signature(self) -> tuple:
+        """Changes when the dropdown would look different (rebuild only then)."""
+        return (self.subtitle, tuple((r.pid, r.title, r.detail, r.color, r.shape) for r in self.rows))
+
+
+def _clock(secs: float) -> str:
+    secs = max(0, int(secs))
+    return f"{secs // 60}:{secs % 60:02d}" if secs < 3600 else f"{secs // 3600}h {secs % 3600 // 60:02d}m"
+
+
+def _short(text: str, limit: int) -> str:
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _state_of(agent: Mapping[str, object], status: Mapping[str, object]) -> str:
+    mode = str(status.get("mode") or "ready")
+    if mode == "confirm":
+        return "confirm"
+    if agent.get("paused") or mode == "paused":
+        return "paused"
+    if mode in ("takeover", "stopped", "working", "awake"):
+        return mode
+    if agent.get("waiting"):
+        return "waiting"
+    return "ready"
+
+
+def _detail(state: str, status: Mapping[str, object]) -> str:
+    label = _STATES[state][0]
+    if state != "working":
+        return label
+    parts = [label]
+    if status.get("turbo"):
+        parts[0] = "Working ⚡"
+    step = _short(str(status.get("step") or ""), 40)
+    if step:
+        parts.append(step)
+    if status.get("app"):
+        parts.append(f"in {_short(str(status['app']), 20)}")
+    if int(status.get("steps") or 0):
+        parts.append(f"step {int(status['steps'])}")
+    if float(status.get("elapsed") or 0) >= 1:
+        parts.append(_clock(float(status["elapsed"])))
+    return " · ".join(parts)
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Mapping[str, object]],
+                own_pid: int = 0, palette: Mapping[str, str] = PALETTE) -> View:
+    """The dropdown: ``agents`` from ``dobby.control.commands.overview``,
+    ``states`` from :func:`read_states`."""
+    from .style import agent_colors  # pure module
+
+    agents = list(agents)
+    colors = agent_colors(agents)
+    rows: List[Row] = []
+    for a in agents:
+        pid = int(a.get("pid", 0) or 0)
+        status = states.get(pid, {})
+        state = _state_of(a, status)
+        _label, shape, color_key = _STATES[state]
+        agent_color = colors.get(pid) or str(a.get("color") or palette["accent"])
+        color = agent_color if color_key == "agent" else palette[color_key]
+        halted = state in ("paused", "takeover")
+        actions = [("Resume" if halted else "Pause", "pause_toggle"), ("Stop", "stop")]
+        rows.append(Row(pid=pid, name=str(a.get("name") or f"Dobby-{pid}"), state=state,
+                        title=_short(str(a.get("name") or f"Dobby-{pid}"), 32),
+                        detail=_detail(state, status), color=color, shape=shape,
+                        own=pid == own_pid, actions=actions))
+    rows.sort(key=lambda r: (_ORDER.index(r.state), r.name.lower(), r.pid))
+    running = len(rows)
+    working = sum(r.state in ("working", "awake") for r in rows)
+    attention = any(r.state in ("confirm", "paused", "takeover", "stopped") for r in rows)
+    if not running:
+        subtitle = "No Dobby is running"
+    else:
+        bits = [f"{running} running" if running > 1 else "1 running"]
+        if working:
+            bits.append(f"{working} working")
+        needs = sum(r.state == "confirm" for r in rows)
+        paused = sum(r.state in ("paused", "takeover") for r in rows)
+        if needs:
+            bits.append(f"{needs} need{'s' if needs == 1 else ''} you")
+        if paused:
+            bits.append(f"{paused} paused")
+        if not working and not needs and not paused:
+            bits.append("all sleeping" if running > 1 else "sleeping")
+        subtitle = " · ".join(bits)
+    all_actions: List[Tuple[str, str]] = []
+    if running > 1:
+        all_actions = [("Pause all", "pause_all"), ("Resume all", "resume_all"), ("Stop all", "stop_all")]
+    return View(header="Dobby", subtitle=subtitle, rows=rows, running=running, working=working,
+                attention=attention, all_actions=all_actions)
+
+
+def icon_state(view: View) -> str:
+    """Which top-bar icon: "attention" (amber), "working" (violet) or "idle"."""
+    if view.attention:
+        return "attention"
+    if view.working:
+        return "working"
+    return "idle"
+
+
+def icon_title(view: View) -> str:
+    """Text beside the icon: the number of running Dobbys when more than one."""
+    return str(view.running) if view.running > 1 else ""
+
+
+def tooltip(view: View) -> str:
+    return f"Dobby: {view.subtitle}"
+
+
+# ------------------------------------------------------------- icons
+def _rgba(hex_color: str, alpha: int = 255) -> Tuple[int, int, int, int]:
+    h = hex_color.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha
+
+
+def _mark(draw, cx: float, cy: float, r: float, fill) -> None:
+    """Dobby's mark: a rounded head with two long pointed ears."""
+    # ears (triangles reaching out and up)
+    draw.polygon([(cx - r * 0.55, cy - r * 0.25), (cx - r * 1.55, cy - r * 0.75),
+                  (cx - r * 0.75, cy + r * 0.35)], fill=fill)
+    draw.polygon([(cx + r * 0.55, cy - r * 0.25), (cx + r * 1.55, cy - r * 0.75),
+                  (cx + r * 0.75, cy + r * 0.35)], fill=fill)
+    draw.ellipse([cx - r * 0.82, cy - r * 0.9, cx + r * 0.82, cy + r * 0.95], fill=fill)
+
+
+def render_icon(state: str, size: int = 36, dark: bool = False, template: bool = False, count: int = 0):
+    """The top-bar icon as a Pillow RGBA image (``size`` px square).
+
+    ``template``: plain black (macOS tints it to the menu bar); otherwise
+    violet with an amber or green status dot. ``count`` > 1 adds a number
+    badge (for trays that cannot show text beside the icon).
+    """
+    from PIL import Image, ImageDraw
+
+    scale = 4  # draw big, shrink: smooth edges without antialiasing support
+    s = size * scale
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if template:
+        body = (0, 0, 0, 255)
+    else:
+        body = _rgba(PALETTE["accent_dark"] if dark else PALETTE["accent"])
+        if state == "idle":
+            body = _rgba(PALETTE["accent_dark"] if dark else PALETTE["accent"], 170)
+    _mark(d, s * 0.5, s * 0.55, s * 0.27, body)
+    # eyes cut out of the head
+    eye = (0, 0, 0, 0)
+    er = s * 0.045
+    for ex in (s * 0.42, s * 0.58):
+        d.ellipse([ex - er, s * 0.5 - er, ex + er, s * 0.5 + er], fill=eye)
+    if state in ("working", "attention"):
+        dot = (0, 0, 0, 255) if template else _rgba(PALETTE["caution"] if state == "attention" else PALETTE["ok"])
+        cx, cy, r = s * 0.8, s * 0.8, s * 0.13
+        d.ellipse([cx - r - s * 0.04, cy - r - s * 0.04, cx + r + s * 0.04, cy + r + s * 0.04], fill=(0, 0, 0, 0))
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=dot)
+    if count > 1:
+        _badge(d, s, str(count) if count < 10 else "9+")
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def _badge(d, s: float, text: str) -> None:
+    from PIL import ImageFont
+
+    cx, cy, r = s * 0.78, s * 0.24, s * 0.22
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=_rgba(PALETTE["fill"]))
+    try:
+        font = ImageFont.load_default(size=int(r * 1.5))  # Pillow 10.1+, needs FreeType
+    except (TypeError, OSError, AttributeError):
+        return  # the disc alone still says "more than one"
+    d.text((cx, cy), text, fill=(255, 255, 255, 255), font=font, anchor="mm")
+
+
+def _glyph(d, shape: str, s: float, color) -> None:
+    c = s / 2
+    if shape == "spark":  # four-point star
+        a, b = s * 0.26, s * 0.07
+        d.polygon([(c, c - a), (c + b, c - b), (c + a, c), (c + b, c + b),
+                   (c, c + a), (c - b, c + b), (c - a, c), (c - b, c - b)], fill=color)
+    elif shape == "moon":
+        r = s * 0.22
+        d.ellipse([c - r, c - r, c + r, c + r], fill=color)
+        off = s * 0.11
+        d.ellipse([c - r + off, c - r - off * 0.6, c + r + off, c + r - off * 0.6], fill=(0, 0, 0, 0))
+    elif shape == "pause":
+        w, h = s * 0.08, s * 0.22
+        for x in (c - s * 0.08, c + s * 0.08):
+            d.rounded_rectangle([x - w / 2, c - h, x + w / 2, c + h], radius=w / 2, fill=color)
+    elif shape == "stop":
+        a = s * 0.16
+        d.rounded_rectangle([c - a, c - a, c + a, c + a], radius=s * 0.04, fill=color)
+    elif shape == "alert":
+        w = s * 0.08
+        d.rounded_rectangle([c - w / 2, c - s * 0.24, c + w / 2, c + s * 0.06], radius=w / 2, fill=color)
+        d.ellipse([c - w * 0.6, c + s * 0.13, c + w * 0.6, c + s * 0.13 + w * 1.2], fill=color)
+    elif shape == "hand":  # an open palm: four fingers and a thumb
+        d.rounded_rectangle([c - s * 0.16, c - s * 0.02, c + s * 0.14, c + s * 0.24], radius=s * 0.08, fill=color)
+        for i, x in enumerate((-0.13, -0.05, 0.03, 0.11)):
+            top = c - s * (0.2 if i in (1, 2) else 0.15)
+            d.rounded_rectangle([c + s * x - s * 0.03, top, c + s * x + s * 0.03, c + s * 0.05],
+                                radius=s * 0.03, fill=color)
+        d.polygon([(c - s * 0.16, c + s * 0.06), (c - s * 0.27, c - s * 0.04), (c - s * 0.22, c - s * 0.08),
+                   (c - s * 0.12, c)], fill=color)
+    elif shape == "clock":
+        r, w = s * 0.2, max(1.0, s * 0.05)
+        d.ellipse([c - r, c - r, c + r, c + r], outline=color, width=int(w))
+        d.line([(c, c), (c, c - r * 0.6)], fill=color, width=int(w))
+        d.line([(c, c), (c + r * 0.5, c)], fill=color, width=int(w))
+
+
+def render_row_icon(color: str, shape: str, size: int = 52, filled: bool = True):
+    """A Focus-style round icon: a coloured disc with a white glyph."""
+    from PIL import Image, ImageDraw
+
+    scale = 4
+    s = size * scale
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse([0, 0, s - 1, s - 1], fill=_rgba(color, 255 if filled else 90))
+    glyph = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    _glyph(ImageDraw.Draw(glyph), shape, s, (255, 255, 255, 255))
+    img.alpha_composite(glyph)
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def icon_file(kind: str, *parts: object, render=None, directory: str = ICON_DIR) -> Optional[str]:
+    """Render once to ``<directory>/<kind>-<parts>.png`` and return its path.
+
+    The name changes with the content, which AppIndicator needs (it caches
+    icons by name). Returns None if the file cannot be written.
+    """
+    name = "-".join([kind] + [str(p).lstrip("#").lower() for p in parts]) + ".png"
+    path = os.path.join(directory, name)
+    if os.path.isfile(path):
+        return path
+    try:
+        os.makedirs(directory, exist_ok=True)
+        img = render()
+        tmp = path + f".{os.getpid()}.tmp"
+        img.save(tmp, "PNG")
+        os.replace(tmp, path)
+        return path
+    except Exception:  # noqa: BLE001 - an icon is cosmetic
+        return None
+
+
+def bar_icon_path(state: str, size: int = 36, dark: bool = False, template: bool = False,
+                  count: int = 0, directory: str = ICON_DIR) -> Optional[str]:
+    return icon_file("bar", state, size, "dark" if dark else "light", "t" if template else "c",
+                     min(count, 10) if count > 1 else 0,
+                     render=lambda: render_icon(state, size, dark, template, count), directory=directory)
+
+
+def row_icon_path(color: str, shape: str, size: int = 52, directory: str = ICON_DIR) -> Optional[str]:
+    return icon_file("row", color, shape, size, render=lambda: render_row_icon(color, shape, size),
+                     directory=directory)
+
+
+def dobby_mode(*, paused: bool, takeover: bool, confirming: bool, stopped: bool, working: bool,
+               awake: bool) -> str:
+    """The helper's own mode for :func:`publish`."""
+    if confirming:
+        return "confirm"
+    if stopped:
+        return "stopped"
+    if paused:
+        return "paused"
+    if takeover:
+        return "takeover"
+    if working:
+        return "working"
+    if awake:
+        return "awake"
+    return "ready"
+
+
+__all__: Sequence[str] = (
+    "PALETTE", "STATUS_DIR", "Row", "View", "publish", "clear", "read_states", "topbar_view",
+    "icon_state", "icon_title", "tooltip", "render_icon", "render_row_icon", "bar_icon_path",
+    "row_icon_path", "dobby_mode",
+)

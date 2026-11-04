@@ -29,7 +29,9 @@ def make(tmp_path):
         out = io.StringIO()
         # The older tests below check the classic bar; modern tests ask for it.
         # Plain wording: these check the bar, test_personality checks the voice.
-        base = {"bar_lock": str(tmp_path / "bar.lock"), "style": "classic", "personality": "off"}
+        # No menu bar item unless a test asks: it would sit in the real menu bar.
+        base = {"bar_lock": str(tmp_path / "bar.lock"), "style": "classic", "personality": "off",
+                "menu_bar": False}
         base.update(cfg)
         c = mac_helper.OverlayController(base, out=out, interactive=False)
         c._claim_bar()
@@ -405,15 +407,46 @@ def test_two_working_bars_stack_instead_of_overlapping(make):
 
 
 # ------------------------------------------------- menu on the bar's ▾
-def test_no_menu_bar_icon_by_default(make):
+def test_menu_bar_item_on_by_default():
+    pytest.importorskip("AppKit")
+    from dobby.overlay import mac_helper
+
+    assert mac_helper.DEFAULT_CONFIG["menu_bar"] is True
+
+
+def test_no_menu_bar_item_when_off(make):
     c, _ = make()
     assert c.bar_owner.owned and c.status_item is None
 
 
-def test_menu_bar_icon_when_enabled(make):
+def test_menu_bar_item_focus_style_menu(make, tmp_path, monkeypatch):
+    from dobby.overlay import topbar
+
+    monkeypatch.setattr(topbar, "ICON_DIR", str(tmp_path / "icons"))
+    monkeypatch.setattr(topbar, "STATUS_DIR", str(tmp_path / "status"))
+    agents = [{"pid": 11, "name": "Mail Dobby", "paused": False, "holding": True, "waiting": False},
+              {"pid": 22, "name": "Xcode Dobby", "paused": True, "holding": False, "waiting": False}]
     c, _ = make(menu_bar=True)
+    monkeypatch.setattr(c, "_agents", lambda: agents)
+    monkeypatch.setattr(topbar, "read_states", lambda *a, **k: {11: {"mode": "working", "steps": 3}})
     assert c.status_item is not None
-    assert c.status_item.menu().itemAtIndex_(0).title().startswith("Dobby: ")
+    c._refresh_topbar(force=True)
+    button = c.status_item.button()
+    assert button.title() == "2" and button.image() is not None
+    assert "2 running" in button.toolTip()
+    menu = c.status_item.menu()
+    c.fill_topbar_menu(menu)
+    titles = [menu.itemAtIndex_(i).title() for i in range(menu.numberOfItems())]
+    assert titles[0] == "Dobby"
+    assert "2 running · 1 working · 1 paused" in menu.itemAtIndex_(0).attributedTitle().string()
+    mail = next(menu.itemAtIndex_(i) for i, t in enumerate(titles) if t == "Mail Dobby")
+    assert "Working" in mail.attributedTitle().string() and mail.image() is not None
+    sub = mail.submenu()
+    assert [sub.itemAtIndex_(i).title() for i in range(sub.numberOfItems())] == ["Pause", "Stop"]
+    assert sub.itemAtIndex_(0).representedObject() == 11
+    xcode = next(menu.itemAtIndex_(i) for i, t in enumerate(titles) if t == "Xcode Dobby")
+    assert xcode.submenu().itemAtIndex_(0).title() == "Resume"
+    assert {"Pause all", "Resume all", "Stop all", "Dobby Settings"} <= set(titles)
 
 
 def _bar_in(c, mode):

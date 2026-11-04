@@ -41,8 +41,10 @@ Click the sleeping control bar to wake Dobby. If the AI waits in the
 the AI (until its next action, or ``DOBBY_OVERLAY_AWAKE_SECS``, default 120).
 If no AI waits, the bar says so for a few seconds and Dobby sleeps again: an
 MCP server cannot start a new AI turn by itself.
-The bar's ▾ button opens Dobby's menu. ``DOBBY_OVERLAY_MENU_BAR=1`` also puts
-a Dobby icon in the macOS menu bar (off by default).
+The bar's ▾ button opens Dobby's menu. A Dobby icon in the top bar (the
+macOS menu bar, or the Linux panel's tray) shows how many Dobbys run and, in
+a Focus-style dropdown, what each one does, with Pause / Resume / Stop
+(see ``dobby.overlay.topbar``). ``DOBBY_OVERLAY_MENU_BAR=0`` hides it.
 
 Hotkeys while Dobby runs: Ctrl+Option+Esc stops, Ctrl+Option+P pauses or
 resumes.
@@ -154,8 +156,11 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         cfg["pill"] = pill
     elif pill in _FALSE:
         cfg["pill"] = "off"
-    if env.get("DOBBY_OVERLAY_MENU_BAR", "").strip().lower() in _TRUE:
+    menu_bar = env.get("DOBBY_OVERLAY_MENU_BAR", "").strip().lower()
+    if menu_bar in _TRUE:
         cfg["menu_bar"] = True
+    elif menu_bar in _FALSE:
+        cfg["menu_bar"] = False
     if env.get("DOBBY_OVERLAY_PILL_RECORD", "").strip().lower() in _TRUE:
         cfg["pill_in_recordings"] = True
     if lock_mode(env) != "off":
