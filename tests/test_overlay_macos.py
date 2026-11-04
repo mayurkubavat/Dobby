@@ -30,9 +30,10 @@ def test_liquid_glass_capsule_where_the_os_has_it():
     except objc.nosuchclass_error:
         assert mac_helper._liquid_glass({"liquid_glass": "auto"}, 34.0) is None  # older macOS: frosted bar
         return
-    glass = mac_helper._liquid_glass({"liquid_glass": "auto"}, 34.0)
+    glass = mac_helper._liquid_glass({"liquid_glass": "clear"}, 34.0)
     assert glass is not None
-    assert glass.cornerRadius() == 17.0
+    assert glass.cornerRadius() == mac_helper._BAR_RADIUS  # rounded rectangle, not a capsule
+    assert glass.style() == 1  # clear
 
 
 def test_liquid_glass_can_be_turned_off():
