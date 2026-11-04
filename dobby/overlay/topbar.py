@@ -154,6 +154,15 @@ class View:
     attention: bool     # some Dobby is paused, stopped or asks Allow/Deny
     all_actions: List[Tuple[str, str]] = field(default_factory=list)
 
+    def to_dict(self) -> dict:
+        """Plain JSON for a native shell (the Swift Dobby.app) to draw as-is."""
+        from dataclasses import asdict
+
+        d = asdict(self)
+        d["icon_state"], d["icon_title"], d["tooltip"] = icon_state(self), icon_title(self), tooltip(self)
+        d["palette"] = dict(PALETTE)
+        return d
+
     def signature(self) -> tuple:
         """Changes when the dropdown would look different (rebuild only then)."""
         return (self.subtitle, tuple((r.pid, r.title, r.detail, r.color, r.shape) for r in self.rows))

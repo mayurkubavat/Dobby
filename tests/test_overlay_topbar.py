@@ -116,3 +116,11 @@ def test_icons_render_and_cache(tmp_path):
     assert p1 == p2 and os.path.isfile(p1)
     assert topbar.bar_icon_path("idle", 36, count=3, directory=str(tmp_path)) != p1
     assert os.path.isfile(topbar.row_icon_path("#7C5CFF", "moon", directory=str(tmp_path)))
+
+
+def test_view_exports_plain_json_for_a_native_shell():
+    v = topbar.topbar_view(_agents(), {11: {"mode": "working"}}, own_pid=11)
+    d = json.loads(json.dumps(v.to_dict()))
+    assert d["subtitle"] == v.subtitle and d["icon_state"] == "attention" and d["icon_title"] == "3"
+    assert d["rows"][1]["actions"] == [["Pause", "pause_toggle"], ["Stop", "stop"]]
+    assert d["palette"]["accent"] == "#7C5CFF"
