@@ -106,27 +106,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     private func rowItem(_ row: TopbarView.Row) -> NSMenuItem {
-        let text = NSMutableAttributedString(
-            string: row.title,
-            attributes: [.font: NSFont.menuFont(ofSize: 0), .foregroundColor: NSColor.labelColor])
-        if !row.detail.isEmpty {
-            text.append(NSAttributedString(
-                string: "\n" + row.detail,
-                attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
-                             .foregroundColor: NSColor.secondaryLabelColor]))
-        }
         let item = NSMenuItem(title: row.title, action: nil, keyEquivalent: "")
-        item.attributedTitle = text
-        item.image = Icons.rowIcon(color: row.color, shape: row.shape)
-        item.setAccessibilityLabel("\(row.title), \(row.detail)")
-        if !row.actions.isEmpty {
-            let sub = NSMenu(title: row.title)
-            sub.autoenablesItems = false
-            for action in row.actions {
-                sub.addItem(actionItem(action.label, key: action.key, pid: row.pid))
-            }
-            item.submenu = sub
+        item.view = RowView(row: row) { [weak self] key in
+            self?.callbacks.action(key, row.pid)
         }
+        item.setAccessibilityLabel("\(row.title), \(row.detail)")
         return item
     }
 
