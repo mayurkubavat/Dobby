@@ -254,3 +254,11 @@ def test_no_grants_means_no_prompts(tmp_path):
     OverlayHAL(desk, ov).mouse_click(150, 10)
     assert desk.done == [("click", 150, 10)]
     assert not [c for c in ov.calls if c[0] == "confirm"]
+
+
+def test_server_sends_instructions_with_every_handoff_kind():
+    from dobby.server import mcp_server
+
+    text = mcp_server.instructions or ""
+    for kind in ("stopped", "denied", "blocked", "interrupted", "paused", "wait_for_wake"):
+        assert kind in text
