@@ -325,8 +325,10 @@ Resume and Stop, and has Pause / Stop all, permission shortcuts, Open at
 Login, Show Log, Restart and Quit. Links such as `dobby://pause-all`,
 `dobby://stop-all` or `dobby://stop?pid=4242` do the same from Shortcuts or a
 script. `DOBBY_APP=0` skips the app; `DOBBY_APP=/path/Dobby.app` picks one.
-Set `DOBBY_SIGN_IDENTITY` when building to keep permissions across rebuilds
-(ad-hoc builds may need Screen Recording granted again).
+Run `apps/macos/build.sh --setup-signing` once before your first build: it
+makes a local "Dobby Local Signing" certificate, so Screen Recording and
+Accessibility stay granted across rebuilds (an ad-hoc build loses them each
+time). `DOBBY_SIGN_IDENTITY` picks another identity, such as a Developer ID.
 
 ### Taking turns
 

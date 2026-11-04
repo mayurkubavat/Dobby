@@ -3,7 +3,7 @@ import AppKit
 /// One Dobby in the menu: its icon, name and what it is doing, with round
 /// Pause/Resume and Stop buttons on the right, so there is no submenu.
 final class RowView: NSView {
-    static let width: CGFloat = 320
+    static let width: CGFloat = 300
     static let height: CGFloat = 46
 
     private let onAction: (String) -> Void
@@ -29,6 +29,7 @@ final class RowView: NSView {
         text.alignment = .leading
         text.spacing = 1
         text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        text.setHuggingPriority(.init(1), for: .horizontal)  // the text takes the slack…
 
         var buttons: [NSView] = []
         for action in row.actions {
@@ -37,13 +38,15 @@ final class RowView: NSView {
         let controls = NSStackView(views: buttons)
         controls.orientation = .horizontal
         controls.spacing = 6
+        controls.setHuggingPriority(.required, for: .horizontal)  // …so the buttons sit at the right edge
+        controls.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let line = NSStackView(views: [icon, text, controls])
         line.orientation = .horizontal
         line.alignment = .centerY
         line.spacing = 10
         line.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 12)
-        line.setHuggingPriority(.defaultLow, for: .horizontal)
+        line.distribution = .fill
         line.translatesAutoresizingMaskIntoConstraints = false
         addSubview(line)
         NSLayoutConstraint.activate([
