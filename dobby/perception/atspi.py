@@ -68,6 +68,17 @@ CONTAINER_ROLES: Set[str] = {
     "unknown", "redundant object", "document frame", "document web", "internal frame",
 }
 
+# Background clicks: roles where the element's own action does what a click does.
+PRESSABLE_ROLES: Set[str] = {
+    "push button", "button", "toggle button", "check box", "radio button", "menu item",
+    "check menu item", "radio menu item", "link", "page tab",
+}
+# Walking up from a label stops here: a click there is not a press.
+PRESS_STOP_ROLES: Set[str] = CONTAINER_ROLES | {"text", "entry", "password text", "terminal", "canvas",
+                                                "list", "table", "tree", "tree table", "combo box"}
+PRESS_ACTIONS = ("click", "press", "activate", "toggle", "jump")
+PRESS_MAX_UP = 2
+
 _SENTINEL = -(2 ** 31)
 _MAX_COORD = 1 << 15
 
@@ -377,6 +388,62 @@ class ATSPIInspector:
         A tree search rather than Component.get_accessible_at_point, which GTK 4
         answers only one level deep.
         """
+        hit = self._deepest_node_at(win, x, y, origin)
+        return hit[1] if hit else None
+
+    def press_at(self, x: int, y: int, pid: int) -> Optional[str]:
+        """Press the button of process ``pid`` at screen point (x, y) through AT-SPI.
+
+        The Linux side of background clicks: the element's own "click" or
+        "press" action runs, so the real pointer does not move and the window
+        need not be in front. Only button-like, enabled elements are pressed
+        (see :data:`PRESSABLE_ROLES`); anything else returns None and the
+        caller clicks with the real mouse.
+        """
+        if not self._available or pid is None:
+            return None
+        try:
+            desktop = self._atspi.get_desktop(0)
+            apps = [desktop.get_child_at_index(i) for i in range(desktop.get_child_count())]
+            apps = [a for a in apps if a is not None and _safe(lambda: a.get_process_id()) == pid]
+            for _app, win, origin in self._toplevels(apps):
+                comp = win.get_component_iface()
+                box = self._extents(comp, origin) if comp is not None else None
+                if box is None or not (box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3]):
+                    continue
+                hit = self._deepest_node_at(win, x, y, origin)
+                if hit is None:
+                    return None
+                return self._press(hit[0])
+        except Exception as e:
+            logger.debug("AT-SPI press failed: %s", e)
+        return None
+
+    def _press(self, node: Any) -> Optional[str]:
+        for _ in range(PRESS_MAX_UP + 1):
+            if node is None:
+                return None
+            role = _safe(lambda: node.get_role_name()) or ""
+            if role in PRESSABLE_ROLES:
+                if "disabled" in self._states(node):
+                    return None
+                action = _safe(lambda: node.get_action_iface())
+                if action is None:
+                    return None
+                names = [(_safe(lambda i=i: action.get_action_name(i)) or "").lower()
+                         for i in range(_safe(lambda: action.get_n_actions()) or 0)]
+                for wanted in PRESS_ACTIONS:
+                    if wanted in names:
+                        ok = _safe(lambda: action.do_action(names.index(wanted)))
+                        return role if ok else None
+                return None
+            if role in PRESS_STOP_ROLES:
+                return None
+            node = _safe(lambda: node.get_parent())
+        return None
+
+    def _deepest_node_at(self, win: Any, x: int, y: int,
+                         origin: Optional[Tuple[int, int]]) -> Optional[Tuple[Any, dict]]:
         best: Optional[Tuple[int, dict]] = None
         best_leaf: Optional[Tuple[int, dict]] = None
         budget = [self.max_nodes]
@@ -395,15 +462,15 @@ class ATSPIInspector:
                 desc = self._describe(node, box)
                 if desc["role"] not in CONTAINER_ROLES:
                     if best_leaf is None or area < best_leaf[0]:
-                        best_leaf = (area, desc)
+                        best_leaf = (area, (node, desc))
                 elif best is None or area < best[0]:
-                    best = (area, desc)
+                    best = (area, (node, desc))
             for c in range(node.get_child_count()):
                 child = node.get_child_at_index(c)
                 if child is not None and self._showing(child):
                     stack.append(child)
         pick = best_leaf or best
-        return pick[1] if pick else None
+        return pick[1] if pick else None  # (node, desc)
 
     def _walk(
         self,

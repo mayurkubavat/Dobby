@@ -51,9 +51,15 @@ Input lock: ``DOBBY_INPUT_LOCK=window`` keeps the person's clicks (and keys,
 while it is in front) out of the window Dobby works in, like an agent browser
 locking its tab; other windows stay usable and the bar offers "Take over".
 Default off. See ``dobby.overlay.inputlock``. With the lock on, plain clicks
-on buttons go through accessibility (``AXPress``) when the app supports it, so
-the person's pointer does not move (``DOBBY_BACKGROUND_CLICKS=0`` turns that
-off; see ``dobby.hal.background``).
+on buttons go through accessibility (``AXPress`` on macOS, the AT-SPI
+"click" action on Linux) when the app supports it, so the person's pointer
+does not move (``DOBBY_BACKGROUND_CLICKS=0`` turns that off; see
+``dobby.hal.background`` and ``ATSPIInspector.press_at``).
+
+App grants: the first action in an app asks "Let Dobby use …?" once per
+session; ``~/.dobby/apps.json`` sets standing tiers (see ``dobby.overlay.grants``).
+Clicks on Send / Delete / Pay-like buttons ask Allow/Deny
+(``DOBBY_CONFIRM_CLICKS=0`` turns that off).
 """
 
 from __future__ import annotations

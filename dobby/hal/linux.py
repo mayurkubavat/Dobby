@@ -536,6 +536,27 @@ class LinuxHAL(IDesktopHAL):
         except Exception:
             return None
 
+    def background_click(self, x: int, y: int, window_id: str) -> bool:
+        """Press the button at (x, y) in window ``window_id`` through AT-SPI,
+        without moving the real pointer (the Linux side of background clicks).
+        False: nothing pressable there, so the caller clicks normally."""
+        pid = self.window_pid(window_id)
+        if pid is None or pid <= 0:
+            return False
+        inspector = getattr(self, "_press_inspector", None)
+        if inspector is None:
+            try:
+                from dobby.perception.atspi import ATSPIInspector
+
+                inspector = ATSPIInspector(hal=self)
+            except Exception:  # noqa: BLE001
+                return False
+            self._press_inspector = inspector
+        if not inspector.is_available or inspector.press_at(int(x), int(y), pid) is None:
+            return False
+        time.sleep(CONFIG.action_cooldown_ms / 1000.0)
+        return True
+
     def focus_window(self, window_id: str) -> bool:
         """Activates the window via _NET_ACTIVE_WINDOW and reports whether focus actually moved."""
         if not self._x_display:

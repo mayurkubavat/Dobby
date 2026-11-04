@@ -9,6 +9,8 @@ drives Dobby and you step in, and the tests that keep it working.
 2. **You step in**, one of four ways:
    - **Stop** (bar, menu, Ctrl+Opt+Esc): the step is not done.
    - **Deny** (or no answer) on an Allow/Deny prompt: the risky step is not done.
+   - **Don't Allow** on "Let Dobby use …?", or an app that `~/.dobby/apps.json` limits:
+     the step is not done and the AI gets `blocked`. Dobby does not ask again this session.
    - **Pause** (bar, menu, Ctrl+Opt+P): Dobby waits up to 2 minutes at its next step.
    - **Take over**: you click, drag, scroll or type while Dobby works. Dobby waits
      until you stop (auto) or press Resume (manual), then skips the step so the AI looks again.
@@ -16,7 +18,7 @@ drives Dobby and you step in, and the tests that keep it working.
 3. **The AI is told what happened.** Every tool returns:
 
    ```json
-   {"ok": false, "handoff": "stopped|denied|interrupted|paused|control_changed|control_busy",
+   {"ok": false, "handoff": "stopped|denied|blocked|interrupted|paused|control_changed|control_busy",
     "look_again": true, "retry_ok": false, "note": "what to do next", "detail": "..."}
    ```
 
