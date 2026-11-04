@@ -177,7 +177,7 @@ def _hal(tmp_path, answers=(), hit=None):
     ov = Overlay(answers)
     desk = Desk()
     grants = AppGrants(path=tmp_path / "apps.json", env={})
-    return OverlayHAL(desk, ov, grants=grants, hit_test=hit), ov, desk
+    return OverlayHAL(desk, ov, grants=grants, hit_test=hit, secure=True), ov, desk
 
 
 def test_first_click_in_an_app_asks_then_acts(tmp_path):
@@ -262,3 +262,45 @@ def test_server_sends_instructions_with_every_handoff_kind():
     text = mcp_server.instructions or ""
     for kind in ("stopped", "denied", "blocked", "interrupted", "paused", "wait_for_wake"):
         assert kind in text
+
+
+# ------------------------------------------------------------------ mode
+def test_turbo_is_the_default_and_secure_is_opt_in():
+    from dobby.mode import security_mode
+
+    assert security_mode(env={}, argv=["dobby"]) == "turbo"
+    assert security_mode(env={}, argv=["dobby", "--secure"]) == "secure"
+    assert security_mode(env={"DOBBY_MODE": "secure"}, argv=["dobby"]) == "secure"
+    assert security_mode(env={"DOBBY_SECURE": "1"}, argv=["dobby"]) == "secure"
+
+
+def test_overlay_config_follows_the_mode():
+    from dobby.overlay import overlay_config
+
+    assert overlay_config({}).get("turbo") is True
+    assert "turbo" not in overlay_config({"DOBBY_MODE": "secure"})
+    assert "turbo" not in overlay_config({"DOBBY_OVERLAY_TURBO": "0"})
+
+
+def test_turbo_hal_never_prompts(tmp_path):
+    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}  # noqa: E731
+    ov, desk = Overlay(answers=[False]), Desk()
+    OverlayHAL(desk, ov, hit_test=hit).mouse_click(150, 10)
+    assert desk.done == [("click", 150, 10)]
+    assert not [c for c in ov.calls if c[0] == "confirm"]
+
+
+def test_wrap_hal_turns_prompts_on_only_in_secure(monkeypatch):
+    import dobby.overlay as overlay_pkg
+
+    class Live(Overlay):
+        pass
+
+    monkeypatch.setattr("sys.argv", ["dobby"])
+    monkeypatch.delenv("DOBBY_MODE", raising=False)
+    monkeypatch.delenv("DOBBY_SECURE", raising=False)
+    turbo = overlay_pkg.wrap_hal(Desk(), Live())
+    assert turbo.grants is None and not turbo.secure and not turbo._confirm_danger
+    monkeypatch.setenv("DOBBY_MODE", "secure")
+    secure = overlay_pkg.wrap_hal(Desk(), Live())
+    assert secure.grants is not None and secure.secure and secure._confirm_danger

@@ -125,9 +125,9 @@ def test_overlay_enabled_rules():
 
 def test_overlay_config():
     cfg = overlay_config({"DOBBY_OVERLAY_COLOR": "#00ff00", "DOBBY_OVERLAY_SPEED": "0", "DOBBY_OVERLAY_LABEL": "D"})
-    assert cfg == {"color": "#00ff00", "color_fixed": True, "speed": 0.0, "label": "D"}
-    assert overlay_config({"DOBBY_OVERLAY_SPEED": "fast"}) == {}
-    assert overlay_config({"DOBBY_OVERLAY_CAPTURE_VISIBLE": "0"}) == {"capture_visible": False}
+    assert cfg == {"color": "#00ff00", "color_fixed": True, "speed": 0.0, "label": "D", "turbo": True}
+    assert overlay_config({"DOBBY_OVERLAY_SPEED": "fast"}) == {"turbo": True}  # turbo is the default
+    assert overlay_config({"DOBBY_OVERLAY_CAPTURE_VISIBLE": "0", "DOBBY_MODE": "secure"}) == {"capture_visible": False}
     assert overlay_config({"DOBBY_OVERLAY_TURBO": "1", "DOBBY_OVERLAY_RESUME": "manual",
                            "DOBBY_OVERLAY_IDLE_SECS": "0.1", "DOBBY_OVERLAY_TRAIL": "0"}) == {
         "turbo": True, "takeover_resume": "manual", "idle_secs": 0.5, "trail": False}
@@ -135,13 +135,13 @@ def test_overlay_config():
 
 def test_overlay_config_narration_is_on_unless_turned_off():
     assert "narrate" not in overlay_config({})
-    assert overlay_config({"DOBBY_OVERLAY_NARRATE": "0"}) == {"narrate": False}
+    assert overlay_config({"DOBBY_OVERLAY_NARRATE": "0", "DOBBY_MODE": "secure"}) == {"narrate": False}
     assert "narrate" not in overlay_config({"DOBBY_OVERLAY_NARRATE": "1"})
 
 
 def test_overlay_config_menu_bar_icon_is_opt_in():
     assert "menu_bar" not in overlay_config({})
-    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "1"}) == {"menu_bar": True}
+    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "1", "DOBBY_MODE": "secure"}) == {"menu_bar": True}
     assert "menu_bar" not in overlay_config({"DOBBY_OVERLAY_MENU_BAR": "0"})
 
 

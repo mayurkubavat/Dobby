@@ -137,7 +137,7 @@ class OverlayHAL:
                  to_points: Optional[ToPoints] = None, confirm_danger: bool = True,
                  grants: Optional[AppGrants] = None,
                  hit_test: Optional[Callable[[int, int], Optional[dict]]] = None,
-                 confirm_clicks: bool = True) -> None:
+                 confirm_clicks: bool = True, secure: bool = False) -> None:
         self._inner = inner
         self.overlay = overlay or NullOverlay()
         # Which apps Dobby may use (None: no check; wrap_hal passes one).
@@ -145,6 +145,9 @@ class OverlayHAL:
         # Accessibility hit test (x, y) -> {"role", "name", "bbox", "secure"}:
         # names the element a click lands on, for Allow/Deny and the bar.
         self._hit_test = hit_test
+        # Secure mode (``dobby --secure``): Allow/Deny for Send/Delete-like
+        # buttons and no typing into password fields. Off in turbo.
+        self.secure = secure
         self._confirm_clicks = confirm_clicks
         self._field: Optional[dict] = None  # last element clicked, for "Type … into ‘Search’"
         # HAL coordinates -> global points. Identity when the HAL already
@@ -223,7 +226,7 @@ class OverlayHAL:
         """Allow/Deny before pressing Send, Delete, Pay and the like."""
         from .client import OverlayDenied
 
-        if not self._confirm_clicks or hit is None:
+        if not (self.secure and self._confirm_clicks) or hit is None:
             return
         label = consequential_label(hit.get("role"), hit.get("name"))
         if label is None:
@@ -428,7 +431,7 @@ class OverlayHAL:
         app = self._active_app()
         self._gate(app, "type")
         field = self._type_target()
-        if field is not None and field.get("secure"):
+        if self.secure and field is not None and field.get("secure"):
             self.overlay.intent("Your turn: type the password", ms=4000)
             raise OverlayBlocked("This is a password field. Dobby does not type passwords: ask the person "
                                  "to type it, then carry on.", app=app or "")

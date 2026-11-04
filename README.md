@@ -214,7 +214,12 @@ When Dobby acts you see it:
   **Pause** and **Stop**. When two or more Dobbys are busy at once it also
   shows one coloured dot per Dobby ("2 Dobbys"); click them to pause or stop one.
 
-**Dobby asks before it uses an app.** The first time it clicks or types in an
+**Turbo or secure.** By default Dobby runs in **turbo**: no permission
+prompts, and it keeps going if you touch the mouse (Stop and Pause still
+work). Start it with `dobby --secure` (or `DOBBY_MODE=secure` in the client's
+`env`) to turn on everything below.
+
+**In secure mode Dobby asks before it uses an app.** The first time it clicks or types in an
 app it shows "Let Dobby use Vivado?" once; your answer lasts until Dobby's
 server exits. Password managers start read-only, and Dobby never types into
 a password field: the bar says "Your turn" instead. To skip the question for
@@ -227,9 +232,9 @@ apps you trust, or to limit an app, write `~/.dobby/apps.json`:
 `full` lets Dobby click and type, `click` allows only clicks and scrolling,
 `read` only looking. `"default": "full"` never asks.
 
-Risky steps (quit, close, delete, log out, and clicking buttons such as
+In secure mode, risky steps (quit, close, delete, log out, and clicking buttons such as
 **Send**, **Delete**, **Pay** or **Publish**) turn red and ask you to
-**Allow** or **Deny** first. If you click, scroll or type while Dobby works,
+**Allow** or **Deny** first, and if you click, scroll or type while Dobby works,
 it pauses and looks again before its next step (just moving the mouse, for
 example to reach the bar, does not count).
 
@@ -259,9 +264,10 @@ it. Settings go in the client's `env`:
 | `DOBBY_OVERLAY=0` | Turn the overlay off |
 | `DOBBY_OVERLAY_STYLE=classic` | Use the older, larger look |
 | `DOBBY_OVERLAY_NARRATE=0` | Quieter modern look: no "Dobby is working" text, the tag shows each action only briefly, unnumbered trail dots, a dot for every running Dobby |
-| `DOBBY_OVERLAY_TURBO=1` | No Allow/Deny prompts and no pause on take-over (Stop and Pause still work; read-only apps stay read-only) |
-| `DOBBY_APP_GRANTS=off` | Don't ask before using each app |
-| `DOBBY_CONFIRM_CLICKS=0` | Don't ask before clicking Send, Delete, Pay and similar buttons |
+| `DOBBY_MODE=secure` | Same as `dobby --secure`: app grants, Allow/Deny prompts, no typing into password fields, pause on take-over. Default `turbo` |
+| `DOBBY_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |
+| `DOBBY_APP_GRANTS=off` | Secure mode without the per-app question |
+| `DOBBY_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |
 | `DOBBY_INPUT_LOCK=window` | Keep your clicks out of the window Dobby works in; buttons are then pressed through accessibility so your pointer stays put (macOS and Linux). `DOBBY_BACKGROUND_CLICKS=0` uses the real mouse instead |
 | `DOBBY_OVERLAY_COLOR=#7c5cff` | Fix the colour (otherwise each Dobby gets its own) |
 | `DOBBY_OVERLAY_CAPTURE_VISIBLE=0` | Hide the overlay from your screen recordings too |

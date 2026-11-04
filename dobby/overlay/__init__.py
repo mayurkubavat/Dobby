@@ -56,7 +56,10 @@ on buttons go through accessibility (``AXPress`` on macOS, the AT-SPI
 does not move (``DOBBY_BACKGROUND_CLICKS=0`` turns that off; see
 ``dobby.hal.background`` and ``ATSPIInspector.press_at``).
 
-App grants: the first action in an app asks "Let Dobby use …?" once per
+Turbo is the default: no permission prompts. Start Dobby with ``--secure``
+(or ``DOBBY_MODE=secure``) for the prompts below (see ``dobby.mode``).
+
+App grants (secure): the first action in an app asks "Let Dobby use …?" once per
 session; ``~/.dobby/apps.json`` sets standing tiers (see ``dobby.overlay.grants``).
 Clicks on Send / Delete / Pay-like buttons ask Allow/Deny
 (``DOBBY_CONFIRM_CLICKS=0`` turns that off).
@@ -71,6 +74,7 @@ from typing import Any, Dict, Optional
 
 import contextlib
 
+from ..mode import is_secure
 from .client import NullOverlay, OverlayBlocked, OverlayClient, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
 from .hal import OverlayHAL, unwrap
 from .inputlock import lock_mode
@@ -140,8 +144,9 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
             cfg["awake_secs"] = max(5.0, float(env["DOBBY_OVERLAY_AWAKE_SECS"]))
         except ValueError:
             pass
-    if env.get("DOBBY_OVERLAY_TURBO", "").strip().lower() in _TRUE:
-        cfg["turbo"] = True
+    turbo_flag = env.get("DOBBY_OVERLAY_TURBO", "").strip().lower()
+    if turbo_flag in _TRUE or (turbo_flag not in _FALSE and not is_secure(env)):
+        cfg["turbo"] = True  # default: turbo; ``--secure`` / DOBBY_MODE=secure turns the prompts on
     if env.get("DOBBY_OVERLAY_TRAIL", "").strip().lower() in _FALSE:
         cfg["trail"] = False
     pill = env.get("DOBBY_OVERLAY_PILL", "").strip().lower()
@@ -185,11 +190,15 @@ def wrap_hal(hal: Any, overlay: Optional[NullOverlay] = None, **kwargs: Any) -> 
     if isinstance(overlay, OverlayClient) or overlay.__class__ is not NullOverlay:
         if isinstance(overlay, OverlayClient) and overlay.config.get("pill", "always") == "always":
             overlay.start_async()  # show the control bar as soon as Dobby runs
-        from .grants import AppGrants
+        if is_secure():
+            from .grants import AppGrants
 
-        kwargs.setdefault("grants", AppGrants())  # "Let Dobby use …?" once per app
-        kwargs.setdefault("confirm_clicks",
-                          os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE)
+            kwargs.setdefault("secure", True)
+            kwargs.setdefault("grants", AppGrants())  # "Let Dobby use …?" once per app
+            kwargs.setdefault("confirm_clicks",
+                              os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE)
+        else:
+            kwargs.setdefault("confirm_danger", False)  # turbo: no Allow/Deny, not even for ⌘Q
         return OverlayHAL(hal, overlay, **kwargs)
     return hal
 
