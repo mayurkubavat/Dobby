@@ -94,17 +94,49 @@ def _rgb(value: str) -> Tuple[float, float, float]:
     return tuple(int(v[i:i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
 
 
-_CONFIRM_CSS = b"""
-#dobby-confirm { background-color: #1f2023; border-radius: 14px; }
-#dobby-confirm .dobby-who { color: @dobby_accent; font-weight: bold; font-size: 11px; letter-spacing: 1px; }
-#dobby-confirm .dobby-title { color: #ffffff; font-weight: bold; font-size: 15px; }
-#dobby-confirm .dobby-detail { color: #c9cbd1; font-size: 12px; }
-#dobby-confirm .dobby-count { color: #8b8e96; font-size: 10px; }
-#dobby-confirm button { border-radius: 8px; padding: 4px 16px; min-height: 26px; }
-#dobby-confirm button:not(.suggested-action):not(.destructive-action) {
-  background-image: none; background-color: #3a3c42; color: #ffffff; border-color: #4a4c52; }
-#dobby-confirm button:not(.suggested-action):not(.destructive-action):hover { background-color: #45474e; }
-"""
+# Palette "Elf Violet, tuned": the card follows the desktop's light/dark
+# theme; filled buttons use #5B3FE0 (white text passes 4.5:1, #7C5CFF does not).
+_CONFIRM_THEMES = {
+    "light": {"bg": "rgba(251,250,255,0.97)", "text": "#1E1A2E", "dim": "#4A4560", "count": "#7A7590",
+              "border": "rgba(124,92,255,0.28)", "accent": "#7C5CFF", "neutral": "#ECE8FA",
+              "neutral_hover": "#E0DAF7", "neutral_text": "#1E1A2E"},
+    "dark": {"bg": "rgba(27,24,38,0.96)", "text": "#F3F0FF", "dim": "#C9C3E0", "count": "#8E88A8",
+             "border": "rgba(155,130,255,0.35)", "accent": "#9B82FF", "neutral": "#3A3550",
+             "neutral_hover": "#454060", "neutral_text": "#F3F0FF"},
+}
+_CONFIRM_FILL, _CONFIRM_DANGER = "#5B3FE0", "#F04438"
+
+
+def _desktop_is_dark() -> bool:
+    try:
+        settings = Gtk.Settings.get_default()
+        if settings.get_property("gtk-application-prefer-dark-theme"):
+            return True
+        return "dark" in str(settings.get_property("gtk-theme-name") or "").lower()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _confirm_css(kind: str, dark: bool) -> bytes:
+    t = _CONFIRM_THEMES["dark" if dark else "light"]
+    who = _CONFIRM_DANGER if kind == "danger" else t["accent"]
+    return f"""
+#dobby-confirm {{ background-color: {t['bg']}; border: 1px solid {t['border']}; border-radius: 14px; }}
+#dobby-confirm .dobby-who {{ color: {who}; font-weight: bold; font-size: 11px; letter-spacing: 1px; }}
+#dobby-confirm .dobby-title {{ color: {t['text']}; font-weight: bold; font-size: 15px; }}
+#dobby-confirm .dobby-detail {{ color: {t['dim']}; font-size: 12px; }}
+#dobby-confirm .dobby-count {{ color: {t['count']}; font-size: 10px; }}
+#dobby-confirm button {{ border-radius: 8px; padding: 4px 16px; min-height: 26px; background-image: none;
+  box-shadow: none; text-shadow: none; }}
+#dobby-confirm button.dobby-allow {{ background-color: {_CONFIRM_FILL}; color: #ffffff; border-color: {_CONFIRM_FILL}; }}
+#dobby-confirm button.dobby-allow:hover {{ background-color: #6A50EA; }}
+#dobby-confirm button.dobby-deny-danger {{ background-color: {_CONFIRM_DANGER}; color: #ffffff;
+  border-color: {_CONFIRM_DANGER}; }}
+#dobby-confirm button.dobby-deny {{ background-color: {t['neutral']}; color: {t['neutral_text']};
+  border-color: {t['border']}; }}
+#dobby-confirm button.dobby-deny:hover {{ background-color: {t['neutral_hover']}; }}
+#dobby-confirm button label {{ color: inherit; }}
+""".encode()
 
 
 def _confirm_window(text: str, detail: str, allow: str, deny: str, kind: str, who: str, accent: str,
@@ -128,11 +160,14 @@ def _confirm_window(text: str, detail: str, allow: str, deny: str, kind: str, wh
         win.set_visual(screen.get_rgba_visual())  # round corners without black wedges
         win.set_app_paintable(False)
     provider = Gtk.CssProvider()
-    provider.load_from_data(b"@define-color dobby_accent " + accent.encode() + b";" + _CONFIRM_CSS)
+    provider.load_from_data(_confirm_css(kind, _desktop_is_dark()))
     win.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
     def styled(widget, cls):
         widget.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        child = widget.get_child() if isinstance(widget, Gtk.Button) else None
+        if child is not None:
+            child.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         if cls:
             widget.get_style_context().add_class(cls)
         return widget
@@ -152,8 +187,8 @@ def _confirm_window(text: str, detail: str, allow: str, deny: str, kind: str, wh
     row = Gtk.Box(spacing=8, margin_top=12)
     countdown = styled(Gtk.Label(label="", xalign=0), "dobby-count")
     row.pack_start(countdown, True, True, 0)
-    deny_btn = styled(Gtk.Button(label=deny), "destructive-action" if kind == "danger" else None)
-    allow_btn = styled(Gtk.Button(label=allow), "suggested-action")
+    deny_btn = styled(Gtk.Button(label=deny), "dobby-deny-danger" if kind == "danger" else "dobby-deny")
+    allow_btn = styled(Gtk.Button(label=allow), "dobby-allow")
     deny_btn.connect("clicked", lambda *_: on_answer(False))
     allow_btn.connect("clicked", lambda *_: on_answer(True))
     row.pack_end(allow_btn, False, False, 0)
