@@ -190,15 +190,14 @@ def wrap_hal(hal: Any, overlay: Optional[NullOverlay] = None, **kwargs: Any) -> 
     if isinstance(overlay, OverlayClient) or overlay.__class__ is not NullOverlay:
         if isinstance(overlay, OverlayClient) and overlay.config.get("pill", "always") == "always":
             overlay.start_async()  # show the control bar as soon as Dobby runs
-        if is_secure():
-            from .grants import AppGrants
+        from .grants import AppGrants
 
-            kwargs.setdefault("secure", True)
-            kwargs.setdefault("grants", AppGrants())  # "Let Dobby use …?" once per app
-            kwargs.setdefault("confirm_clicks",
-                              os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE)
-        else:
-            kwargs.setdefault("confirm_danger", False)  # turbo: no Allow/Deny, not even for ⌘Q
+        # The mode is read per call (dobby.mode): a shared Dobby serves turbo
+        # and secure clients at once. Turbo: no prompts at all, not even for ⌘Q.
+        kwargs.setdefault("policy", is_secure)
+        kwargs.setdefault("grants", AppGrants())  # secure: "Let Dobby use …?" once per app
+        kwargs.setdefault("confirm_clicks",
+                          os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE)
         return OverlayHAL(hal, overlay, **kwargs)
     return hal
 

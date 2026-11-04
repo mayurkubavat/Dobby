@@ -53,6 +53,9 @@ OPS: Dict[str, tuple] = {
     # keyboard grab in between; macOS needs nothing (its tap knows Dobby's
     # events) and just acks.
     "input.pass": (("on",), ()),
+    # Turbo (no prompts, no take-over pause) on or off for the next actions:
+    # a shared Dobby serves turbo and secure clients through one helper.
+    "turbo": (("on",), ()),
     "hide": ((), ()),
     "show": ((), ()),
     "ping": ((), ()),

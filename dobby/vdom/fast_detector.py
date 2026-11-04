@@ -504,6 +504,12 @@ class FastONNXUIDetector:
             self.model_path = os.path.abspath(os.path.join(pkg_dir, "..", "models", "ui_detector_fast.onnx"))
         else:
             self.model_path = os.path.abspath(model_path)
+            if not os.path.isabs(model_path) and not os.path.exists(self.model_path):
+                # Relative to the checkout, not to wherever the client started Dobby.
+                root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                candidate = os.path.join(root, model_path)
+                if os.path.exists(candidate):
+                    self.model_path = candidate
 
         self._session = None
         self._input_name = "images"

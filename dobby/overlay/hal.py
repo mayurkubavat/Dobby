@@ -137,7 +137,8 @@ class OverlayHAL:
                  to_points: Optional[ToPoints] = None, confirm_danger: bool = True,
                  grants: Optional[AppGrants] = None,
                  hit_test: Optional[Callable[[int, int], Optional[dict]]] = None,
-                 confirm_clicks: bool = True, secure: bool = False) -> None:
+                 confirm_clicks: bool = True, secure: bool = False,
+                 policy: Optional[Callable[[], bool]] = None) -> None:
         self._inner = inner
         self.overlay = overlay or NullOverlay()
         # Which apps Dobby may use (None: no check; wrap_hal passes one).
@@ -147,7 +148,12 @@ class OverlayHAL:
         self._hit_test = hit_test
         # Secure mode (``dobby --secure``): Allow/Deny for Send/Delete-like
         # buttons and no typing into password fields. Off in turbo.
-        self.secure = secure
+        self._secure = secure
+        # policy() -> True when the current call is in secure mode. Set by
+        # wrap_hal so one shared Dobby can serve turbo and secure clients;
+        # None keeps the fixed ``secure`` / ``confirm_danger`` flags.
+        self._policy = policy
+        self._turbo_sent: Optional[bool] = None
         self._confirm_clicks = confirm_clicks
         self._field: Optional[dict] = None  # last element clicked, for "Type … into ‘Search’"
         # HAL coordinates -> global points. Identity when the HAL already
@@ -163,6 +169,34 @@ class OverlayHAL:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
+
+    @property
+    def secure(self) -> bool:
+        if self._policy is not None:
+            try:
+                return bool(self._policy())
+            except Exception:  # noqa: BLE001 - fail safe
+                return True
+        return self._secure
+
+    @secure.setter
+    def secure(self, value: bool) -> None:
+        self._secure, self._policy = bool(value), None
+
+    def _danger_prompts(self) -> bool:
+        return self._confirm_danger and (self._policy is None or self.secure)
+
+    def _sync_turbo(self) -> None:
+        """Shared Dobby: tell the helper whether this call is turbo (no prompts,
+        no take-over pause) before acting; clients may differ."""
+        if self._policy is None:
+            return
+        turbo = not self.secure
+        if turbo != self._turbo_sent:
+            self._turbo_sent = turbo
+            setter = getattr(self.overlay, "set_turbo", None)
+            if setter is not None:
+                setter(turbo)
 
     def set_hit_test(self, hit_test: Optional[Callable[[int, int], Optional[dict]]]) -> None:
         """Give the overlay an accessibility hit test (the server does, once perception is up)."""
@@ -204,7 +238,7 @@ class OverlayHAL:
 
     def _gate(self, app: Optional[str], action: str) -> None:
         """Per-app grants: ask once per app, refuse what its tier forbids."""
-        if self.grants is None or not app:
+        if self.grants is None or not app or not self.secure:
             return
         from .client import OverlayBlocked
 
@@ -354,6 +388,7 @@ class OverlayHAL:
         """
         from .client import OverlayDenied
 
+        self._sync_turbo()
         self.overlay.checkpoint()
         self.overlay.intent(text, ms=60000)
         if risk:
@@ -374,6 +409,7 @@ class OverlayHAL:
 
     # --------------------------------------------------------------- mouse
     def mouse_move(self, x: int, y: int, *args: Any, **kwargs: Any) -> Any:
+        self._sync_turbo()
         self.overlay.checkpoint()
         self._point_to(x, y, verb="Move")
         with self._passing():
@@ -381,6 +417,7 @@ class OverlayHAL:
 
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1,
                     *args: Any, **kwargs: Any) -> Any:
+        self._sync_turbo()
         self.overlay.checkpoint()
         verb = _VERBS.get((button, click_count), "Click")
         app = self._window_app_at(x, y)
@@ -400,6 +437,7 @@ class OverlayHAL:
 
     def mouse_drag(self, start_x: int, start_y: int, end_x: int, end_y: int,
                    duration_sec: float = 0.3, *args: Any, **kwargs: Any) -> Any:
+        self._sync_turbo()
         self.overlay.checkpoint()
         app = self._window_app_at(start_x, start_y)
         self._gate(app, "drag")
@@ -413,6 +451,7 @@ class OverlayHAL:
         return result
 
     def mouse_scroll(self, dx: int, dy: int, *args: Any, **kwargs: Any) -> Any:
+        self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
         app = self._active_app()
@@ -426,6 +465,7 @@ class OverlayHAL:
     def keyboard_type(self, text: str, *args: Any, **kwargs: Any) -> Any:
         from .client import OverlayBlocked
 
+        self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
         app = self._active_app()
@@ -447,6 +487,7 @@ class OverlayHAL:
             self.overlay.state("idle")
 
     def keyboard_press_key(self, key_name: str, *args: Any, **kwargs: Any) -> Any:
+        self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
         app = self._active_app()
@@ -461,12 +502,13 @@ class OverlayHAL:
     def keyboard_hotkey(self, keys: List[str], *args: Any, **kwargs: Any) -> Any:
         from .client import OverlayDenied
 
+        self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
         app = self._active_app()
         self._gate(app, "keys")
         label = combo_label(keys)
-        reason = danger_reason(keys) if self._confirm_danger else None
+        reason = danger_reason(keys) if self._danger_prompts() else None
         if reason is None:
             self._intent(action_text(f"Press {label}", None, app))
             try:
@@ -488,6 +530,7 @@ class OverlayHAL:
 
     # ------------------------------------------------------------- windows
     def focus_window(self, window_id: str, *args: Any, **kwargs: Any) -> Any:
+        self._sync_turbo()
         self.overlay.checkpoint()
         ok = self._inner.focus_window(window_id, *args, **kwargs)
         if ok:

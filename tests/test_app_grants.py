@@ -299,8 +299,30 @@ def test_wrap_hal_turns_prompts_on_only_in_secure(monkeypatch):
     monkeypatch.setattr("sys.argv", ["dobby"])
     monkeypatch.delenv("DOBBY_MODE", raising=False)
     monkeypatch.delenv("DOBBY_SECURE", raising=False)
-    turbo = overlay_pkg.wrap_hal(Desk(), Live())
-    assert turbo.grants is None and not turbo.secure and not turbo._confirm_danger
+    hal = overlay_pkg.wrap_hal(Desk(), Live())
+    assert not hal.secure and not hal._danger_prompts()
     monkeypatch.setenv("DOBBY_MODE", "secure")
-    secure = overlay_pkg.wrap_hal(Desk(), Live())
-    assert secure.grants is not None and secure.secure and secure._confirm_danger
+    assert hal.secure and hal._danger_prompts()  # read per call, not fixed at start
+
+
+def test_one_shared_dobby_serves_turbo_and_secure_clients(tmp_path):
+    from dobby.mode import session_mode
+    from dobby.mode import is_secure
+
+    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}  # noqa: E731
+
+    class Turbo(Overlay):
+        def set_turbo(self, on):
+            self.calls.append(("turbo", on))
+            return True
+
+    ov, desk = Turbo(answers=[False]), Desk()
+    hal = OverlayHAL(desk, ov, hit_test=hit, grants=AppGrants(path=tmp_path / "a.json", env={}),
+                     policy=is_secure)
+    with session_mode("turbo"):
+        hal.mouse_click(10, 10)  # no questions
+    assert desk.done == [("click", 10, 10)]
+    with session_mode("secure"):
+        with pytest.raises(OverlayBlocked):  # "Let Dobby use Vivado?" -> Don't Allow
+            hal.mouse_click(10, 10)
+    assert [c for c in ov.calls if c[0] == "turbo"] == [("turbo", True), ("turbo", False)]

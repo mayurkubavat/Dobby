@@ -22,7 +22,18 @@ class ControlHAL:
 
     def __init__(self, inner: Any, controller: Controller) -> None:
         self._inner = inner
-        self.controller = controller
+        self._controller = controller
+
+    @property
+    def controller(self) -> Controller:
+        """This session's controller in a shared Dobby, else the one given."""
+        from . import _SESSION_CONTROLLER
+
+        return _SESSION_CONTROLLER.get() or self._controller
+
+    @controller.setter
+    def controller(self, value: Controller) -> None:
+        self._controller = value
 
     @property
     def inner(self) -> Any:

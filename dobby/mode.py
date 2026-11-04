@@ -15,15 +15,36 @@ server so an AI cannot switch it off mid-task.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import os
 import sys
-from typing import Mapping, Optional, Sequence
+from typing import Iterator, Mapping, Optional, Sequence
 
 TURBO, SECURE = "turbo", "secure"
 _TRUE = {"1", "true", "yes", "on"}
 
 
+# In the shared Dobby (``dobby serve``) each connected client has its own
+# mode, set for the duration of its session (see dobby.hub).
+_SESSION_MODE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("dobby_mode", default=None)
+
+
+@contextlib.contextmanager
+def session_mode(mode: Optional[str]) -> Iterator[None]:
+    """Run the block (and the tool calls it starts) in ``mode``."""
+    token = _SESSION_MODE.set(mode if mode in (TURBO, SECURE) else None)
+    try:
+        yield
+    finally:
+        _SESSION_MODE.reset(token)
+
+
 def security_mode(env: Optional[Mapping[str, str]] = None, argv: Optional[Sequence[str]] = None) -> str:
+    if env is None and argv is None:
+        current = _SESSION_MODE.get()
+        if current is not None:
+            return current
     env = os.environ if env is None else env
     argv = sys.argv if argv is None else argv
     if "--secure" in argv:

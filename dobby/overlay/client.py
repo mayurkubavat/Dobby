@@ -132,6 +132,10 @@ class NullOverlay:
         """Dobby's own input runs now (True) or is done (False); see ``inputlock``."""
         return True
 
+    def set_turbo(self, on: bool) -> bool:
+        """Turbo on/off for the next actions (shared Dobby with mixed clients)."""
+        return True
+
     def clear(self) -> bool:
         return True
 
@@ -558,6 +562,12 @@ class OverlayClient(NullOverlay):
     @property
     def background_on(self) -> bool:  # type: ignore[override]
         return self.lock_on and bool(self.config.get("background_clicks", True))
+
+    def set_turbo(self, on: bool) -> bool:  # type: ignore[override]
+        self.config["turbo"] = bool(on)
+        if not self.active:
+            return True  # the helper starts with config["turbo"]
+        return self._send("turbo", on=bool(on))
 
     def input_pass(self, on: bool) -> bool:  # type: ignore[override]
         """Let Dobby's own input past the X11 input lock (shield + key grab).

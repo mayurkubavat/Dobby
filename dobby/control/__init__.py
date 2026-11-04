@@ -21,9 +21,11 @@ Environment (set per client in its MCP config):
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, Optional
 
 from .controller import ControlBusy, ControlChanged, ControlError, ControlStopped, Controller
 from .hal import ACTING, OBSERVING, ControlHAL, find_control_hal, unwrap_control
@@ -81,8 +83,46 @@ def agent_name(env: Optional[Dict[str, str]] = None) -> Optional[str]:
     return name or None
 
 
+# The shared Dobby (``dobby serve``) runs one Controller per connected client,
+# so the lease sees each AI as its own agent even inside one process.
+_SESSION_CONTROLLER: contextvars.ContextVar[Optional[Controller]] = contextvars.ContextVar(
+    "dobby_session_controller", default=None)
+
+
+@contextlib.contextmanager
+def session_controller(ctl: Optional[Controller]) -> Iterator[None]:
+    """Make ``ctl`` this session's controller for the block (and its tool calls)."""
+    token = _SESSION_CONTROLLER.set(ctl)
+    try:
+        yield
+    finally:
+        _SESSION_CONTROLLER.reset(token)
+
+
+def new_session_controller(name: str, pid: Optional[int] = None) -> Optional[Controller]:
+    """A controller for one client of the shared Dobby, or None when control is off."""
+    if not control_enabled():
+        return None
+    try:
+        priority = int(os.environ.get("DOBBY_AGENT_PRIORITY", "0") or 0)
+    except ValueError:
+        priority = 0
+    ctl = Controller(control_root(), name=name, priority=priority, settings=settings_from_env(), pid=pid)
+    ctl.name_locked = False  # type: ignore[attr-defined]
+    if _HAL_FOR_SESSIONS is not None:
+        _wire_overlay(_HAL_FOR_SESSIONS, ctl)
+    return ctl
+
+
+_HAL_FOR_SESSIONS: Any = None
+
+
 def get_controller(create: bool = True) -> Optional[Controller]:
-    """The process controller, created on first use when control is enabled."""
+    """This session's controller in a shared Dobby, else the process controller
+    (created on first use when control is enabled)."""
+    session = _SESSION_CONTROLLER.get()
+    if session is not None:
+        return session
     global _CONTROLLER
     if _CONTROLLER is None and create and control_enabled():
         env = os.environ
@@ -110,10 +150,12 @@ def wrap_hal(hal: Any, controller: Optional[Controller] = None) -> Any:
     """Wrap ``hal`` in :class:`ControlHAL` when shared control is enabled."""
     if isinstance(hal, ControlHAL):
         return hal
+    global _HAL_FOR_SESSIONS
     ctl = controller if controller is not None else get_controller()
     if ctl is None:
         return hal
     _wire_overlay(hal, ctl)
+    _HAL_FOR_SESSIONS = hal
     return ControlHAL(hal, ctl)
 
 

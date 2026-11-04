@@ -164,6 +164,9 @@ class DobbyServer(MCPServer):
         if not toolset_manager.is_tool_active(name):
             raise ToolError(f"Tool '{name}' is outside the active tool profile. Call manage_toolsets to enable it.")
         _adopt_client_name(context)
+        from dobby.hub import sessions as _sessions
+
+        _sessions.note_call(name)
         started = time.monotonic()
         try:
             result = await self._call_in_scope(name, arguments, context)
@@ -193,6 +196,9 @@ def _adopt_client_name(context: Any) -> None:
         return
     if name:
         adopt_client_name(name)
+        from dobby.hub import sessions as _sessions
+
+        _sessions.rename(name)
 
 
 from dobby.mode import security_mode  # noqa: E402
@@ -1906,8 +1912,18 @@ def control_status() -> Dict[str, Any]:
     """
     ctl = _control_or_none()
     if ctl is None:
-        return {**_CONTROL_OFF, "mode": security_mode()}
-    return {"ok": True, "shared_control": True, "mode": security_mode(), **ctl.status()}
+        return {**_CONTROL_OFF, "mode": security_mode(), **_shared_clients()}
+    return {"ok": True, "shared_control": True, "mode": security_mode(), **ctl.status(), **_shared_clients()}
+
+
+def _shared_clients() -> Dict[str, Any]:
+    """In the shared Dobby: every connected client and which one is asking."""
+    from dobby.hub import sessions as _sessions
+
+    me = _sessions.CURRENT.get()
+    if me is None:
+        return {}
+    return {"shared_dobby": True, "session": me.id, "clients": _sessions.snapshot()}
 
 
 @mcp_server.tool()

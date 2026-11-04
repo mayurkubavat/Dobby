@@ -1241,6 +1241,10 @@ class X11Overlay:
         elif op == "sleep.done":
             self._ai_wait(False)
             self.ack(msg_id)
+        elif op == "turbo":
+            self.cfg["turbo"] = bool(msg["on"])
+            self._refresh_bar()
+            self.ack(msg_id)
         elif op == "input.pass":
             if self.lock is not None:
                 self.lock.set_pass(bool(msg["on"]))

@@ -55,7 +55,7 @@ dev = [
 ]
 
 [project.scripts]
-dobby = "dobby.server:main"
+dobby = "dobby.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["dobby*"]

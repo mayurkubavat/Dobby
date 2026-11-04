@@ -286,6 +286,30 @@ are not drawn yet.
 
 ## Two AIs, one desktop
 
+### One shared Dobby
+
+Every AI client runs the same `dobby` command, but there is only one Dobby
+per computer. The first client starts `dobby serve` in the background (it
+loads the models once); later clients connect to it over a private socket
+in a few milliseconds. Each client keeps its own mode (turbo or secure),
+its own name and its own turn at the mouse. The shared Dobby exits 10
+minutes after the last client leaves.
+
+After updating from an older checkout, run `pip install -e .` again so the
+`dobby` command points at the new connector.
+
+| Variable | Effect |
+| --- | --- |
+| `DOBBY_SHARED=0` | Run a private Dobby inside this client (the old behaviour) |
+| `DOBBY_IDLE_EXIT=600` | Seconds the shared Dobby waits with no clients before exiting (`0` = never) |
+| `DOBBY_SOCKET=/path/dobby.sock` | Socket location. Default `~/Library/Application Support/Dobby/dobby.sock` on macOS, `$XDG_RUNTIME_DIR/dobby/dobby.sock` on Linux |
+
+`dobby serve` starts the shared Dobby by hand (its log is
+`~/.dobby/logs/daemon.log`), and `dobby stdio` runs a private one.
+`control_status` lists every connected client.
+
+### Taking turns
+
 If you run Dobby from two clients at once (say Claude Code and Antigravity),
 they take turns instead of fighting over the mouse. A whole tool call is one
 turn, so nobody cuts in between a click and the typing after it. Control

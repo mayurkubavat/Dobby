@@ -2649,6 +2649,11 @@ class OverlayController:
             self.ack(msg_id)
         elif op == "input.pass":
             self.ack(msg_id)  # the tap lets Dobby's tagged events through already
+        elif op == "turbo":
+            self.turbo = bool(msg["on"])
+            self.cfg["turbo"] = self.turbo
+            self._refresh_pill()
+            self.ack(msg_id)
         elif op == "ping":
             self.ack(msg_id)
         elif op == "bye":
