@@ -223,3 +223,50 @@ def test_each_dobby_gets_its_own_name(tmp_path):
     assert names.pool({}, names_file=f) == ["Ada", "Grace"]
     assert names.pool({"DOBBY_NAMES": "X, Y"}) == ["X", "Y"]
     assert names.pool({"DOBBY_NAMES": "off"}) == []
+
+
+@pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
+def test_clients_connecting_at_once_get_different_names(tmp_path):
+    import threading
+
+    sock_path = tmp_path / "run" / "dobby.sock"
+    env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
+           "HOME": str(tmp_path), "DOBBY_CONTROL": "1", "DOBBY_CONTROL_DIR": str(tmp_path / "control")}
+    root = Path(__file__).resolve().parents[1]
+    daemon = subprocess.Popen([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        _client(sock_path, "warmup", "turbo")[0].close()  # wait until it listens
+        time.sleep(0.3)
+        socks = [socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) for _ in range(4)]
+        for s in socks:
+            s.connect(str(sock_path))
+        go = threading.Barrier(len(socks))
+
+        def hello(s, i):
+            go.wait()
+            s.sendall((json.dumps({"dobby_hello": 1, "pid": os.getpid(), "mode": "turbo", "name": f"c{i}"}) + "\n").encode())
+
+        threads = [threading.Thread(target=hello, args=(s, i)) for i, s in enumerate(socks)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        for s in socks:
+            buf = b""
+            while b"\n" not in buf:
+                buf += s.recv(4096)
+        app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        app.connect(str(sock_path))
+        app.sendall(b'{"dobby_control": 1}\n')
+        abuf = [b""]
+        while b"\n" not in abuf[0]:
+            abuf[0] += app.recv(4096)
+        abuf[0] = abuf[0].split(b"\n", 1)[1]
+        firsts = [s["first_name"] for s in _rpc(app, abuf, {"id": 1, "op": "status"})["sessions"]]
+        assert len(firsts) == 4 and len(set(firsts)) == 4, firsts
+        for s in socks + [app]:
+            s.close()
+    finally:
+        daemon.terminate()
+        daemon.wait(timeout=10)

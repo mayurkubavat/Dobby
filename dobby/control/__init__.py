@@ -100,7 +100,8 @@ def session_controller(ctl: Optional[Controller]) -> Iterator[None]:
         _SESSION_CONTROLLER.reset(token)
 
 
-def new_session_controller(name: str, pid: Optional[int] = None) -> Optional[Controller]:
+def new_session_controller(name: str, pid: Optional[int] = None,
+                           first_name: Optional[str] = None) -> Optional[Controller]:
     """A controller for one client of the shared Dobby, or None when control is off."""
     if not control_enabled():
         return None
@@ -108,7 +109,7 @@ def new_session_controller(name: str, pid: Optional[int] = None) -> Optional[Con
         priority = int(os.environ.get("DOBBY_AGENT_PRIORITY", "0") or 0)
     except ValueError:
         priority = 0
-    first = pick_first_name(pid if pid is not None else os.getpid())
+    first = first_name or pick_first_name(pid if pid is not None else os.getpid())
     ctl = Controller(control_root(), name=names.display(first, name), priority=priority,
                      settings=settings_from_env(), pid=pid)
     ctl.first_name = first  # type: ignore[attr-defined]
