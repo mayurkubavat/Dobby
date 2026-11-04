@@ -113,7 +113,8 @@ def test_two_clients_share_one_dobby(tmp_path):
         rb = json.loads(_rpc(b, bbuf, call)["result"]["content"][0]["text"])
         assert ra["mode"] == "turbo" and rb["mode"] == "secure"
         assert ra["session"] != rb["session"]
-        assert sorted(c["name"] for c in ra["clients"]) == ["Antigravity", "Claude Code"]
+        assert sorted(c["client"] for c in ra["clients"]) == ["Antigravity", "Claude Code"]
+        assert sorted(c["name"] for c in ra["clients"]) == ["Hermione · Claude Code", "Ron · Antigravity"]
         # a second shared Dobby refuses to start while this one runs
         second = subprocess.run([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
                                 capture_output=True, text=True, timeout=60)
@@ -193,7 +194,8 @@ def test_control_connection_end_to_end(tmp_path):
         ready, buf[0] = buf[0].split(b"\n", 1)
         assert json.loads(ready)["control"] == 1
         status = _rpc(app, buf, {"id": 1, "op": "status"})
-        assert [s["name"] for s in status["sessions"]] == ["Claude Code"]
+        assert [s["client"] for s in status["sessions"]] == ["Claude Code"]
+        assert status["sessions"][0]["name"].endswith(" · Claude Code")
         view = _rpc(app, buf, {"id": 2, "op": "topbar"})["view"]
         assert view["header"] == "Dobby" and isinstance(view["rows"], list)
         assert _rpc(app, buf, {"id": 3, "op": "quit"})["quitting"] is True
@@ -205,3 +207,19 @@ def test_control_connection_end_to_end(tmp_path):
         if daemon.poll() is None:
             daemon.terminate()
             daemon.wait(timeout=10)
+
+
+def test_each_dobby_gets_its_own_name(tmp_path):
+    from dobby.control import names
+
+    assert names.pick([], 1) == "Hermione"
+    assert names.pick(["Hermione", "Ron"], 1) == "Harry"
+    assert names.pick(["A"], 1, names=["A"]) == "A 2"
+    assert names.pick([], 7, names=[]) == "Dobby-7"
+    assert names.display("Luna", "Claude Code") == "Luna · Claude Code"
+    assert names.display("Luna", "") == "Luna"
+    f = tmp_path / "names.txt"
+    f.write_text("# mine\nAda\n\nGrace  # admiral\nAda\n")
+    assert names.pool({}, names_file=f) == ["Ada", "Grace"]
+    assert names.pool({"DOBBY_NAMES": "X, Y"}) == ["X", "Y"]
+    assert names.pool({"DOBBY_NAMES": "off"}) == []

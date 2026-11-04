@@ -351,6 +351,7 @@ Useful settings, per client:
 | Variable | Effect |
 | --- | --- |
 | `DOBBY_AGENT_NAME=Antigravity` | Name shown on the overlay and to the other agent |
+| `DOBBY_NAMES=Ada,Grace` | First names handed out to each running Dobby (default: Harry Potter names, shown as "Hermione · Claude Code"; also `~/.dobby/names.txt`, one per line; `off` = `Dobby-<pid>`) |
 | `DOBBY_AGENT_PRIORITY=1` | Higher goes first when both are waiting |
 | `DOBBY_CONTROL=0` | Turn shared control off |
 

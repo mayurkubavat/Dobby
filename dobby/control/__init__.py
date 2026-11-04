@@ -27,6 +27,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
 
+from . import names
 from .controller import ControlBusy, ControlChanged, ControlError, ControlStopped, Controller
 from .hal import ACTING, OBSERVING, ControlHAL, find_control_hal, unwrap_control
 from .lease import ControlSettings
@@ -107,7 +108,10 @@ def new_session_controller(name: str, pid: Optional[int] = None) -> Optional[Con
         priority = int(os.environ.get("DOBBY_AGENT_PRIORITY", "0") or 0)
     except ValueError:
         priority = 0
-    ctl = Controller(control_root(), name=name, priority=priority, settings=settings_from_env(), pid=pid)
+    first = pick_first_name(pid if pid is not None else os.getpid())
+    ctl = Controller(control_root(), name=names.display(first, name), priority=priority,
+                     settings=settings_from_env(), pid=pid)
+    ctl.first_name = first  # type: ignore[attr-defined]
     ctl.name_locked = False  # type: ignore[attr-defined]
     if _HAL_FOR_SESSIONS is not None:
         _wire_overlay(_HAL_FOR_SESSIONS, ctl)
@@ -115,6 +119,23 @@ def new_session_controller(name: str, pid: Optional[int] = None) -> Optional[Con
 
 
 _HAL_FOR_SESSIONS: Any = None
+
+
+def pick_first_name(pid: int) -> str:
+    """A Harry Potter name no running Dobby uses yet (see :mod:`dobby.control.names`)."""
+    try:
+        from . import registry
+
+        taken = [str(r.get("name") or "").split(names.SEPARATOR)[0] for r in registry.list_agents(control_root())]
+    except OSError:
+        taken = []
+    try:
+        from dobby.hub import sessions
+
+        taken += [str(s.get("first_name") or "") for s in sessions.snapshot()]
+    except Exception:  # noqa: BLE001
+        pass
+    return names.pick(taken, pid)
 
 
 def get_controller(create: bool = True) -> Optional[Controller]:
@@ -130,12 +151,14 @@ def get_controller(create: bool = True) -> Optional[Controller]:
             priority = int(env.get("DOBBY_AGENT_PRIORITY", "0") or 0)
         except ValueError:
             priority = 0
+        first = agent_name() or pick_first_name(os.getpid())
         _CONTROLLER = Controller(
             control_root(),
-            name=agent_name() or f"Dobby-{os.getpid()}",
+            name=first,
             priority=priority,
             settings=settings_from_env(),
         )
+        _CONTROLLER.first_name = first  # type: ignore[attr-defined]
         _CONTROLLER.name_locked = agent_name() is not None  # type: ignore[attr-defined]
     return _CONTROLLER
 
@@ -194,4 +217,4 @@ def adopt_client_name(name: Optional[str]) -> None:
     ctl = get_controller(create=False)
     if ctl is None or not name or getattr(ctl, "name_locked", False):
         return
-    ctl.set_name(name)
+    ctl.set_name(names.display(getattr(ctl, "first_name", "") or name, name))

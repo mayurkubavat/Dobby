@@ -104,8 +104,13 @@ class Hub:
             pid = _peer_pid(stream) or hello.get("pid")
             mode = "secure" if hello.get("mode") == "secure" else "turbo"
             name = str(hello.get("name") or "AI client")[:40]
-            info = sessions.open_session(name, pid, mode)
             ctl = await anyio.to_thread.run_sync(lambda: new_session_controller(name, pid))
+            from dobby.control import pick_first_name
+            from dobby.control.names import display
+
+            first = getattr(ctl, "first_name", None) or pick_first_name(pid or 0)
+            info = sessions.open_session(display(first, name), pid, mode)
+            info.first_name, info.client = first, name
             log.info("client %s connected: %s (pid %s, %s)", info.id, name, pid, mode)
             await stream.send((json.dumps({"dobby_ready": 1, "server_pid": os.getpid(),
                                            "session": info.id}) + "\n").encode())

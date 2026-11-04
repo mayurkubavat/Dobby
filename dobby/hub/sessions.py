@@ -31,6 +31,8 @@ class SessionInfo:
     step: Optional[int] = None
     steps: Optional[int] = None
     elapsed: Optional[float] = None
+    first_name: str = ""  # "Hermione": shown as "Hermione · <client>"
+    client: str = ""
 
     @property
     def turbo(self) -> bool:
@@ -69,9 +71,13 @@ def note_call(tool: str) -> None:
 
 
 def rename(name: Optional[str]) -> None:
+    """The client told us who it is (MCP ``clientInfo.name``)."""
+    from dobby.control.names import display
+
     info = CURRENT.get()
     if info is not None and name:
-        info.name = name
+        info.client = name
+        info.name = display(info.first_name, name) if info.first_name else name
 
 
 def count() -> int:
