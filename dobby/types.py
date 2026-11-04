@@ -223,6 +223,10 @@ class ScreenshotResult(BaseModel):
     original_height: int = Field(description="Physical desktop screen height")
     scale_factor: float = Field(default=1.0, description="Scale ratio applied (e.g. 0.5 means scaled to 50%)")
     zoom_factor: float = Field(default=1.0, description="Zoom magnification factor applied to capture")
+    origin_x: int = Field(default=0, description="Screen x of the image's top-left corner (click coordinates)")
+    origin_y: int = Field(default=0, description="Screen y of the image's top-left corner (click coordinates)")
+    area_width: int = Field(default=0, description="Width of the captured area in screen (click) units")
+    area_height: int = Field(default=0, description="Height of the captured area in screen (click) units")
     marks: List[UIElement] = Field(default_factory=list, description="List of interactable elements tagged with marks")
     cursor_position: Optional[tuple[int, int]] = Field(default=None, description="Pointer (x, y) at time of capture")
 
