@@ -10,6 +10,10 @@ struct AITool: Identifiable, Equatable {
     var state: String       // "connected", "broken", "not set up", "not installed"
     var stable: Bool
     var note: String
+    /// The client key `pinlet mode` saves this tool's level under, and the saved level
+    /// ("default", "turbo", "careful" or "secure").
+    var modeKey: String
+    var mode: String
 
     init?(json: [String: Any]) {
         guard let key = json["key"] as? String, let label = json["label"] as? String else { return nil }
@@ -19,6 +23,8 @@ struct AITool: Identifiable, Equatable {
         state = json["state"] as? String ?? "not installed"
         stable = json["stable"] as? Bool ?? false
         note = json["note"] as? String ?? ""
+        modeKey = json["mode_key"] as? String ?? key
+        mode = json["mode"] as? String ?? "default"
     }
 
     var connected: Bool { state == "connected" }
@@ -52,6 +58,38 @@ final class AIToolsModel: ObservableObject {
     func connect(_ keys: [String]) { change(["setup", "--only", keys.joined(separator: ",")], verb: "Connected") }
     func remove(_ keys: [String]) { change(["setup", "--remove", "--only", keys.joined(separator: ",")], verb: "Removed Pinlet from") }
     func repair() { change(["setup", "--repair"], verb: "Repaired") }
+
+    /// The admin policy's least-asking level, if any (from `pinlet mode --json`).
+    @Published private(set) var floor: String?
+
+    /// Save how much Pinlet asks one tool; "default" lets the tool decide.
+    func setMode(_ tool: AITool, _ level: String) {
+        guard !busy, level != tool.mode else { return }
+        busy = true
+        message = nil
+        PinletCommand.run(["mode", tool.modeKey, level, "--json"]) { [weak self] json, err in
+            guard let self else { return }
+            self.busy = false
+            if let json, json["ok"] as? Bool == true {
+                self.floor = json["floor"] as? String
+                let name = AIToolsModel.levelNames[level] ?? level
+                self.message = "\(tool.label) is set to \(name). It applies the next time \(tool.label) connects to Pinlet."
+            } else {
+                self.message = (json?["error"] as? String) ?? (err.isEmpty ? "Could not save the level." : err)
+            }
+            self.refresh()
+        }
+    }
+
+    func loadFloor() {
+        PinletCommand.run(["mode", "--json"]) { [weak self] json, _ in
+            self?.floor = json?["floor"] as? String
+        }
+    }
+
+    static let levels = ["default", "turbo", "careful", "secure"]
+    static let levelNames = ["default": "Default", "turbo": "Full", "careful": "Ask for risky", "secure": "Ask everything"]
+    static let levelOrder = ["turbo": 0, "careful": 1, "secure": 2]
 
     private func change(_ args: [String], verb: String) {
         guard !busy, !(args.last ?? "").isEmpty else { return }
@@ -127,6 +165,19 @@ struct AIToolsList: View {
                     }
                     Spacer()
                     Text(stateText(tool)).font(.caption).foregroundStyle(.secondary)
+                    if !compact && tool.connected {
+                        Picker("Permission level for \(tool.label)", selection: modeBinding(tool)) {
+                            ForEach(AIToolsModel.levels, id: \.self) { level in
+                                Text(AIToolsModel.levelNames[level] ?? level)
+                                    .tag(level)
+                                    .disabled(belowFloor(level))
+                            }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        .disabled(model.busy)
+                        .help("How much Pinlet asks before \(tool.label) acts. Default follows what the tool asks for.")
+                    }
                     if !compact {
                         if tool.connected && !tool.needsRepair {
                             Button("Remove") { model.remove([tool.key]) }.disabled(model.busy)
@@ -156,12 +207,19 @@ struct AIToolsList: View {
                     }
                 }
             }
+            if !compact && model.found.contains(where: \.connected) {
+                Text(floorNote).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let message = model.message {
                 Text(message).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .onAppear { if !model.loaded { model.refresh() } }
+        .onAppear {
+            if !model.loaded { model.refresh() }
+            if !compact { model.loadFloor() }
+        }
         .onChange(of: model.tools) { tools in
             if !seeded && !tools.isEmpty {
                 chosen = Set(tools.filter { $0.installed && !$0.connected }.map(\.key))
@@ -173,6 +231,23 @@ struct AIToolsList: View {
     private func binding(_ key: String) -> Binding<Bool> {
         Binding(get: { chosen.contains(key) },
                 set: { on in if on { chosen.insert(key) } else { chosen.remove(key) } })
+    }
+
+    private func modeBinding(_ tool: AITool) -> Binding<String> {
+        Binding(get: { tool.mode }, set: { model.setMode(tool, $0) })
+    }
+
+    /// A level the admin policy does not allow (it asks less than the floor).
+    private func belowFloor(_ level: String) -> Bool {
+        guard let floor = model.floor, let min = AIToolsModel.levelOrder[floor],
+              let rank = AIToolsModel.levelOrder[level] else { return false }
+        return rank < min
+    }
+
+    private var floorNote: String {
+        let base = "Full lets the tool act without asking. Ask for risky asks before steps that quit, close or delete things. Ask everything asks before each new app. A change applies when the tool next connects."
+        guard let floor = model.floor else { return base }
+        return base + " Your organization requires at least \(AIToolsModel.levelNames[floor] ?? floor)."
     }
 
     private func stateText(_ tool: AITool) -> String {

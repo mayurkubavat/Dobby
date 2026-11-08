@@ -689,9 +689,12 @@ def tool_status(home: Path, command: Sequence[str] | None = None) -> list[dict[s
     ``state`` is one of ``connected``, ``broken`` (its command is gone), ``not set up`` or
     ``not installed``; ``stable`` says the entry runs the launcher ``command``.
     """
+    from pinlet.mode import client_modes, mode_key
+
     cmd = list(command) if command else pinlet_command()
     source = skills_dir()
     names = skill_names(source)
+    modes = client_modes()
     out: list[dict[str, object]] = []
     for tool in tools():
         installed = tool.marker(home)
@@ -724,6 +727,9 @@ def tool_status(home: Path, command: Sequence[str] | None = None) -> list[dict[s
                 "stable": registered is not None and registered[:1] == cmd[:1],
                 "skills": skills,
                 "note": tool.note,
+                # How much Pinlet asks this tool (pinlet mode): "default" or a level.
+                "mode_key": mode_key(tool.key),
+                "mode": modes.get(mode_key(tool.key), "default"),
             }
         )
     return out

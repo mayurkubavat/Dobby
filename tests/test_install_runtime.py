@@ -151,3 +151,14 @@ def test_doctor_names_the_engine_the_app_starts(home, monkeypatch, tmp_path):
     own.symlink_to(sys.executable)
     check = doctor._app_config("darwin")[0]
     assert check.status == "ok" and "own runtime" in check.detail
+
+
+def test_tool_status_reports_each_tools_permission_level(home, tmp_path, monkeypatch):
+    from pinlet import mode
+
+    monkeypatch.setenv("PINLET_MODES_FILE", str(tmp_path / "modes.json"))
+    mode.set_client_mode("antigravity", "careful")
+    rows = {e["key"]: e for e in agent_setup.tool_status(home)}
+    assert rows["antigravity-cli"]["mode_key"] == "antigravity"
+    assert rows["antigravity-cli"]["mode"] == "careful"
+    assert rows["cursor"]["mode"] == "default"

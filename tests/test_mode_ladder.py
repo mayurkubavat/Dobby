@@ -120,3 +120,18 @@ def test_policy_check_and_show(tmp_path, monkeypatch, capsys):
         monkeypatch.delenv("PINLET_POLICY_FILE")
         policy.reset_cache()
     assert policy.main([]) == 2
+
+
+def test_cli_json_for_the_app(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PINLET_MODES_FILE", str(tmp_path / "modes.json"))
+    policy.reset_cache()
+    assert mode.main(["cursor", "careful", "--json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] and out["modes"] == {"cursor": "careful"} and out["floor"] is None
+    assert out["labels"]["careful"] == "Ask for risky"
+    assert mode.main(["nope", "careful", "--json"]) == 2
+    assert json.loads(capsys.readouterr().out)["ok"] is False
+    assert mode.main(["cursor", "loud", "--json"]) == 2
+    assert json.loads(capsys.readouterr().out)["ok"] is False
+    assert mode.mode_key("antigravity-cli") == "antigravity"
+    assert mode.mode_key("codex") == "codex"

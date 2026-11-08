@@ -164,27 +164,49 @@ def mode_for_client(requested: str | None, client_name: str | None) -> str:
     return strictest(requested, chosen, _admin_policy().floor)
 
 
+def mode_key(setup_key: str) -> str:
+    """The client key a ``pinlet setup`` tool's level is saved under ("antigravity-cli" -> "antigravity")."""
+    return {"antigravity-cli": "antigravity"}.get(setup_key, setup_key)
+
+
+def overview() -> dict[str, object]:
+    """Every client's saved level and the admin floor, for ``pinlet mode --json``."""
+    from pinlet.policy import current as _admin_policy
+
+    floor = _admin_policy().floor
+    return {"modes": client_modes(), "floor": floor, "levels": list(LEVELS), "labels": LABELS}
+
+
 def main(argv: list[str] | None = None) -> int:
-    """``pinlet mode [<client> <turbo|careful|secure|default>]``: show or set per-client levels."""
+    """``pinlet mode [<client> <turbo|careful|secure|default>] [--json]``: show or set levels."""
     from pinlet.clients import _TABLE
     from pinlet.policy import current as _admin_policy
 
     argv = list(argv or [])
+    as_json = "--json" in argv
+    argv = [a for a in argv if a != "--json"]
     keys = [p.key for _, p in _TABLE]
     if len(argv) == 2:
         key, value = argv[0].lower(), argv[1].lower()
         if key not in keys:
-            print(f"pinlet mode: unknown client {key!r}; one of {', '.join(keys)}")
+            why = f"unknown client {key!r}; one of {', '.join(keys)}"
+            print(json.dumps({"ok": False, "error": why}) if as_json else f"pinlet mode: {why}")
             return 2
         try:
             set_client_mode(key, None if value == "default" else value)
         except ValueError as exc:
-            print(f"pinlet mode: {exc}")
+            print(
+                json.dumps({"ok": False, "error": str(exc)}) if as_json else f"pinlet mode: {exc}"
+            )
             return 2
-        print("Saved. It applies the next time that client connects to Pinlet.")
+        if not as_json:
+            print("Saved. It applies the next time that client connects to Pinlet.")
     elif argv:
-        print("usage: pinlet mode [<client> <turbo|careful|secure|default>]")
+        print("usage: pinlet mode [<client> <turbo|careful|secure|default>] [--json]")
         return 2
+    if as_json:
+        print(json.dumps({"ok": True, **overview()}))
+        return 0
     modes = client_modes()
     floor = _admin_policy().floor
     for key in keys:
