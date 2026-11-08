@@ -1,8 +1,5 @@
 # Pinlet
 
-_Formerly Dobby. Old `DOBBY_*` settings and `~/.dobby` keep working for now; run
-`pinlet setup` once to update your AI tools._
-
 Pinlet lets an AI assistant use your desktop the way you do: it looks at the
 screen, finds buttons and fields, clicks, types and checks that each step
 worked. It runs as an [MCP](https://modelcontextprotocol.io) server, so any

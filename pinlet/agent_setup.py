@@ -45,7 +45,6 @@ from pathlib import Path
 from pinlet import runtime
 
 SERVER_NAME = "Pinlet"
-LEGACY_NAME = "Dobby"  # the old name; setup replaces its entries and skill links
 _SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
@@ -168,12 +167,7 @@ def _write_text(path: Path, text: str) -> None:
 
 
 def _existing_key(table: dict) -> str | None:
-    names = (SERVER_NAME.lower(), LEGACY_NAME.lower())
-    return next((k for k in table if k.lower() in names), None)
-
-
-def _is_legacy(key: str | None) -> bool:
-    return key is not None and key.lower() == LEGACY_NAME.lower()
+    return next((k for k in table if k.lower() == SERVER_NAME.lower()), None)
 
 
 def _json_server(
@@ -192,7 +186,7 @@ def _json_server(
     if not isinstance(table, dict):
         return Change(tool, "mcp", str(path), "error", f"'{section}' is not an object")
     key = _existing_key(table)
-    if key is not None and not force and not _is_legacy(key):
+    if key is not None and not force:
         same = table[key] == entry
         return Change(
             tool,
@@ -211,8 +205,7 @@ def _json_server(
         servers[SERVER_NAME] = entry
         _write_text(path, json.dumps(fresh, indent=2) + "\n")
 
-    note = "renamed from Dobby" if _is_legacy(key) else ""
-    return Change(tool, "mcp", str(path), "updated" if key else "added", note, apply)
+    return Change(tool, "mcp", str(path), "updated" if key else "added", "", apply)
 
 
 def _entry_command(entry: object) -> list[str] | None:
@@ -253,9 +246,7 @@ def _json_remover(tool: str, path_of: Callable[[Path], Path], section: str):
         def apply() -> None:
             fresh = _read_json(path)
             servers = fresh.get(section) or {}
-            for key in [
-                k for k in servers if k.lower() in (SERVER_NAME.lower(), LEGACY_NAME.lower())
-            ]:
+            for key in [k for k in servers if k.lower() == SERVER_NAME.lower()]:
                 del servers[key]
             _write_text(path, json.dumps(fresh, indent=2) + "\n")
 
@@ -317,11 +308,11 @@ def _codex_path(home: Path) -> Path:
     return Path(os.environ.get("CODEX_HOME", home / ".codex")) / "config.toml"
 
 
-_CODEX_HEADER = re.compile(r'^\s*\[mcp_servers\.(?:"?(?:pinlet|dobby)"?)\]\s*$', re.I)
+_CODEX_HEADER = re.compile(r'^\s*\[mcp_servers\.(?:"?pinlet"?)\]\s*$', re.I)
 
 
 def _codex_split(text: str) -> tuple[str, str]:
-    """Splits config.toml into (everything else, the Pinlet/Dobby server table)."""
+    """Splits config.toml into (everything else, the Pinlet server table)."""
     keep: list[str] = []
     ours: list[str] = []
     inside = False
@@ -329,8 +320,7 @@ def _codex_split(text: str) -> tuple[str, str]:
         stripped = line.strip()
         if stripped.startswith("["):
             inside = bool(_CODEX_HEADER.match(line)) or (
-                inside
-                and re.match(r"^\[mcp_servers\.\"?(pinlet|dobby)\"?\.", stripped, re.I) is not None
+                inside and re.match(r"^\[mcp_servers\.\"?pinlet\"?\.", stripped, re.I) is not None
             )
         (ours if inside else keep).append(line)
     rest = "".join(keep)
@@ -464,14 +454,7 @@ def _claude_code(home: Path, cmd: list[str], env: dict[str, str], force: bool = 
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return Change("claude-code", "mcp", "claude mcp", "error", str(exc))
-    try:
-        legacy = subprocess.run(
-            [claude, "mcp", "get", LEGACY_NAME], capture_output=True, text=True, timeout=20
-        )
-    except (OSError, subprocess.SubprocessError):
-        legacy = None
-    had_legacy = legacy is not None and legacy.returncode == 0
-    if has.returncode == 0 and not force and not had_legacy:
+    if has.returncode == 0 and not force:
         return Change("claude-code", "mcp", "claude mcp (user scope)", "ok")
     add = [claude, "mcp", "add", "--scope", "user"]
     for k, v in env.items():
@@ -479,15 +462,11 @@ def _claude_code(home: Path, cmd: list[str], env: dict[str, str], force: bool = 
     add += [SERVER_NAME, "--", *cmd]
 
     def apply() -> None:
-        if had_legacy:
-            subprocess.run([claude, "mcp", "remove", "--scope", "user", LEGACY_NAME], timeout=20)
-        if has.returncode == 0 and (force or not had_legacy):
+        if has.returncode == 0:
             subprocess.run([claude, "mcp", "remove", "--scope", "user", SERVER_NAME], timeout=20)
-        if has.returncode != 0 or force:
-            subprocess.run(add, check=True, capture_output=True, timeout=30)
+        subprocess.run(add, check=True, capture_output=True, timeout=30)
 
-    note = "renamed from Dobby" if had_legacy else ""
-    return Change("claude-code", "mcp", "claude mcp (user scope)", "added", note, apply)
+    return Change("claude-code", "mcp", "claude mcp (user scope)", "added", "", apply)
 
 
 def _claude_plugin_installed(home: Path) -> bool:
@@ -656,26 +635,6 @@ def _link_skills(tool: str, target: Path, source: Path, force: bool) -> list[Cha
         changes.append(
             Change(tool, "skills", str(dst), "updated" if dst.is_symlink() else "added", "", apply)
         )
-    changes.extend(_unlink_legacy_skills(tool, target))
-    return changes
-
-
-def _unlink_legacy_skills(tool: str, target: Path) -> list[Change]:
-    """Removes ``dobby*`` skill links left from before the rename (only links into a Dobby repo)."""
-    changes: list[Change] = []
-    if not target.is_dir():
-        return changes
-    for dst in sorted(target.glob(LEGACY_NAME.lower() + "*")):
-        if not dst.is_symlink():
-            continue
-        parts = tuple(p.lower() for p in dst.readlink().parts)
-        if "dobby" not in parts or "skills" not in parts:
-            continue
-
-        def apply(dst: Path = dst) -> None:
-            dst.unlink()
-
-        changes.append(Change(tool, "skills", str(dst), "removed", "old Dobby skill", apply))
     return changes
 
 

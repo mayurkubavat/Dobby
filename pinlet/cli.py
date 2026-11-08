@@ -14,7 +14,6 @@ Kept free of engine imports so connecting is fast.
 
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import Sequence
 
@@ -26,11 +25,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     shared Pinlet and ``stdio`` a private one. ``pinlet --help`` prints the module docstring.
     """
     argv = list(sys.argv if argv is None else argv)
-    if argv and os.path.basename(argv[0]).lower().startswith("dobby"):
-        print(
-            "Dobby is now called Pinlet: run `pinlet setup` to update your AI tools.",
-            file=sys.stderr,
-        )
     command = next((a for a in argv[1:] if not a.startswith("-")), "")
     if command == "serve":
         from pinlet.hub.daemon import serve

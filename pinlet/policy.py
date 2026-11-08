@@ -7,8 +7,6 @@ can deploy it:
 
 * macOS:   ``/Library/Application Support/Pinlet/policy.json``
 * Linux:   ``/etc/pinlet/policy.json``
-
-The old Dobby locations are still read while only they exist.
 * Windows: ``%ProgramData%\\Pinlet\\policy.json``
 
 When no system file exists, ``PINLET_POLICY_FILE`` may point at one (for
@@ -80,17 +78,6 @@ def system_path(platform: str | None = None, env: Mapping[str, str] | None = Non
         path = Path(env.get("ProgramData", r"C:\ProgramData")) / "Pinlet" / "policy.json"
     else:
         path = Path("/etc/pinlet/policy.json")
-    return _legacy_policy(path)
-
-
-def _legacy_policy(path: Path) -> Path:
-    """The new path, or the file at the old Dobby location while only that one exists."""
-    old = Path(str(path).replace("Pinlet", "Dobby").replace("pinlet", "dobby"))
-    try:
-        if not path.exists() and old.exists():
-            return old
-    except OSError:
-        return old  # there but unreadable: read_policy fails closed
     return path
 
 

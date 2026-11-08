@@ -58,8 +58,6 @@ dev = [
 
 [project.scripts]
 pinlet = "pinlet.cli:main"
-# Old name, kept for one release so existing MCP entries keep working.
-dobby = "pinlet.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["pinlet*"]

@@ -54,7 +54,6 @@ def test_levels_from_env():
     assert personality.normalize_level(None) == "subtle"
     assert personality.normalize_level("OFF") == "off"
     assert personality.normalize_level("0") == "off"
-    assert personality.normalize_level("elf") == "lively"
     assert personality.normalize_level("lively") == "lively"
     assert personality.normalize_level("bogus") == "subtle"
     cfg = overlay_config(

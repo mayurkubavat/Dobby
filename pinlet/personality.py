@@ -17,8 +17,7 @@ whose lists replace that moment's lines. ``{name}`` in a line becomes the
 Pinlet's name (``PINLET_AGENT_NAME``), ``{you}`` becomes ", Sam" (or nothing when no name is set).
 
 The lines are written for this project in Pinlet's way of talking; they are
-not quotes from any book or film. ``elf`` (the level's name from when
-Pinlet was called Dobby) still means ``lively``.
+not quotes from any book or film.
 """
 
 from __future__ import annotations
@@ -100,7 +99,6 @@ LIVELY: dict[str, tuple[str, ...]] = {
     "egg_late": ("So late! {name} works very quietly",),
 }
 
-ELF = LIVELY  # the old name of these lines
 MOMENTS = tuple(LIVELY)
 
 
@@ -109,7 +107,7 @@ def normalize_level(value: str | None) -> str:
     v = (value or "").strip().lower()
     if v in ("0", "false", "no", "none"):
         return "off"
-    if v in ("1", "true", "yes", "on", "full", "fun", "elf"):
+    if v in ("1", "true", "yes", "on", "full", "fun"):
         return "lively"
     return v if v in LEVELS else DEFAULT_LEVEL
 

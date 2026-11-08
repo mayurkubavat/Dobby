@@ -42,13 +42,6 @@ The first public release will be 0.1.0. It contains:
   the glass rim and the pointer move from violet to cool cyan (fill `#0E7490`,
   glow `#0EA5C6` / `#67E8F9` on dark). The menu bar icon keeps its shape.
 - `pinlet setup` registers the launcher instead of a venv's own `pinlet` script.
-- Renamed from Dobby to Pinlet: package and command `pinlet`, module
-  `pinlet`, `PINLET_*` settings, `~/.pinlet`, Pinlet.app (`dev.pinlet.app`),
-  `pinlet*` skills and the `Pinlet` MCP server. For one release the old names
-  still work: `DOBBY_*` variables fill unset `PINLET_*` ones, `~/.dobby` moves
-  to `~/.pinlet` (a link stays behind), the old policy paths are read, a
-  `dobby` command remains, and `pinlet setup` replaces old Dobby entries and
-  skill links. The `elf` personality level is now `lively` (`elf` still works).
 
 ### Added
 
