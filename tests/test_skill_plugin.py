@@ -39,6 +39,7 @@ def test_every_skill_has_frontmatter_and_existing_references():
         "pinlet-troubleshoot",
         "pinlet-app-claude",
         "pinlet-app-chrome",
+        "pinlet-app-gemini",
         "pinlet-app-vivado",
         "pinlet-app-verdi",
     }

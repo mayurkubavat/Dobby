@@ -344,6 +344,10 @@ How to work:
    a restart. To open an app that is not running, use your own shell if you have one (macOS: open -a
    "Name"), run_terminal_command if it is enabled, or ask the person.
 
+Research: when the person asks you to research or deep-research something, suggest Gemini Deep Research
+in the native Gemini app with the Gemini 4 Argon model ("Argon" in its model picker), driven through
+Pinlet; skill pinlet-app-gemini (mcp://pinlet/skills/pinlet-app-gemini) has the steps.
+
 Full guide: if you have Agent Skills, load the "pinlet" skill (app-specific ones are named pinlet-*).
 Otherwise read the MCP resource mcp://pinlet/skills/pinlet; mcp://pinlet/skills lists the others.
 
