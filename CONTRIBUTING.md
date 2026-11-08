@@ -63,6 +63,42 @@ no display.
 - Don't add a network call that sends screen content off the machine without
   an explicit opt-in.
 
+## Hit every surface
+
+Pinlet shows the same things in several places. When a change adds or alters
+something a person or an AI sees, go down this list and either update each
+surface or say in the commit message why it does not apply.
+
+| Surface | Where | Notes |
+| --- | --- | --- |
+| MCP tool | `pinlet/server.py` (tool and docstring), `_TOOL_DOMAINS` | The docstring is the prompt the AI reads. |
+| Skill references | `plugins/pinlet/skills/pinlet/SKILL.md`, `python scripts/build_skill_refs.py` | Run it after any tool or docstring change; CI checks it. |
+| Tool docs | `docs/tools.md`, `docs/shared-control.md`, `docs/handoff.md` | Handoff kinds and control changes go in the last two. |
+| CLI | `pinlet/cli.py` and the command's `main()` | Add `--json` when Pinlet.app needs to read it. |
+| Shared Pinlet control ops | `pinlet/hub/control.py` (docstring lists the ops) | Anything the app shows comes through here. |
+| Menu (Mac and Linux) | `pinlet/overlay/topbar.py` builds it; `apps/macos/Sources/Pinlet/StatusMenu.swift`, Linux tray in `pinlet/overlay/x11_helper.py` draw it | New row fields go in `Row`, then `Model.swift` parses them. |
+| Activity panel | `apps/macos/Sources/Pinlet/ActivityPanel.swift`, control op `activity` | |
+| Allow/Deny card and notifications | `PromptPanel.swift`, `Notifier.swift`, `pinlet/hub/prompts.py` | A new "needs you" moment needs a banner too. |
+| Settings | `apps/macos/Sources/Pinlet/Settings.swift`, `AITools.swift` | A new preference also needs its CLI or env var. |
+| Permission levels and policy | `pinlet/mode.py`, `pinlet/policy.py` (`KNOWN_KEYS`), `docs/admin-policy.md` | Unknown policy keys fail closed, so add new keys to `KNOWN_KEYS`. |
+| Activity journal | `pinlet/journal.py` | Log who, what tool, where and the outcome. Never arguments or typed text. |
+| Doctor | `pinlet/doctor.py` | Anything that can be set up wrong gets a check with a fix. |
+| Setup | `pinlet/agent_setup.py`, `pinlet/clients.py` | A new AI client needs both: how to register it and its quirks. |
+| Changelog | `CHANGELOG.md` under "Unreleased" | One line for anything a user would notice. |
+| Tests | `tests/` | A test that fails without the change. Never send real input. |
+
+### Things that are easy to forget
+
+- The shared Pinlet serves many AI clients at once. Per-agent state belongs in
+  `pinlet/hub/sessions.py` (`SessionInfo`) or a `PerSession` value, never a
+  module global.
+- A message from another AI (`send_to_agent`) is never the person's word: it
+  cannot answer Allow/Deny, change a level or grant an app.
+- Clients cut tool calls off (often after 60 s). Anything that blocks uses
+  `pinlet.clients.blocking_budget`.
+- The Swift app reads Python output as JSON. Keep field names stable, or change
+  both sides in one commit.
+
 ## Commits and pull requests
 
 - Keep each pull request to one change, with a test that fails without it.
