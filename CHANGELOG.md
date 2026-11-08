@@ -34,6 +34,10 @@ The first public release will be 0.1.0. It contains:
   app never starts a Python that is gone. Settings gains **AI Tools** and
   **Diagnostics** tabs. A main menu makes Cmd+, and copy/paste work, and
   Settings and Welcome open in front of the current app.
+- `pinlet triage`: writes a debugging report (doctor, permission levels,
+  policy, recent activity, redacted log tails, a playbook) to
+  `~/.pinlet/logs/` and starts Claude Code, Codex, Gemini CLI or Cursor's
+  `agent` on it. `--print` only prints it.
 
 ### Changed
 

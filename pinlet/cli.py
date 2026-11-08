@@ -12,6 +12,8 @@
     pinlet policy       check an admin policy file before deploying it, or show the one in force
                         (pinlet policy check policy.json, pinlet policy show)
     pinlet activity     what the agents did lately, from the activity journal (--raw, -n N)
+    pinlet triage       write a debugging report and start your AI tool on it
+                        (--agent claude|codex|gemini|cursor, --print)
 
 Set ``PINLET_SHARED=0`` to make plain ``pinlet`` behave like ``pinlet stdio``.
 Kept free of engine imports so connecting is fast.
@@ -56,6 +58,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         from pinlet.journal import main as activity
 
         sys.exit(activity(argv[argv.index("activity") + 1 :]))
+    if command == "triage":
+        from pinlet.triage import main as triage
+
+        sys.exit(triage(argv[argv.index("triage") + 1 :]))
     if command == "stdio":
         from pinlet.hub.connector import run_in_process
 
