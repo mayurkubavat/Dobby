@@ -12,7 +12,6 @@ import json
 import time
 import logging
 import tempfile
-import subprocess
 from typing import Dict, Any, Optional, List, Tuple, Union
 import jinja2
 from PIL import Image
@@ -500,23 +499,21 @@ class TrajectoryEngine:
         if not command:
             return False, {}, "Missing 'command' parameter"
 
-        proc = subprocess.run(
-            command,
-            shell=True,
-            executable="/bin/bash",
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        success = (proc.returncode == 0)
+        from dobby.policy import run_command
+
+        res = run_command(command, timeout=timeout)
+        if res.get("refused"):
+            return False, {"command": command, "refused": True}, res["error"]
+        if "stdout" not in res:
+            return False, {"command": command, "exit_code": res.get("exit_code", -1)}, res.get("error", "failed")
         output = {
             "command": command,
-            "exit_code": proc.returncode,
-            "stdout": proc.stdout.strip(),
-            "stderr": proc.stderr.strip(),
+            "exit_code": res["exit_code"],
+            "stdout": res["stdout"].strip(),
+            "stderr": res["stderr"].strip(),
         }
-        msg = f"Terminal command '{command}' exited with code {proc.returncode}"
-        return success, output, msg
+        msg = f"Terminal command '{command}' exited with code {res['exit_code']}"
+        return bool(res["success"]), output, msg
 
     def _action_dismiss_obstructions(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
         res = self.controller.obstruction_interceptor.dismiss_if_present()

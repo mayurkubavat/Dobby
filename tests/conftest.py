@@ -180,6 +180,26 @@ def _isolate_model_roles(monkeypatch, tmp_path):
     for role in lm.ROLES:
         lm.set_role(role, None)
 
+
+@pytest.fixture(autouse=True)
+def _isolate_admin_policy(monkeypatch, tmp_path):
+    """Tests never read the machine's real admin policy or the person's shell opt-in."""
+    from dobby import policy
+
+    monkeypatch.setattr(policy, "system_path", lambda *a, **k: tmp_path / "no-system-policy.json")
+    monkeypatch.delenv("DOBBY_POLICY_FILE", raising=False)
+    monkeypatch.delenv("DOBBY_ALLOW_SHELL", raising=False)
+    policy.reset_cache()
+    yield
+    policy.reset_cache()
+
+
+@pytest.fixture
+def shell_on(monkeypatch):
+    """The person opted in to terminal commands (DOBBY_ALLOW_SHELL=1)."""
+    monkeypatch.setenv("DOBBY_ALLOW_SHELL", "1")
+
+
 # ------------------------------------------------- real-screen reads
 @pytest.fixture
 def live_screen():

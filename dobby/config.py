@@ -333,8 +333,11 @@ class VisionConfig(BaseModel):
 
     # Terminal Integration
     allow_terminal_commands: bool = Field(
-        default=True,
-        description="Allow AI to execute headless bash commands for hybrid vision + CLI speed.",
+        default=False,
+        description=(
+            "Allow the AI to run shell commands (run_terminal_command). Off by default; the person opts in "
+            "with DOBBY_ALLOW_SHELL=1, and an admin policy (dobby.policy) overrides both."
+        ),
     )
     command_timeout_seconds: int = Field(
         default=30,

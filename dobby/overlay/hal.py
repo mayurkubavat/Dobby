@@ -238,8 +238,10 @@ class OverlayHAL:
 
     def _gate(self, app: Optional[str], action: str) -> None:
         """Per-app grants: ask once per app, refuse what its tier forbids."""
-        if self.grants is None or not app or not self.secure:
+        if self.grants is None or not app:
             return
+        if not self.secure and self.grants.admin(app) is None:
+            return  # turbo: only the admin's app tiers apply
         from .client import OverlayBlocked
 
         try:

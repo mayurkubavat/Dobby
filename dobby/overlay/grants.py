@@ -23,6 +23,10 @@ Standing rules live in ``~/.dobby/apps.json`` (re-read when it changes)::
 a tier, for example ``"full"`` to never be asked. ``DOBBY_APP_GRANTS=off``
 turns the whole check off. App names match without case and without
 endings such as ``.app`` or ``-bin``.
+
+An admin policy (``dobby.policy``) can set tiers too. Those win over
+``apps.json``, the built-in list and the person's "Allow", and they apply
+even with ``DOBBY_APP_GRANTS=off``.
 """
 
 from __future__ import annotations
@@ -122,9 +126,19 @@ class AppGrants:
         default = str(data.get("default", ASK)).lower() if isinstance(data, dict) else ASK
         self._default = default if default in TIERS + (ASK,) else ASK
 
+    @staticmethod
+    def admin(app: str) -> Optional[str]:
+        """The tier the admin policy sets for ``app``, or None."""
+        from dobby.policy import current
+
+        return current().app_tier(normalize(app))
+
     def standing(self, app: str) -> Optional[str]:
-        """The tier set by apps.json or the built-in list, or None to ask."""
+        """The tier set by the admin policy, apps.json or the built-in list, or None to ask."""
         key = normalize(app)
+        admin = self.admin(app)
+        if admin is not None:
+            return admin
         with self._lock:
             self._load()
             rule = self._rules.get(key)
@@ -137,6 +151,9 @@ class AppGrants:
     def tier(self, app: str) -> Optional[str]:
         """What Dobby may do in ``app`` right now; None means ask first."""
         key = normalize(app)
+        admin = self.admin(app)
+        if admin is not None:
+            return admin  # the person's "Allow" cannot widen what the admin set
         with self._lock:
             if key in self._session:
                 return self._session[key]
@@ -170,7 +187,9 @@ class AppGrants:
         returns their answer. An unknown app (no name) is not checked:
         Dobby cannot ask about something it cannot name.
         """
-        if not self.enabled or not app or not str(app).strip():
+        if not app or not str(app).strip():
+            return
+        if not self.enabled and self.admin(app) is None:
             return
         tier = self.tier(app)
         if tier is not None:

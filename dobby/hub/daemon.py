@@ -102,7 +102,10 @@ class Hub:
                 await stream.send(b'{"dobby_ready": 0, "error": "unknown hello version"}\n')
                 return
             pid = _peer_pid(stream) or hello.get("pid")
-            mode = "secure" if hello.get("mode") == "secure" else "turbo"
+            from dobby.policy import current as admin_policy
+
+            # An admin policy can make every client secure, whatever it asked for.
+            mode = "secure" if hello.get("mode") == "secure" or admin_policy().forces_secure else "turbo"
             name = str(hello.get("name") or "AI client")[:40]
             from dobby.control import pick_first_name
             from dobby.control.names import display

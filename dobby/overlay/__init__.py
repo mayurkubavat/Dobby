@@ -96,11 +96,17 @@ _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
 
 
+def _admin_secure() -> bool:
+    from ..policy import current
+
+    return current().forces_secure
+
+
 def overlay_enabled(env: Optional[Dict[str, str]] = None, platform: str = sys.platform) -> bool:
     env = os.environ if env is None else env
     flag = env.get("DOBBY_OVERLAY", "").strip().lower()
-    if flag in _FALSE:
-        return False
+    if flag in _FALSE and not _admin_secure():
+        return False  # an admin's secure policy keeps the overlay (the Allow/Deny prompts) on
     if platform != "darwin" and not (platform.startswith("linux") and env.get("DISPLAY")):
         return False
     if flag in _TRUE:
@@ -149,7 +155,7 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         except ValueError:
             pass
     turbo_flag = env.get("DOBBY_OVERLAY_TURBO", "").strip().lower()
-    if turbo_flag in _TRUE or (turbo_flag not in _FALSE and not is_secure(env)):
+    if not _admin_secure() and (turbo_flag in _TRUE or (turbo_flag not in _FALSE and not is_secure(env))):
         cfg["turbo"] = True  # default: turbo; ``--secure`` / DOBBY_MODE=secure turns the prompts on
     if env.get("DOBBY_OVERLAY_TRAIL", "").strip().lower() in _FALSE:
         cfg["trail"] = False
@@ -203,10 +209,29 @@ def wrap_hal(hal: Any, overlay: Optional[NullOverlay] = None, **kwargs: Any) -> 
         # and secure clients at once. Turbo: no prompts at all, not even for ⌘Q.
         kwargs.setdefault("policy", is_secure)
         kwargs.setdefault("grants", AppGrants())  # secure: "Let Dobby use …?" once per app
-        kwargs.setdefault("confirm_clicks",
+        kwargs.setdefault("confirm_clicks", _admin_secure() or
                           os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE)
         return OverlayHAL(hal, overlay, **kwargs)
+    from ..policy import current
+
+    rules = current()
+    if rules.forces_secure or rules.apps or rules.app_default:
+        # No overlay to ask on, but the admin policy still applies: its app
+        # tiers hold, and every question it would ask is answered Deny.
+        from .grants import AppGrants
+
+        kwargs.setdefault("policy", is_secure)
+        kwargs.setdefault("grants", AppGrants())
+        return OverlayHAL(hal, DenyingOverlay(), **kwargs)
     return hal
+
+
+class DenyingOverlay(NullOverlay):
+    """No overlay under an admin policy: nobody can say Allow, so the answer is Deny."""
+
+    def confirm(self, text: str, secs: float = 30.0, detail: str = "", allow: str = "Allow",
+                deny: str = "Deny", kind: str = "danger") -> bool:
+        return False
 
 
 def find_overlay_hal(hal: Any) -> Optional[OverlayHAL]:

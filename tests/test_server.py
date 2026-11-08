@@ -29,7 +29,7 @@ def test_mcp_tools_registered():
     assert expected_tools.issubset(tool_names)
 
 
-def test_run_terminal_command():
+def test_run_terminal_command(shell_on):
     """Verify terminal tool executes bash commands and captures stdout."""
     res = server.run_terminal_command("echo 'MCP_TEST_OUTPUT'")
     assert res["success"] is True

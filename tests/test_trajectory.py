@@ -128,7 +128,7 @@ def test_trajectory_templating_and_variables():
     assert "enter" in hal.pressed_keys
 
 
-def test_trajectory_multi_step_execution():
+def test_trajectory_multi_step_execution(shell_on):
     """Validates execution of multiple distinct action primitives."""
     hal = MockHAL()
     controller = FeedbackLoopController(hal)
@@ -187,7 +187,7 @@ def test_trajectory_multi_step_execution():
     assert res.estimated_tokens_saved == 7 * 1600
 
 
-def test_trajectory_assertions_pass_and_fail():
+def test_trajectory_assertions_pass_and_fail(shell_on):
     """Validates step assertions (assert_exit_code, assert_text_present)."""
     hal = MockHAL()
     controller = FeedbackLoopController(hal)
@@ -239,7 +239,7 @@ def test_trajectory_assertions_pass_and_fail():
     assert "Assertion failed" in fail_res.step_results[0].error
 
 
-def test_trajectory_continue_on_failure():
+def test_trajectory_continue_on_failure(shell_on):
     """Validates continue_on_failure flag allowing non-critical steps to fail gracefully."""
     hal = MockHAL()
     controller = FeedbackLoopController(hal)
@@ -270,7 +270,7 @@ def test_trajectory_continue_on_failure():
     assert "CRITICAL_STEP_RAN" in res.step_results[1].output_data["stdout"]
 
 
-def test_server_execute_trajectory_tool():
+def test_server_execute_trajectory_tool(shell_on):
     """Validates server execute_trajectory FastMCP tool."""
     from dobby.server import execute_trajectory
 
