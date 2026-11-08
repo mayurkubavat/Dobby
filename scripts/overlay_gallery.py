@@ -39,7 +39,8 @@ def main() -> int:
     lock = os.path.join(tempfile.mkdtemp(), "bar.lock")
     c = mac_helper.OverlayController(
         {"style": args.style, "pill_in_recordings": True, "bar_lock": lock, "speed": 0},
-        out=open(os.devnull, "w"), interactive=False,
+        out=open(os.devnull, "w"),
+        interactive=False,
     )
     c._claim_bar()
     c.pill.animate = True  # shimmer and resize animations as in real use
@@ -61,12 +62,19 @@ def main() -> int:
         bx, bw = float(f.origin.x), float(f.size.width)
         by = sh - float(f.origin.y) - float(f.size.height)
         pad = 14
-        img.crop((int((bx - pad) * k), int(max(0, by - pad) * k), int((bx + bw + pad) * k),
-                  int((by + f.size.height + pad) * k))).save(os.path.join(args.out, f"{name}-bar.png"))
+        img.crop(
+            (
+                int((bx - pad) * k),
+                int(max(0, by - pad) * k),
+                int((bx + bw + pad) * k),
+                int((by + f.size.height + pad) * k),
+            )
+        ).save(os.path.join(args.out, f"{name}-bar.png"))
         if scene_too:
             x, y, w, h = scene
-            img.crop((int((x - 40) * k), int((y - 40) * k), int((x + w + 60) * k),
-                      int((y + h + 60) * k))).save(os.path.join(args.out, f"{name}-scene.png"))
+            img.crop(
+                (int((x - 40) * k), int((y - 40) * k), int((x + w + 60) * k), int((y + h + 60) * k))
+            ).save(os.path.join(args.out, f"{name}-scene.png"))
         os.remove(path)
         print("saved", name)
 
@@ -106,10 +114,12 @@ def main() -> int:
 
     # Two Dobbys: this one becomes the second (teal) and the bar shows dots.
     c.server_pid = 222
-    c._apply_agents([
-        {"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
-        {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
-    ])
+    c._apply_agents(
+        [
+            {"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
+            {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
+        ]
+    )
     c._mark_active()
     c._refresh_pill()
     shot("7-two-dobbys")
@@ -123,8 +133,9 @@ def main() -> int:
     subprocess.run(["screencapture", "-x", "-m", path], check=True)
     img = Image.open(path)
     k = img.size[0] / sw
-    img.crop((int((sw - 360) * k), int((edge[1] - 60) * k), int(sw * k), int((edge[1] + 80) * k))).save(
-        os.path.join(args.out, "8-tag-at-edge.png"))
+    img.crop(
+        (int((sw - 360) * k), int((edge[1] - 60) * k), int(sw * k), int((edge[1] + 80) * k))
+    ).save(os.path.join(args.out, "8-tag-at-edge.png"))
     os.remove(path)
     print("saved 8-tag-at-edge")
 

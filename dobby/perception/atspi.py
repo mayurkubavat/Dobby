@@ -1,5 +1,4 @@
-"""
-AT-SPI2 accessibility inspector for Linux (X11 and XWayland).
+"""AT-SPI2 accessibility inspector for Linux (X11 and XWayland).
 
 Same interface as the macOS ``AXInspector``: ``is_available``,
 ``inspect_desktop``, ``inspect`` and ``hit_test``. Role names are AT-SPI's own,
@@ -27,14 +26,14 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from dobby.config import CONFIG
 from dobby.types import BoundingBox, UIElement
 
 logger = logging.getLogger(__name__)
 
-INTERACTABLE_ROLES: Set[str] = {
+INTERACTABLE_ROLES: set[str] = {
     "push button",
     "button",
     "toggle button",
@@ -62,28 +61,61 @@ INTERACTABLE_ROLES: Set[str] = {
 }
 
 # Roles that are only containers: a hit test that lands on one keeps looking deeper.
-CONTAINER_ROLES: Set[str] = {
-    "application", "frame", "window", "dialog", "panel", "filler", "scroll pane",
-    "viewport", "layered pane", "root pane", "split pane", "section", "grouping",
-    "unknown", "redundant object", "document frame", "document web", "internal frame",
+CONTAINER_ROLES: set[str] = {
+    "application",
+    "frame",
+    "window",
+    "dialog",
+    "panel",
+    "filler",
+    "scroll pane",
+    "viewport",
+    "layered pane",
+    "root pane",
+    "split pane",
+    "section",
+    "grouping",
+    "unknown",
+    "redundant object",
+    "document frame",
+    "document web",
+    "internal frame",
 }
 
 # Background clicks: roles where the element's own action does what a click does.
-PRESSABLE_ROLES: Set[str] = {
-    "push button", "button", "toggle button", "check box", "radio button", "menu item",
-    "check menu item", "radio menu item", "link", "page tab",
+PRESSABLE_ROLES: set[str] = {
+    "push button",
+    "button",
+    "toggle button",
+    "check box",
+    "radio button",
+    "menu item",
+    "check menu item",
+    "radio menu item",
+    "link",
+    "page tab",
 }
 # Walking up from a label stops here: a click there is not a press.
-PRESS_STOP_ROLES: Set[str] = CONTAINER_ROLES | {"text", "entry", "password text", "terminal", "canvas",
-                                                "list", "table", "tree", "tree table", "combo box"}
+PRESS_STOP_ROLES: set[str] = CONTAINER_ROLES | {
+    "text",
+    "entry",
+    "password text",
+    "terminal",
+    "canvas",
+    "list",
+    "table",
+    "tree",
+    "tree table",
+    "combo box",
+}
 PRESS_ACTIONS = ("click", "press", "activate", "toggle", "jump")
 PRESS_MAX_UP = 2
 
-_SENTINEL = -(2 ** 31)
+_SENTINEL = -(2**31)
 _MAX_COORD = 1 << 15
 
 
-def a11y_bus_reachable(timeout_ms: int = 500) -> Tuple[bool, str]:
+def a11y_bus_reachable(timeout_ms: int = 500) -> tuple[bool, str]:
     """Probes the accessibility bus without touching libatspi (which aborts when it is missing)."""
     if os.environ.get("AT_SPI_BUS_ADDRESS"):
         return True, ""
@@ -94,8 +126,15 @@ def a11y_bus_reachable(timeout_ms: int = 500) -> Tuple[bool, str]:
 
         bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         reply = bus.call_sync(
-            "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Bus", "GetAddress",
-            None, GLib.VariantType.new("(s)"), Gio.DBusCallFlags.NONE, timeout_ms, None,
+            "org.a11y.Bus",
+            "/org/a11y/bus",
+            "org.a11y.Bus",
+            "GetAddress",
+            None,
+            GLib.VariantType.new("(s)"),
+            Gio.DBusCallFlags.NONE,
+            timeout_ms,
+            None,
         )
         address = reply.unpack()[0] if reply is not None else ""
         return (bool(address), "" if address else "org.a11y.Bus returned no address")
@@ -110,9 +149,15 @@ def announce_assistive_technology(timeout_ms: int = 500) -> bool:
 
         bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         bus.call_sync(
-            "org.a11y.Bus", "/org/a11y/bus", "org.freedesktop.DBus.Properties", "Set",
+            "org.a11y.Bus",
+            "/org/a11y/bus",
+            "org.freedesktop.DBus.Properties",
+            "Set",
             GLib.Variant("(ssv)", ("org.a11y.Status", "IsEnabled", GLib.Variant("b", True))),
-            None, Gio.DBusCallFlags.NONE, timeout_ms, None,
+            None,
+            Gio.DBusCallFlags.NONE,
+            timeout_ms,
+            None,
         )
         return True
     except Exception as e:
@@ -122,9 +167,12 @@ def announce_assistive_technology(timeout_ms: int = 500) -> bool:
 
 def _valid(x: int, y: int, w: int, h: int) -> bool:
     return (
-        x != _SENTINEL and y != _SENTINEL
-        and -_MAX_COORD < x < _MAX_COORD and -_MAX_COORD < y < _MAX_COORD
-        and 0 < w < _MAX_COORD and 0 < h < _MAX_COORD
+        x != _SENTINEL
+        and y != _SENTINEL
+        and -_MAX_COORD < x < _MAX_COORD
+        and -_MAX_COORD < y < _MAX_COORD
+        and 0 < w < _MAX_COORD
+        and 0 < h < _MAX_COORD
     )
 
 
@@ -141,7 +189,7 @@ class ATSPIInspector:
     ) -> None:
         self.max_nodes = max_nodes
         self.max_seconds = max_seconds
-        self.error: Optional[str] = None
+        self.error: str | None = None
         self.web_content_announced = False
         self._hal = hal
         self._atspi = atspi
@@ -182,14 +230,14 @@ class ATSPIInspector:
             self._hal = get_desktop_hal()
         return self._hal
 
-    def _client_windows(self) -> List[Dict[str, Any]]:
+    def _client_windows(self) -> list[dict[str, Any]]:
         try:
             fn = getattr(self._get_hal(), "client_windows", None)
             return list(fn()) if callable(fn) else []
         except Exception:
             return []
 
-    def _active_pid(self) -> Optional[int]:
+    def _active_pid(self) -> int | None:
         try:
             hal = self._get_hal()
             win = hal.get_active_window()
@@ -204,7 +252,7 @@ class ATSPIInspector:
         if CONFIG.ax_enable_web_content and not self.web_content_announced:
             self.web_content_announced = announce_assistive_technology()
 
-    def _apps(self, app_name_filter: Optional[str]) -> List[Any]:
+    def _apps(self, app_name_filter: str | None) -> list[Any]:
         desktop = self._atspi.get_desktop(0)
         apps = []
         for i in range(desktop.get_child_count()):
@@ -231,7 +279,9 @@ class ATSPIInspector:
                 return front
         return apps
 
-    def _origin_for(self, app: Any, win: Any, clients: List[Dict[str, Any]]) -> Optional[Tuple[int, int]]:
+    def _origin_for(
+        self, app: Any, win: Any, clients: list[dict[str, Any]]
+    ) -> tuple[int, int] | None:
         """Client-area origin of ``win`` when its SCREEN extents are unusable (GTK 4)."""
         comp = win.get_component_iface()
         if comp is None:
@@ -256,7 +306,9 @@ class ATSPIInspector:
             return (same_pid[0]["x"], same_pid[0]["y"])
         return None
 
-    def _extents(self, comp: Any, origin: Optional[Tuple[int, int]]) -> Optional[Tuple[int, int, int, int]]:
+    def _extents(
+        self, comp: Any, origin: tuple[int, int] | None
+    ) -> tuple[int, int, int, int] | None:
         try:
             if origin is None:
                 r = comp.get_extents(self._coord_type)
@@ -271,9 +323,9 @@ class ATSPIInspector:
             return None
         return box if _valid(*box) else None
 
-    def _states(self, node: Any) -> List[str]:
+    def _states(self, node: Any) -> list[str]:
         """Same state words as the macOS inspector: focused, enabled/disabled, selected, checked."""
-        out: List[str] = []
+        out: list[str] = []
         try:
             st = node.get_state_set()
             T = self._atspi.StateType
@@ -296,7 +348,7 @@ class ATSPIInspector:
         except Exception:
             return True
 
-    def _toplevels(self, apps: List[Any]):
+    def _toplevels(self, apps: list[Any]):
         clients = self._client_windows()
         for app in apps:
             for w in range(app.get_child_count()):
@@ -309,34 +361,39 @@ class ATSPIInspector:
 
     def inspect_desktop(
         self,
-        app_name_filter: Optional[str] = None,
+        app_name_filter: str | None = None,
         max_depth: int = 16,
         filter_interactable: bool = True,
-    ) -> List[UIElement]:
-        """
-        Flattened, on-screen elements of the active app (or apps matching
+    ) -> list[UIElement]:
+        """Flattened, on-screen elements of the active app (or apps matching
         ``app_name_filter``), with true screen bounding boxes.
         """
         if not self._available:
             return []
         self._announce()
-        elements: List[UIElement] = []
+        elements: list[UIElement] = []
         budget = [self.max_nodes]
         deadline = time.monotonic() + self.max_seconds
         try:
             for _app, win, origin in self._toplevels(self._apps(app_name_filter)):
-                self._walk(win, 1, max_depth, filter_interactable, elements, origin, budget, deadline)
-                if len(elements) >= CONFIG.som_max_elements or budget[0] <= 0 or time.monotonic() > deadline:
+                self._walk(
+                    win, 1, max_depth, filter_interactable, elements, origin, budget, deadline
+                )
+                if (
+                    len(elements) >= CONFIG.som_max_elements
+                    or budget[0] <= 0
+                    or time.monotonic() > deadline
+                ):
                     break
         except Exception as e:
             logger.debug("AT-SPI walk failed: %s", e)
         return elements[: CONFIG.som_max_elements]
 
-    def inspect(self) -> List[UIElement]:
+    def inspect(self) -> list[UIElement]:
         """All elements, interactable or not (used by post-condition checks)."""
         return self.inspect_desktop(filter_interactable=False)
 
-    def hit_test(self, x: int, y: int) -> Optional[dict]:
+    def hit_test(self, x: int, y: int) -> dict | None:
         """The deepest element at screen point (x, y) as ``{"role", "name", "bbox"}``, or None.
 
         Like the macOS hit test this answers for whatever window is on top at
@@ -350,14 +407,16 @@ class ATSPIInspector:
             for app, win, origin in self._toplevels(apps):
                 comp = win.get_component_iface()
                 box = self._extents(comp, origin) if comp is not None else None
-                if box is None or not (box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3]):
+                if box is None or not (
+                    box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3]
+                ):
                     continue
                 return self._deepest_at(win, x, y, origin) or self._describe(win, box)
         except Exception as e:
             logger.debug("AT-SPI hit test failed: %s", e)
         return None
 
-    def _apps_at(self, x: int, y: int) -> List[Any]:
+    def _apps_at(self, x: int, y: int) -> list[Any]:
         for c in self._client_windows():  # front to back
             if c["x"] <= x < c["x"] + c["width"] and c["y"] <= y < c["y"] + c["height"]:
                 pid = c.get("pid")
@@ -365,7 +424,9 @@ class ATSPIInspector:
                     break
                 desktop = self._atspi.get_desktop(0)
                 apps = [desktop.get_child_at_index(i) for i in range(desktop.get_child_count())]
-                hits = [a for a in apps if a is not None and _safe(lambda: a.get_process_id()) == pid]
+                hits = [
+                    a for a in apps if a is not None and _safe(lambda: a.get_process_id()) == pid
+                ]
                 if hits:
                     return hits
                 break
@@ -373,7 +434,7 @@ class ATSPIInspector:
 
     # ------------------------------------------------------------- walking
 
-    def _describe(self, node: Any, box: Tuple[int, int, int, int]) -> dict:
+    def _describe(self, node: Any, box: tuple[int, int, int, int]) -> dict:
         role = node.get_role_name() or "unknown"
         return {
             "role": role,
@@ -382,7 +443,7 @@ class ATSPIInspector:
             "secure": role == "password text",
         }
 
-    def _deepest_at(self, win: Any, x: int, y: int, origin: Optional[Tuple[int, int]]) -> Optional[dict]:
+    def _deepest_at(self, win: Any, x: int, y: int, origin: tuple[int, int] | None) -> dict | None:
         """Smallest showing element containing the point, searched under ``win`` within the budget.
 
         A tree search rather than Component.get_accessible_at_point, which GTK 4
@@ -391,7 +452,7 @@ class ATSPIInspector:
         hit = self._deepest_node_at(win, x, y, origin)
         return hit[1] if hit else None
 
-    def press_at(self, x: int, y: int, pid: int) -> Optional[str]:
+    def press_at(self, x: int, y: int, pid: int) -> str | None:
         """Press the button of process ``pid`` at screen point (x, y) through AT-SPI.
 
         The Linux side of background clicks: the element's own "click" or
@@ -409,7 +470,9 @@ class ATSPIInspector:
             for _app, win, origin in self._toplevels(apps):
                 comp = win.get_component_iface()
                 box = self._extents(comp, origin) if comp is not None else None
-                if box is None or not (box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3]):
+                if box is None or not (
+                    box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3]
+                ):
                     continue
                 hit = self._deepest_node_at(win, x, y, origin)
                 if hit is None:
@@ -419,7 +482,7 @@ class ATSPIInspector:
             logger.debug("AT-SPI press failed: %s", e)
         return None
 
-    def _press(self, node: Any) -> Optional[str]:
+    def _press(self, node: Any) -> str | None:
         for _ in range(PRESS_MAX_UP + 1):
             if node is None:
                 return None
@@ -430,8 +493,10 @@ class ATSPIInspector:
                 action = _safe(lambda: node.get_action_iface())
                 if action is None:
                     return None
-                names = [(_safe(lambda i=i: action.get_action_name(i)) or "").lower()
-                         for i in range(_safe(lambda: action.get_n_actions()) or 0)]
+                names = [
+                    (_safe(lambda i=i: action.get_action_name(i)) or "").lower()
+                    for i in range(_safe(lambda: action.get_n_actions()) or 0)
+                ]
                 for wanted in PRESS_ACTIONS:
                     if wanted in names:
                         ok = _safe(lambda: action.do_action(names.index(wanted)))
@@ -442,10 +507,11 @@ class ATSPIInspector:
             node = _safe(lambda: node.get_parent())
         return None
 
-    def _deepest_node_at(self, win: Any, x: int, y: int,
-                         origin: Optional[Tuple[int, int]]) -> Optional[Tuple[Any, dict]]:
-        best: Optional[Tuple[int, dict]] = None
-        best_leaf: Optional[Tuple[int, dict]] = None
+    def _deepest_node_at(
+        self, win: Any, x: int, y: int, origin: tuple[int, int] | None
+    ) -> tuple[Any, dict] | None:
+        best: tuple[int, dict] | None = None
+        best_leaf: tuple[int, dict] | None = None
         budget = [self.max_nodes]
         deadline = time.monotonic() + self.max_seconds
         stack = [win]
@@ -478,9 +544,9 @@ class ATSPIInspector:
         depth: int,
         max_depth: int,
         filter_interactable: bool,
-        elements: List[UIElement],
-        origin: Optional[Tuple[int, int]],
-        budget: List[int],
+        elements: list[UIElement],
+        origin: tuple[int, int] | None,
+        budget: list[int],
         deadline: float,
     ) -> None:
         if depth > max_depth or len(elements) >= CONFIG.som_max_elements:
@@ -497,7 +563,12 @@ class ATSPIInspector:
             if box is not None:
                 x, y, w, h = box
                 is_collapsed_menu = role.lower() == "menu item" and h <= 14
-                if w > 8 and h > 8 and w * h >= CONFIG.som_min_element_area and not is_collapsed_menu:
+                if (
+                    w > 8
+                    and h > 8
+                    and w * h >= CONFIG.som_min_element_area
+                    and not is_collapsed_menu
+                ):
                     if not filter_interactable or is_interactable or role == "dialog":
                         if not name.strip():
                             name = _safe(lambda: node.get_description()) or ""
@@ -514,7 +585,16 @@ class ATSPIInspector:
             for c in range(node.get_child_count()):
                 child = node.get_child_at_index(c)
                 if child is not None and self._showing(child):
-                    self._walk(child, depth + 1, max_depth, filter_interactable, elements, origin, budget, deadline)
+                    self._walk(
+                        child,
+                        depth + 1,
+                        max_depth,
+                        filter_interactable,
+                        elements,
+                        origin,
+                        budget,
+                        deadline,
+                    )
         except Exception:
             return
 

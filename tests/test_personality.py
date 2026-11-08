@@ -30,8 +30,16 @@ def voice(level="elf", **kw):
 
 
 def view(**kw):
-    base = dict(paused=False, takeover=False, takeover_resume="auto", working=False, turbo=False,
-                current_mode="hidden", bar_mode="always", owner=True)
+    base = dict(
+        paused=False,
+        takeover=False,
+        takeover_resume="auto",
+        working=False,
+        turbo=False,
+        current_mode="hidden",
+        bar_mode="always",
+        owner=True,
+    )
     base.update(kw)
     return bar_view(**base)
 
@@ -48,8 +56,18 @@ def test_levels_from_env():
     assert personality.normalize_level("0") == "off"
     assert personality.normalize_level("elf") == "elf"
     assert personality.normalize_level("bogus") == "subtle"
-    cfg = overlay_config({"DOBBY_PERSONALITY": "elf", "DOBBY_USER_NAME": " Sam ", "DOBBY_PERSONALITY_LINES": "x.json"})
-    assert cfg["personality"] == "elf" and cfg["user_name"] == "Sam" and cfg["personality_lines"] == "x.json"
+    cfg = overlay_config(
+        {
+            "DOBBY_PERSONALITY": "elf",
+            "DOBBY_USER_NAME": " Sam ",
+            "DOBBY_PERSONALITY_LINES": "x.json",
+        }
+    )
+    assert (
+        cfg["personality"] == "elf"
+        and cfg["user_name"] == "Sam"
+        and cfg["personality_lines"] == "x.json"
+    )
     assert "personality" not in overlay_config({})
 
 
@@ -141,10 +159,17 @@ def test_late_night_and_long_tasks():
 # ------------------------------------------------------------ the bar
 def test_off_bar_is_unchanged():
     v, _ = voice("off")
-    for kw in ({}, {"working": True}, {"paused": True}, {"current_mode": "stopped"}, {"takeover": True}):
+    for kw in (
+        {},
+        {"working": True},
+        {"paused": True},
+        {"current_mode": "stopped"},
+        {"takeover": True},
+    ):
         vw = view(**kw)
-        assert style.bar_spec(vw, voice=v, hovered=True, step="Click ‘Send’", steps=3) == \
-            style.bar_spec(vw, hovered=True, step="Click ‘Send’", steps=3)
+        assert style.bar_spec(
+            vw, voice=v, hovered=True, step="Click ‘Send’", steps=3
+        ) == style.bar_spec(vw, hovered=True, step="Click ‘Send’", steps=3)
 
 
 def test_subtle_working_bar_keeps_the_facts():
@@ -160,10 +185,14 @@ def test_subtle_working_bar_keeps_the_facts():
 def test_elf_thinking_and_sleeping():
     v, _ = voice()
     s = spec(v, view=view(working=True), thinking=True, steps=2, elapsed=5)
-    assert s.text.split(" · ")[0] in [x.replace("{name}", "Dobby") for x in personality.ELF["thinking"]]
+    assert s.text.split(" · ")[0] in [
+        x.replace("{name}", "Dobby") for x in personality.ELF["thinking"]
+    ]
     v, _ = voice()  # a fresh Dobby: no task just ended, so no cheer
     s = spec(v, view=view(), hovered=False)
-    assert s.compact and s.text in [x.replace("{name}", "Dobby") for x in personality.ELF["sleeping"]]
+    assert s.compact and s.text in [
+        x.replace("{name}", "Dobby") for x in personality.ELF["sleeping"]
+    ]
 
 
 def test_safety_texts_stay_plain():
@@ -175,15 +204,23 @@ def test_safety_texts_stay_plain():
 
 def test_paused_and_stopped_get_words():
     v, _ = voice()
-    assert spec(v, view=view(paused=True)).text in ["Dobby is paused · Dobby waits", "Dobby is paused for you, sir"]
-    assert spec(v, view=view(current_mode="stopped")).text in ["Dobby stopped, as you asked", "Dobby stops at once, sir!"]
+    assert spec(v, view=view(paused=True)).text in [
+        "Dobby is paused · Dobby waits",
+        "Dobby is paused for you, sir",
+    ]
+    assert spec(v, view=view(current_mode="stopped")).text in [
+        "Dobby stopped, as you asked",
+        "Dobby stops at once, sir!",
+    ]
 
 
 def test_cheer_when_a_task_ends_then_back_to_sleep():
     v, clock = voice()
     spec(v, view=view(working=True), step="Click", steps=4, elapsed=3)
     done = spec(v, view=view(), hovered=False)
-    cheers = [x.replace("{name}", "Dobby").replace("{you}", ", sir") for x in personality.ELF["done"]]
+    cheers = [
+        x.replace("{name}", "Dobby").replace("{you}", ", sir") for x in personality.ELF["done"]
+    ]
     assert done.text in cheers
     assert v.refresh_due() is False
     clock.t += personality.DONE_SECS + 0.1
@@ -216,7 +253,9 @@ def test_classic_bar_uses_the_dressed_text():
 def test_startup_line():
     assert personality.startup_line({"DOBBY_PERSONALITY": "off"}) == ""
     assert personality.startup_line({}) == "Dobby is ready."
-    assert "Antigravity" in personality.startup_line({"DOBBY_PERSONALITY": "elf", "DOBBY_AGENT_NAME": "Antigravity"})
+    assert "Antigravity" in personality.startup_line(
+        {"DOBBY_PERSONALITY": "elf", "DOBBY_AGENT_NAME": "Antigravity"}
+    )
 
 
 @pytest.mark.parametrize("line", personality.all_lines())

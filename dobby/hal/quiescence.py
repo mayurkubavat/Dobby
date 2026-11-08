@@ -1,17 +1,15 @@
-"""
-Event-Driven X11 Quiescence Monitor using libXdamage and libXfixes via ctypes.
+"""Event-Driven X11 Quiescence Monitor using libXdamage and libXfixes via ctypes.
 
 Provides sub-millisecond visibility into X11 screen damage regions and mouse cursor
 busy/hourglass states without incurring screenshot overhead or relying on static sleep delays.
 """
 
-import os
-import time
-import logging
-from typing import Tuple, Optional, Set
 import ctypes
 import ctypes.util
-from ctypes import c_int, c_ulong, c_short, c_ushort, c_char_p, POINTER, Structure
+import logging
+import os
+import time
+from ctypes import POINTER, Structure, c_char_p, c_int, c_short, c_ulong, c_ushort
 
 from dobby.types import ExecutionPhase, QuiescenceReport
 
@@ -20,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class XRectangle(Structure):
     """X11 Rectangle structure."""
+
     _fields_ = [
         ("x", c_short),
         ("y", c_short),
@@ -30,6 +29,7 @@ class XRectangle(Structure):
 
 class XFixesCursorImage(Structure):
     """XFixes Cursor Image structure from Xfixes.h."""
+
     _fields_ = [
         ("x", c_short),
         ("y", c_short),
@@ -45,13 +45,12 @@ class XFixesCursorImage(Structure):
 
 
 class X11QuiescenceMonitor:
-    """
-    Sub-millisecond X11 screen buffer damage and cursor state monitor.
+    """Sub-millisecond X11 screen buffer damage and cursor state monitor.
     Uses XDamage (DamageReportRawRectangles) to track dirty buffer regions
     and XFixes to monitor cursor pointer transformations (watch, wait, spinning).
     """
 
-    BUSY_CURSOR_NAMES: Set[str] = {
+    BUSY_CURSOR_NAMES: set[str] = {
         "watch",
         "wait",
         "progress",
@@ -65,12 +64,11 @@ class X11QuiescenceMonitor:
 
     def __init__(
         self,
-        display_name: Optional[str] = None,
-        target_window_id: Optional[int] = None,
+        display_name: str | None = None,
+        target_window_id: int | None = None,
         min_damage_area: int = 64,
     ) -> None:
-        """
-        Initializes X11 ctypes connection and registers damage monitors.
+        """Initializes X11 ctypes connection and registers damage monitors.
 
         Args:
             display_name: X11 display string (e.g. ':20' or None for default).
@@ -88,7 +86,9 @@ class X11QuiescenceMonitor:
         if display_name is None:
             display_name = os.environ.get("DISPLAY", ":0")
 
-        self.display_bytes = display_name.encode("utf-8") if isinstance(display_name, str) else display_name
+        self.display_bytes = (
+            display_name.encode("utf-8") if isinstance(display_name, str) else display_name
+        )
 
         try:
             lib_x11 = ctypes.util.find_library("X11")
@@ -96,7 +96,9 @@ class X11QuiescenceMonitor:
             lib_xfixes = ctypes.util.find_library("Xfixes")
 
             if not (lib_x11 and lib_xdamage and lib_xfixes):
-                logger.warning("X11 libraries missing (X11, Xdamage, or Xfixes). Quiescence monitor unavailable.")
+                logger.warning(
+                    "X11 libraries missing (X11, Xdamage, or Xfixes). Quiescence monitor unavailable."
+                )
                 return
 
             self.x11 = ctypes.cdll.LoadLibrary(lib_x11)
@@ -146,26 +148,32 @@ class X11QuiescenceMonitor:
                 logger.warning(f"Could not open X11 display: {display_name}")
                 return
 
-            self._target_win = target_window_id if target_window_id is not None else self.x11.XDefaultRootWindow(self.dpy)
+            self._target_win = (
+                target_window_id
+                if target_window_id is not None
+                else self.x11.XDefaultRootWindow(self.dpy)
+            )
 
             # XDamageReportRawRectangles = 0
-            self._damage_handle = self.xdamage.XDamageCreate(self.dpy, c_ulong(self._target_win), c_int(0))
+            self._damage_handle = self.xdamage.XDamageCreate(
+                self.dpy, c_ulong(self._target_win), c_int(0)
+            )
             self._region_handle = self.xfixes.XFixesCreateRegion(self.dpy, None, c_int(0))
 
             if self._damage_handle and self._region_handle:
                 self.is_available = True
                 # Clear any pre-existing damage
                 self.consume_damage_area()
-                logger.info(f"X11QuiescenceMonitor initialized on {display_name} (root window: {self._target_win})")
+                logger.info(
+                    f"X11QuiescenceMonitor initialized on {display_name} (root window: {self._target_win})"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to initialize X11QuiescenceMonitor: {e}")
             self.close()
 
-    def get_cursor_state(self) -> Tuple[str, int]:
-        """
-        Returns (cursor_name, cursor_serial_hash).
-        """
+    def get_cursor_state(self) -> tuple[str, int]:
+        """Returns (cursor_name, cursor_serial_hash)."""
         if not self.is_available or not self.dpy:
             return ("unknown", 0)
 
@@ -187,17 +195,14 @@ class X11QuiescenceMonitor:
                 self.x11.XFree(cursor_ptr)
 
     def is_cursor_busy(self) -> bool:
-        """
-        Returns True if the current X11 mouse cursor is in a busy/wait/hourglass state.
-        """
+        """Returns True if the current X11 mouse cursor is in a busy/wait/hourglass state."""
         name, _ = self.get_cursor_state()
         if not name:
             return False
         return any(busy in name for busy in self.BUSY_CURSOR_NAMES)
 
     def consume_damage_area(self) -> int:
-        """
-        Atomically copies and clears accumulated XDamage regions.
+        """Atomically copies and clears accumulated XDamage regions.
         Returns total number of modified pixels, filtering out blinks <= min_damage_area.
         """
         if not self.is_available or not self.dpy:
@@ -213,7 +218,9 @@ class X11QuiescenceMonitor:
             )
 
             nrects = c_int(0)
-            rects_ptr = self.xfixes.XFixesFetchRegion(self.dpy, c_ulong(self._region_handle), ctypes.byref(nrects))
+            rects_ptr = self.xfixes.XFixesFetchRegion(
+                self.dpy, c_ulong(self._region_handle), ctypes.byref(nrects)
+            )
             if not rects_ptr or nrects.value == 0:
                 return 0
 
@@ -238,9 +245,8 @@ class X11QuiescenceMonitor:
         initial_timeout_ms: int = 1500,
         max_total_timeout_ms: int = 15000,
         poll_interval_sec: float = 0.025,
-    ) -> Tuple[ExecutionPhase, float, int]:
-        """
-        Executes the adaptive 6-state quiescence loop.
+    ) -> tuple[ExecutionPhase, float, int]:
+        """Executes the adaptive 6-state quiescence loop.
 
         Returns:
             Tuple of (final_phase, elapsed_ms, total_damage_observed).
@@ -257,7 +263,7 @@ class X11QuiescenceMonitor:
         self.consume_damage_area()
 
         phase = ExecutionPhase.DISPATCHED
-        quiet_since: Optional[float] = None
+        quiet_since: float | None = None
 
         while True:
             now = time.monotonic()
@@ -353,7 +359,7 @@ class SleepQuiescenceMonitor:
     def consume_damage_area(self) -> int:
         return 0
 
-    def get_cursor_state(self) -> Tuple[str, int]:
+    def get_cursor_state(self) -> tuple[str, int]:
         return ("unknown", 0)
 
     def is_cursor_busy(self) -> bool:
@@ -365,7 +371,7 @@ class SleepQuiescenceMonitor:
         initial_timeout_ms: int = 1500,
         max_total_timeout_ms: int = 15000,
         poll_interval_sec: float = 0.025,
-    ) -> Tuple[ExecutionPhase, float, int]:
+    ) -> tuple[ExecutionPhase, float, int]:
         time.sleep(quiescence_window_ms / 1000.0)
         return (ExecutionPhase.SLEEP_FALLBACK, float(quiescence_window_ms), 0)
 

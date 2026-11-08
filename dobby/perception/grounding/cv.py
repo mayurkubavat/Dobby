@@ -1,17 +1,16 @@
 """Pure Computer Vision Grounding Provider using Edge Contours and MSER."""
 
-from typing import List, Optional, Tuple
 from PIL import Image
 
-from dobby.perception.grounding.base import BaseGroundingProvider
 from dobby.perception.cv_detector import CVDetector
+from dobby.perception.grounding.base import BaseGroundingProvider
 from dobby.types import UIElement
 
 
 class CVGroundingProvider(BaseGroundingProvider):
     """Grounding provider leveraging pure Computer Vision edge and contour analysis."""
 
-    def __init__(self, detector: Optional[CVDetector] = None) -> None:
+    def __init__(self, detector: CVDetector | None = None) -> None:
         self.detector = detector or CVDetector()
 
     @property
@@ -26,9 +25,9 @@ class CVGroundingProvider(BaseGroundingProvider):
         self,
         image: Image.Image,
         scale_factor: float = 1.0,
-        app_filter: Optional[str] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-    ) -> List[UIElement]:
+        app_filter: str | None = None,
+        region: tuple[int, int, int, int] | None = None,
+    ) -> list[UIElement]:
         """Detects interactable regions directly from screenshot pixels."""
         elements = self.detector.detect(image, scale_factor=scale_factor)
         if region:
@@ -36,7 +35,7 @@ class CVGroundingProvider(BaseGroundingProvider):
             filtered = []
             for e in elements:
                 bx, by, bw, bh = e.bbox.x, e.bbox.y, e.bbox.width, e.bbox.height
-                if (bx >= rx and by >= ry and (bx + bw) <= (rx + rw) and (by + bh) <= (ry + rh)):
+                if bx >= rx and by >= ry and (bx + bw) <= (rx + rw) and (by + bh) <= (ry + rh):
                     filtered.append(e)
             return filtered
         return elements

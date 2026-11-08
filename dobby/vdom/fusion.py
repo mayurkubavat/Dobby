@@ -1,5 +1,4 @@
-"""
-Unified Virtual DOM (vDOM) Fusion Engine.
+"""Unified Virtual DOM (vDOM) Fusion Engine.
 
 Reconciles ground-truth AT-SPI2 accessibility trees with neural vision proposals,
 performing asymmetric IoU deduplication, containment nesting, and canvas role inference.
@@ -7,22 +6,20 @@ performing asymmetric IoU deduplication, containment nesting, and canvas role in
 
 import hashlib
 import time
-from typing import List, Dict, Any, Optional
+from typing import Any
 
+from dobby.config import CONFIG
 from dobby.types import (
     BoundingBox,
-    VDOMNode,
-    VirtualDOMSnapshot,
     GroundingSource,
     UIRole,
+    VDOMNode,
+    VirtualDOMSnapshot,
 )
-from dobby.config import CONFIG
 
 
 class VDOMFusionEngine:
-    """
-    Fuses AT-SPI2 semantic trees with Neural/CV visual proposals in < 4ms.
-    """
+    """Fuses AT-SPI2 semantic trees with Neural/CV visual proposals in < 4ms."""
 
     def __init__(
         self,
@@ -34,16 +31,14 @@ class VDOMFusionEngine:
 
     def fuse(
         self,
-        atspi_nodes: List[VDOMNode],
-        visual_proposals: List[Dict[str, Any]],
+        atspi_nodes: list[VDOMNode],
+        visual_proposals: list[dict[str, Any]],
         window_id: str = "",
         window_title: str = "",
-        window_bbox: Optional[BoundingBox] = None,
-        timestamp: Optional[float] = None,
+        window_bbox: BoundingBox | None = None,
+        timestamp: float | None = None,
     ) -> VirtualDOMSnapshot:
-        """
-        Merges accessibility nodes and visual proposals into an indexed VirtualDOMSnapshot.
-        """
+        """Merges accessibility nodes and visual proposals into an indexed VirtualDOMSnapshot."""
         now = timestamp if timestamp is not None else time.monotonic()
         win_box = window_bbox or BoundingBox(x=0, y=0, width=1920, height=1080)
 
@@ -61,7 +56,7 @@ class VDOMFusionEngine:
             )
             atspi_nodes = [root_node]
 
-        nodes_map: Dict[str, VDOMNode] = {n.node_id: n for n in atspi_nodes}
+        nodes_map: dict[str, VDOMNode] = {n.node_id: n for n in atspi_nodes}
         root_node = atspi_nodes[0]
 
         # Identify leaf nodes and potential enclosing containers
@@ -99,7 +94,7 @@ class VDOMFusionEngine:
             v_raw_class = prop.get("class_name", "icon_button")
 
             # 1. Asymmetric IoU Deduplication against AT-SPI2 leaf nodes
-            best_match: Optional[VDOMNode] = None
+            best_match: VDOMNode | None = None
             best_iou = 0.0
             for leaf in leaf_atspi:
                 score = leaf.bbox.iou(v_bbox)
@@ -116,7 +111,11 @@ class VDOMFusionEngine:
 
             # 2. Unmatched visual detection -> Find tightest enclosing AT-SPI2 container
             parent_node = next(
-                (c for c in containers if c.bbox.containment_ratio(v_bbox) >= self.containment_threshold),
+                (
+                    c
+                    for c in containers
+                    if c.bbox.containment_ratio(v_bbox) >= self.containment_threshold
+                ),
                 root_node,
             )
 

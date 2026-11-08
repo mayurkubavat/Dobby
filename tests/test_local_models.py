@@ -10,7 +10,6 @@ from dobby.config import CONFIG
 from dobby.gemma.client import GemmaClient
 from dobby.model_bench import bench_model, markdown, pick_text_cases
 
-
 # conftest._isolate_model_roles gives each test clean roles and tmp_path/models.json.
 
 
@@ -70,17 +69,26 @@ class Oracle:
             goal = user.split("Goal: ")[1].split("\n")[0]
             case = next((c for c in pick_text_cases() if c["goal"] == goal), None)
             n = len(case["options"]) if case else 6
-            idx = (case["expect"] if case else None)
+            idx = case["expect"] if case else None
             tok = "ABCDEFGHIJ"[n if idx is None else idx]
         top = [(tok, math.log(0.97)), ("Z", math.log(0.03))]
-        return {"message": {"content": tok},
-                "logprobs": [{"token": tok, "logprob": top[0][1],
-                              "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top]}]}
+        return {
+            "message": {"content": tok},
+            "logprobs": [
+                {
+                    "token": tok,
+                    "logprob": top[0][1],
+                    "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top],
+                }
+            ],
+        }
 
 
 def test_bench_scores_confident_mistakes_and_none_answers():
     good = bench_model(GemmaClient(transport=Oracle()), "good:1", tasks=("pick_text",))
-    dumb = bench_model(GemmaClient(transport=Oracle(dumb=True)), "dumb:1", tasks=("pick_text", "pick_visual"))
+    dumb = bench_model(
+        GemmaClient(transport=Oracle(dumb=True)), "dumb:1", tasks=("pick_text", "pick_visual")
+    )
     g, d = good["tasks"][0], dumb["tasks"][0]
     assert g["accuracy"] == 1.0 and g["confident_wrong"] == 0 and g["absent_ok"] == "3/3"
     assert d["confident_wrong"] > 0 and d["absent_ok"] == "0/3" and d["logprobs"] == "10/10"
@@ -93,13 +101,15 @@ def test_bench_scores_confident_mistakes_and_none_answers():
 
 def test_bench_check_task_runs_on_images():
     res = bench_model(GemmaClient(transport=Oracle()), "good:1", tasks=("check",))["tasks"][0]
-    assert res["n"] == 11 and res["errors"] == 0 and res["correct"] >= 5  # always-yes gets the yes cases
+    assert (
+        res["n"] == 11 and res["errors"] == 0 and res["correct"] >= 5
+    )  # always-yes gets the yes cases
 
 
 def test_tests_never_read_the_developers_own_model_file(monkeypatch):
     """Guard for conftest._isolate_model_roles: your ~/.dobby/models.json must not leak in."""
-    from pathlib import Path
     import os
+    from pathlib import Path
 
-    assert lm.MODELS_FILE != Path(os.path.expanduser("~/.dobby/models.json"))
+    assert Path(os.path.expanduser("~/.dobby/models.json")) != lm.MODELS_FILE
     assert all(lm.source_of(r) == "default" for r in lm.ROLES)

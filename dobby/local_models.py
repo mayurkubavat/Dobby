@@ -1,5 +1,4 @@
-"""
-Which local model does which job: plug-and-play model roles.
+"""Which local model does which job: plug-and-play model roles.
 
 Dobby talks to any model served by Ollama. Instead of one "Gemma" setting,
 each job has a role, and each role can point at a different model:
@@ -29,7 +28,7 @@ import os
 import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from dobby.config import CONFIG
 
@@ -45,39 +44,71 @@ MODELS_FILE = Path(os.path.expanduser("~/.dobby/models.json"))
 
 @dataclass(frozen=True)
 class ModelProfile:
-    tag: str            # Ollama tag
+    tag: str  # Ollama tag
     family: str
     vision: bool
-    approx_gb: float    # download size, roughly
+    approx_gb: float  # download size, roughly
     good_for: str
     notes: str = ""
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
-KNOWN_MODELS: List[ModelProfile] = [
-    ModelProfile("gemma3:4b", "Gemma 3", True, 3.3, "current default for every role",
-                 "overconfident on Set-of-Marks picks; rarely answers 'none'"),
-    ModelProfile("gemma3:12b", "Gemma 3", True, 8.1, "harder text decisions", "slow on a 16 GB Mac"),
-    ModelProfile("qwen2.5vl:3b", "Qwen2.5-VL", True, 3.2, "vision checks, small and fast",
-                 "trained on UI screenshots and grounding"),
+KNOWN_MODELS: list[ModelProfile] = [
+    ModelProfile(
+        "gemma3:4b",
+        "Gemma 3",
+        True,
+        3.3,
+        "current default for every role",
+        "overconfident on Set-of-Marks picks; rarely answers 'none'",
+    ),
+    ModelProfile(
+        "gemma3:12b", "Gemma 3", True, 8.1, "harder text decisions", "slow on a 16 GB Mac"
+    ),
+    ModelProfile(
+        "qwen2.5vl:3b",
+        "Qwen2.5-VL",
+        True,
+        3.2,
+        "vision checks, small and fast",
+        "trained on UI screenshots and grounding",
+    ),
     ModelProfile("qwen2.5vl:7b", "Qwen2.5-VL", True, 6.0, "vision checks, visual_pick"),
-    ModelProfile("qwen3-vl:4b", "Qwen3-VL", True, 3.3, "vision, visual_pick", "needs a recent Ollama"),
-    ModelProfile("qwen3-vl:8b", "Qwen3-VL", True, 6.1, "visual_pick, strongest open UI reader here",
-                 "needs a recent Ollama"),
+    ModelProfile(
+        "qwen3-vl:4b", "Qwen3-VL", True, 3.3, "vision, visual_pick", "needs a recent Ollama"
+    ),
+    ModelProfile(
+        "qwen3-vl:8b",
+        "Qwen3-VL",
+        True,
+        6.1,
+        "visual_pick, strongest open UI reader here",
+        "needs a recent Ollama",
+    ),
     ModelProfile("minicpm-v:8b", "MiniCPM-V", True, 5.5, "vision checks, OCR-heavy crops"),
     ModelProfile("granite3.2-vision:2b", "Granite Vision", True, 2.4, "document/table crops, tiny"),
-    ModelProfile("moondream:1.8b", "Moondream", True, 1.7, "fast yes/no on crops", "weak at multi-choice"),
-    ModelProfile("llama3.2-vision:11b", "Llama 3.2 Vision", True, 7.9, "vision checks", "heavy for 16 GB"),
+    ModelProfile(
+        "moondream:1.8b", "Moondream", True, 1.7, "fast yes/no on crops", "weak at multi-choice"
+    ),
+    ModelProfile(
+        "llama3.2-vision:11b", "Llama 3.2 Vision", True, 7.9, "vision checks", "heavy for 16 GB"
+    ),
     ModelProfile("qwen3:4b", "Qwen3", False, 2.6, "text role", "text only"),
-    ModelProfile("ui-tars-1.5-7b", "UI-TARS", True, 5.0, "visual_pick (GUI agent model)",
-                 "not in the Ollama library: import a GGUF with a Modelfile and use your tag"),
+    ModelProfile(
+        "ui-tars-1.5-7b",
+        "UI-TARS",
+        True,
+        5.0,
+        "visual_pick (GUI agent model)",
+        "not in the Ollama library: import a GGUF with a Modelfile and use your tag",
+    ),
 ]
 
 _lock = threading.Lock()
-_overrides: Dict[str, str] = {}
-_file_cache: Dict[str, Any] = {"mtime": None, "data": {}}
+_overrides: dict[str, str] = {}
+_file_cache: dict[str, Any] = {"mtime": None, "data": {}}
 
 
 def _check(role: str) -> str:
@@ -87,7 +118,7 @@ def _check(role: str) -> str:
     return role
 
 
-def _file_roles(path: Optional[Path] = None) -> Dict[str, str]:
+def _file_roles(path: Path | None = None) -> dict[str, str]:
     path = path or MODELS_FILE
     try:
         mtime = path.stat().st_mtime
@@ -97,7 +128,11 @@ def _file_roles(path: Optional[Path] = None) -> Dict[str, str]:
         if _file_cache["mtime"] != (str(path), mtime):
             try:
                 data = json.loads(path.read_text())
-                data = {k: str(v) for k, v in data.items() if k in ROLES and isinstance(v, str) and v.strip()}
+                data = {
+                    k: str(v)
+                    for k, v in data.items()
+                    if k in ROLES and isinstance(v, str) and v.strip()
+                }
             except (OSError, ValueError, AttributeError):
                 data = {}
             _file_cache.update(mtime=(str(path), mtime), data=data)
@@ -113,7 +148,7 @@ def _config_default(role: str) -> str:
     return CONFIG.gemma3_vision_model
 
 
-def model_for(role: str, models_file: Optional[Path] = None) -> str:
+def model_for(role: str, models_file: Path | None = None) -> str:
     """The Ollama model tag for ``role`` (see the module docstring for precedence)."""
     role = _check(role)
     env = os.environ.get(f"DOBBY_MODEL_{role.upper()}", "").strip()
@@ -128,7 +163,7 @@ def model_for(role: str, models_file: Optional[Path] = None) -> str:
     return _config_default(role)
 
 
-def source_of(role: str, models_file: Optional[Path] = None) -> str:
+def source_of(role: str, models_file: Path | None = None) -> str:
     role = _check(role)
     if os.environ.get(f"DOBBY_MODEL_{role.upper()}", "").strip():
         return "env"
@@ -140,7 +175,7 @@ def source_of(role: str, models_file: Optional[Path] = None) -> str:
     return "config" if getattr(CONFIG, f"model_{role}", "") else "default"
 
 
-def set_role(role: str, model: Optional[str]) -> str:
+def set_role(role: str, model: str | None) -> str:
     """Runtime override for ``role`` (None or "" clears it). Returns the role's model now."""
     role = _check(role)
     with _lock:
@@ -151,7 +186,7 @@ def set_role(role: str, model: Optional[str]) -> str:
     return model_for(role)
 
 
-def roles_table(installed: Optional[set] = None) -> List[Dict[str, Any]]:
+def roles_table(installed: set | None = None) -> list[dict[str, Any]]:
     """Each role with its model, where the choice came from, and whether it is installed."""
     rows = []
     for role in ROLES:
@@ -164,5 +199,5 @@ def roles_table(installed: Optional[set] = None) -> List[Dict[str, Any]]:
     return rows
 
 
-def profile(tag: str) -> Optional[ModelProfile]:
+def profile(tag: str) -> ModelProfile | None:
     return next((p for p in KNOWN_MODELS if p.tag == tag), None)

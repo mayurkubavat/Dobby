@@ -10,25 +10,23 @@ Validates:
 """
 
 import json
-import pytest
 from pathlib import Path
-from dobby.hal.protocols import (
-    IScreenCapture,
-    IInputDriver,
-    IWindowManager,
-    IDesktopHALProtocol,
-)
-from dobby.hal.mock_replay import MockReplayHAL, ScreenFrameState
-from dobby.hal.factory import get_desktop_hal
-from dobby.toolset import ToolSetManager, ToolDefinition, OutputMode
+
+import dobby.server as server
 from dobby.agent_loop.bicameral import (
     BicameralStepController,
     VerificationTier,
-    StepExecutionVerdict,
-    COMPACT_PROMPT_TEMPLATE,
 )
-import dobby.server as server
-from dobby.types import WindowInfo, BoundingBox
+from dobby.hal.factory import get_desktop_hal
+from dobby.hal.mock_replay import MockReplayHAL, ScreenFrameState
+from dobby.hal.protocols import (
+    IDesktopHALProtocol,
+    IInputDriver,
+    IScreenCapture,
+    IWindowManager,
+)
+from dobby.toolset import OutputMode, ToolDefinition, ToolSetManager
+from dobby.types import BoundingBox, WindowInfo
 
 
 def test_hal_protocols_runtime_checkable():
@@ -120,8 +118,12 @@ def test_toolset_manager_profiles_and_capability_gating(tmp_path):
     )
 
     mgr.register_tool(ToolDefinition(name="click", domain="core", description="Click mouse"))
-    mgr.register_tool(ToolDefinition(name="focus_window", domain="window_mgmt", description="Focus window"))
-    mgr.register_tool(ToolDefinition(name="synthesize", domain="eda_vivado", description="Run synthesis"))
+    mgr.register_tool(
+        ToolDefinition(name="focus_window", domain="window_mgmt", description="Focus window")
+    )
+    mgr.register_tool(
+        ToolDefinition(name="synthesize", domain="eda_vivado", description="Run synthesis")
+    )
 
     # Initial profile minimal_computer_use has only 'core'
     schemas = mgr.get_active_mcp_schemas()
@@ -302,7 +304,9 @@ def test_compact_trajectory_history_8_part_invariant():
     ]
     for i in range(1, 20):
         messages.append({"role": "user", "content": f"Turn {i}: Action executed: click button {i}"})
-        messages.append({"role": "assistant", "content": f"Turn {i}: Clicked button {i} successfully."})
+        messages.append(
+            {"role": "assistant", "content": f"Turn {i}: Clicked button {i} successfully."}
+        )
 
     # Total messages: 1 system + 38 turns = 39 messages
     compacted = BicameralStepController.compact_trajectory_history(
@@ -333,7 +337,7 @@ def test_compact_trajectory_history_8_part_invariant():
 
 def test_cursor_state_checkpoint_schema_validation():
     """Verify StateCheckpoint Pydantic model validates structured fields."""
-    from dobby.agent_loop.bicameral import StateCheckpoint, EscalationPredicate
+    from dobby.agent_loop.bicameral import EscalationPredicate, StateCheckpoint
 
     checkpoint = StateCheckpoint(
         user_instructions="Synthesize Vivado top-level module",

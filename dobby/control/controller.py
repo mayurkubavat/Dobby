@@ -7,8 +7,9 @@ import random
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 from . import commands, registry
 from .lease import Agent, ControlSettings, LeaseStore, decide, pid_alive, prune
@@ -42,19 +43,26 @@ class Controller:
     (click then type) keeps the lease across all of them.
     """
 
-    def __init__(self, root: Path, name: str, priority: int = 0,
-                 settings: Optional[ControlSettings] = None,
-                 pid: Optional[int] = None,
-                 clock: Callable[[], float] = time.time,
-                 sleep: Callable[[float], None] = time.sleep,
-                 alive: Callable[[int], bool] = pid_alive,
-                 register: bool = True) -> None:
+    def __init__(
+        self,
+        root: Path,
+        name: str,
+        priority: int = 0,
+        settings: ControlSettings | None = None,
+        pid: int | None = None,
+        clock: Callable[[], float] = time.time,
+        sleep: Callable[[float], None] = time.sleep,
+        alive: Callable[[int], bool] = pid_alive,
+        register: bool = True,
+    ) -> None:
         import os
 
         self.root = Path(root)
         self.settings = settings or ControlSettings()
         pid = os.getpid() if pid is None else pid
-        self.agent = Agent(id=f"{pid}-{uuid.uuid4().hex[:6]}", name=name, pid=pid, priority=priority)
+        self.agent = Agent(
+            id=f"{pid}-{uuid.uuid4().hex[:6]}", name=name, pid=pid, priority=priority
+        )
         self.store = LeaseStore(self.root)
         self._clock = clock
         self._sleep = sleep
@@ -63,10 +71,10 @@ class Controller:
         self._depth = 0  # nested action scopes in this process
         self._tool_scopes = 0  # tool calls in progress
         self._tool_holding = False  # a tool call acquired and keeps the lease busy
-        self._seen_world: Optional[int] = None
+        self._seen_world: int | None = None
         self._name_from_env = name
-        self.on_wait: Optional[Callable[[Optional[Dict[str, Any]]], None]] = None
-        self.on_paused: Optional[Callable[[bool], None]] = None
+        self.on_wait: Callable[[dict[str, Any] | None], None] | None = None
+        self.on_paused: Callable[[bool], None] | None = None
         self._stop_seen = commands.read(self.root, pid)["stop"]
         self._registered = False
         if register:
@@ -75,7 +83,9 @@ class Controller:
     # ------------------------------------------------------------ identity
     def _register(self) -> None:
         try:
-            registry.register(self.root, self.agent.id, self.agent.name, self.agent.pid, self.agent.priority)
+            registry.register(
+                self.root, self.agent.id, self.agent.name, self.agent.pid, self.agent.priority
+            )
             self._registered = True
             atexit.register(self.close)
         except OSError:
@@ -89,7 +99,9 @@ class Controller:
         self.agent.name = name
         if self._registered:
             try:
-                registry.register(self.root, self.agent.id, name, self.agent.pid, self.agent.priority)
+                registry.register(
+                    self.root, self.agent.id, name, self.agent.pid, self.agent.priority
+                )
             except OSError:
                 pass
 
@@ -104,7 +116,7 @@ class Controller:
             self._registered = False
 
     # --------------------------------------------------------------- lease
-    def _try(self) -> tuple[bool, str, Dict[str, Any]]:
+    def _try(self) -> tuple[bool, str, dict[str, Any]]:
         now = self._clock()
         with self.store.transaction() as state:
             prev = state.get("last_holder")
@@ -122,7 +134,7 @@ class Controller:
         with self.store.transaction() as state:
             state.setdefault("waiters", {}).pop(self.agent.id, None)
 
-    def acquire(self, max_wait: Optional[float] = None) -> Dict[str, Any]:
+    def acquire(self, max_wait: float | None = None) -> dict[str, Any]:
         """Block until this agent holds the lease (marked busy), or raise ``ControlBusy``."""
         wait = self.settings.max_wait if max_wait is None else max_wait
         deadline = self._clock() + wait
@@ -151,7 +163,7 @@ class Controller:
                 )
             self._sleep(self.settings.poll * (0.75 + random.random() * 0.5))
 
-    def _check_world(self, info: Dict[str, Any]) -> None:
+    def _check_world(self, info: dict[str, Any]) -> None:
         world = info["world"]
         seen = self._seen_world
         self._seen_world = world
@@ -180,8 +192,10 @@ class Controller:
         cmd = commands.read(self.root, self.agent.pid)
         if cmd["stop"] > self._stop_seen:
             self._stop_seen = cmd["stop"]
-            raise ControlStopped("Stopped by the person from the Dobby menu. Do not retry this task "
-                                 "unless they ask again.")
+            raise ControlStopped(
+                "Stopped by the person from the Dobby menu. Do not retry this task "
+                "unless they ask again."
+            )
         if not cmd["paused"]:
             return
         holding = self._depth > 0
@@ -220,7 +234,7 @@ class Controller:
             if self._depth == 0:
                 self._finish()
 
-    def action(self) -> "_ActionScope":
+    def action(self) -> _ActionScope:
         return _ActionScope(self)
 
     def tool_scope(self):
@@ -230,12 +244,15 @@ class Controller:
 
     def ensure_registered(self) -> None:
         """Put this agent's registry file back if something removed it, so the
-        other Dobbys and the overlay keep counting this one as an agent."""
+        other Dobbys and the overlay keep counting this one as an agent.
+        """
         if not self._registered:
             return
         try:
             if not registry.is_registered(self.root, self.agent.pid):
-                registry.register(self.root, self.agent.id, self.agent.name, self.agent.pid, self.agent.priority)
+                registry.register(
+                    self.root, self.agent.id, self.agent.name, self.agent.pid, self.agent.priority
+                )
         except OSError:
             pass
 
@@ -258,7 +275,7 @@ class Controller:
                     return True
             return False
 
-    def hold(self, seconds: float) -> Dict[str, Any]:
+    def hold(self, seconds: float) -> dict[str, Any]:
         """Keep the lease for ``seconds`` (capped) even when idle or past the slice."""
         secs = max(0.0, min(float(seconds), self.settings.hold_cap))
         with self._lock:
@@ -280,22 +297,37 @@ class Controller:
             if holder is not None and holder.get("id") == self.agent.id:
                 holder.update(busy=False, last=now)
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         now = self._clock()
         with self.store.transaction() as state:
             prune(state, now, self.settings, self._alive)
             holder = state.get("holder")
-            waiters = sorted(state.get("waiters", {}).values(), key=lambda w: float(w.get("since", now)))
-            out: Dict[str, Any] = {
+            waiters = sorted(
+                state.get("waiters", {}).values(), key=lambda w: float(w.get("since", now))
+            )
+            out: dict[str, Any] = {
                 "you": {"name": self.agent.name, "priority": self.agent.priority},
                 "you_hold_control": bool(holder and holder.get("id") == self.agent.id),
                 "holder": None,
-                "waiting": [{"name": w.get("name"), "priority": w.get("priority", 0),
-                             "waiting_s": round(now - float(w.get("since", now)), 1)} for w in waiters],
+                "waiting": [
+                    {
+                        "name": w.get("name"),
+                        "priority": w.get("priority", 0),
+                        "waiting_s": round(now - float(w.get("since", now)), 1),
+                    }
+                    for w in waiters
+                ],
                 "epoch": state.get("epoch", 0),
-                "agents": [{"name": a.get("name"), "pid": a.get("pid")} for a in registry.list_agents(self.root)],
-                "rules": {"idle_grace_s": self.settings.idle_grace, "slice_s": self.settings.slice,
-                          "max_wait_s": self.settings.max_wait, "preempt": self.settings.preempt},
+                "agents": [
+                    {"name": a.get("name"), "pid": a.get("pid")}
+                    for a in registry.list_agents(self.root)
+                ],
+                "rules": {
+                    "idle_grace_s": self.settings.idle_grace,
+                    "slice_s": self.settings.slice,
+                    "max_wait_s": self.settings.max_wait,
+                    "preempt": self.settings.preempt,
+                },
             }
             if holder:
                 out["holder"] = {
@@ -310,7 +342,8 @@ class Controller:
 
 class _ActionScope:
     """One HAL action. Inside a tool call the first action acquires and the
-    lease stays busy until the tool returns; outside, each action stands alone."""
+    lease stays busy until the tool returns; outside, each action stands alone.
+    """
 
     def __init__(self, ctl: Controller) -> None:
         self.ctl = ctl
@@ -340,7 +373,7 @@ class _LazyToolScope:
     def __init__(self, ctl: Controller) -> None:
         self.ctl = ctl
 
-    def __enter__(self) -> "_LazyToolScope":
+    def __enter__(self) -> _LazyToolScope:
         with self.ctl._lock:
             self.ctl._tool_scopes += 1
         return self

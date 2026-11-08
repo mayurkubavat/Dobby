@@ -7,7 +7,7 @@ or Xlib.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from dobby.types import DisplayTopology, WindowInfo
 
@@ -16,11 +16,11 @@ from dobby.types import DisplayTopology, WindowInfo
 class IScreenCapture(Protocol):
     """Display capture and resolution metrics."""
 
-    def get_screen_size(self) -> Tuple[int, int]:
+    def get_screen_size(self) -> tuple[int, int]:
         """Primary screen size as (width, height) in logical points."""
         ...
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Any:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Any:
         """Captures the display or a sub-region. Region is (x, y, width, height)."""
         ...
 
@@ -29,7 +29,7 @@ class IScreenCapture(Protocol):
 class IInputDriver(Protocol):
     """Low-level mouse and keyboard input in logical global points."""
 
-    def get_cursor_position(self) -> Tuple[int, int]:
+    def get_cursor_position(self) -> tuple[int, int]:
         """Current pointer in logical global points."""
         ...
 
@@ -59,7 +59,7 @@ class IInputDriver(Protocol):
         """Presses and releases one key."""
         ...
 
-    def keyboard_hotkey(self, keys: List[str]) -> None:
+    def keyboard_hotkey(self, keys: list[str]) -> None:
         """Presses a chord and releases it in reverse order."""
         ...
 
@@ -68,11 +68,11 @@ class IInputDriver(Protocol):
 class IWindowManager(Protocol):
     """Window enumeration and focus."""
 
-    def list_windows(self) -> List[WindowInfo]:
+    def list_windows(self) -> list[WindowInfo]:
         """Top-level windows."""
         ...
 
-    def get_active_window(self) -> Optional[WindowInfo]:
+    def get_active_window(self) -> WindowInfo | None:
         """Focused top-level window, if any."""
         ...
 
@@ -87,10 +87,10 @@ class IAXTreeDriver(Protocol):
 
     def get_accessibility_tree(
         self,
-        app_filter: Optional[str] = None,
-        max_depth: Optional[int] = None,
+        app_filter: str | None = None,
+        max_depth: int | None = None,
         diff_only: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Returns the accessibility tree, or a diff when diff_only is set."""
         ...
 
@@ -111,7 +111,7 @@ class IQuiescenceMonitor(Protocol):
         initial_timeout_ms: int = 1500,
         max_total_timeout_ms: int = 15000,
         poll_interval_sec: float = 0.025,
-    ) -> Tuple[Any, float, int]:
+    ) -> tuple[Any, float, int]:
         """Returns (phase, elapsed_ms, dirty_area)."""
         ...
 
@@ -119,6 +119,7 @@ class IQuiescenceMonitor(Protocol):
 @runtime_checkable
 class IDesktopHALProtocol(IScreenCapture, IInputDriver, IWindowManager, Protocol):
     """Capture, input, and windows. AX and quiescence stay separate."""
+
     ...
 
 

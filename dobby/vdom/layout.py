@@ -1,5 +1,4 @@
-"""
-Dynamic Anchor-Relative Sub-Pane Resolution Engine.
+"""Dynamic Anchor-Relative Sub-Pane Resolution Engine.
 
 Calculates exact sub-pane bounding boxes dynamically relative to persistent UI anchors
 (e.g., sash dividers, tab headers, status bar) rather than static pixel coordinates.
@@ -7,12 +6,11 @@ Resilient to window resizing, display scaling, and docking panel shifts.
 """
 
 import logging
-from typing import Optional
 
 from dobby.types import (
-    BoundingBox,
     AnchorEdge,
     BoundaryConstraint,
+    BoundingBox,
     SubPaneLayoutSpec,
 )
 from dobby.vdom.query import VDOMQueryEngine
@@ -21,27 +19,25 @@ logger = logging.getLogger(__name__)
 
 
 class SubPaneLayoutSolver:
-    """
-    Solves sub-pane bounding geometries dynamically from vDOM topological anchors.
-    """
+    """Solves sub-pane bounding geometries dynamically from vDOM topological anchors."""
 
     def resolve_edge(
         self,
-        constraint: Optional[BoundaryConstraint],
+        constraint: BoundaryConstraint | None,
         vdom_engine: VDOMQueryEngine,
         default_val: int,
         axis: str,
         win_bbox: BoundingBox,
     ) -> int:
-        """
-        Resolves a single spatial boundary coordinate from a topological constraint.
-        """
+        """Resolves a single spatial boundary coordinate from a topological constraint."""
         if not constraint:
             return default_val
 
         matches = vdom_engine.query_selector(constraint.anchor_selector, limit=1)
         if not matches:
-            logger.debug(f"Anchor selector '{constraint.anchor_selector}' not found in vDOM; using default {default_val}")
+            logger.debug(
+                f"Anchor selector '{constraint.anchor_selector}' not found in vDOM; using default {default_val}"
+            )
             return default_val
 
         anchor = matches[0]
@@ -69,9 +65,7 @@ class SubPaneLayoutSolver:
         vdom_engine: VDOMQueryEngine,
         win_bbox: BoundingBox,
     ) -> BoundingBox:
-        """
-        Resolves full 2D bounding box for the target sub-pane relative to active window and vDOM.
-        """
+        """Resolves full 2D bounding box for the target sub-pane relative to active window and vDOM."""
         top_y = self.resolve_edge(
             spec.top_constraint,
             vdom_engine,
@@ -106,7 +100,9 @@ class SubPaneLayoutSolver:
 
         # If constraints yielded degenerate geometry, use fallback ROI if available
         if (width <= 10 or height <= 10) and spec.fallback_roi is not None:
-            logger.debug(f"Dynamic resolution for '{spec.pane_id}' produced degenerate box ({width}x{height}); falling back to static ROI")
+            logger.debug(
+                f"Dynamic resolution for '{spec.pane_id}' produced degenerate box ({width}x{height}); falling back to static ROI"
+            )
             return spec.fallback_roi.compute_bbox(win_bbox)
 
         return BoundingBox(

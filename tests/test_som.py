@@ -1,8 +1,9 @@
 """Tests for Set-of-Marks (SoM) overlay generator."""
 
 from PIL import Image
+
 from dobby.perception.som import SetOfMarksGenerator
-from dobby.types import UIElement, BoundingBox
+from dobby.types import BoundingBox, UIElement
 
 
 def test_som_annotation_and_mapping():

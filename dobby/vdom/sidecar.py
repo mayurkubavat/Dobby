@@ -1,43 +1,39 @@
-"""
-Local Neural Grounding Sidecar & Shared Memory IPC Pipeline.
+"""Local Neural Grounding Sidecar & Shared Memory IPC Pipeline.
 
 Facilitates sub-60ms element proposals via POSIX shared memory (/dev/shm)
 and local neural/CV inference without cloud token overhead.
 """
 
-import os
-import mmap
-import time
 import logging
-from typing import List, Dict, Any, Optional, Tuple
-from PIL import Image
+import os
+from typing import Any
+
 import numpy as np
+from PIL import Image
 
 from dobby.config import CONFIG
-from dobby.types import BoundingBox
-from dobby.vdom.gemma3_sidecar import Gemma3Grounder
 from dobby.vdom.fast_detector import FastONNXUIDetector
+from dobby.vdom.gemma3_sidecar import Gemma3Grounder
 
 logger = logging.getLogger(__name__)
 
 
 class LocalNeuralGrounder:
-    """
-    Local grounding sidecar interfacing with POSIX shared memory (/dev/shm)
+    """Local grounding sidecar interfacing with POSIX shared memory (/dev/shm)
     and running sub-20ms neural/CV visual proposals and local Gemma 3 VLM grounding.
     """
 
     def __init__(
         self,
         shm_path: str = CONFIG.vdom_sidecar_shm_path,
-        onnx_model_path: Optional[str] = None,
+        onnx_model_path: str | None = None,
         enable_fast_onnx: bool = CONFIG.enable_fast_onnx_detector,
         enable_gemma3: bool = CONFIG.enable_gemma3_sidecar,
     ) -> None:
         self.shm_path = shm_path
         self.onnx_model_path = onnx_model_path or CONFIG.fast_onnx_model_path
         self.enable_fast_onnx = enable_fast_onnx
-        self.fast_detector: Optional[FastONNXUIDetector] = None
+        self.fast_detector: FastONNXUIDetector | None = None
         self._onnx_session = None
         self.enable_gemma3 = enable_gemma3
         self.gemma3_grounder = Gemma3Grounder() if enable_gemma3 else None
@@ -68,24 +64,27 @@ class LocalNeuralGrounder:
     def _init_onnx(self) -> None:
         try:
             import onnxruntime as ort
+
             sess_opts = ort.SessionOptions()
             sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
             available = ort.get_available_providers()
-            providers = [p for p in ["CUDAExecutionProvider", "CPUExecutionProvider"] if p in available] or ["CPUExecutionProvider"]
+            providers = [
+                p for p in ["CUDAExecutionProvider", "CPUExecutionProvider"] if p in available
+            ] or ["CPUExecutionProvider"]
             self._onnx_session = ort.InferenceSession(
                 self.onnx_model_path,
                 sess_options=sess_opts,
                 providers=providers,
             )
-            logger.info(f"Loaded ONNX model from '{self.onnx_model_path}' with providers {self._onnx_session.get_providers()}")
+            logger.info(
+                f"Loaded ONNX model from '{self.onnx_model_path}' with providers {self._onnx_session.get_providers()}"
+            )
         except Exception as e:
             logger.warning(f"Could not initialize ONNX runtime: {e}")
             self._onnx_session = None
 
     def write_frame_to_shm(self, image: Image.Image) -> bool:
-        """
-        Writes raw RGB/RGBA frame to POSIX shared memory buffer for zero-copy DMA IPC.
-        """
+        """Writes raw RGB/RGBA frame to POSIX shared memory buffer for zero-copy DMA IPC."""
         try:
             arr = np.array(image)
             raw_bytes = arr.tobytes()
@@ -101,10 +100,9 @@ class LocalNeuralGrounder:
     def generate_proposals(
         self,
         image: Image.Image,
-        offset: Tuple[int, int] = (0, 0),
-    ) -> List[Dict[str, Any]]:
-        """
-        Generates fast UI element bounding box proposals (< 20ms) from the given image frame.
+        offset: tuple[int, int] = (0, 0),
+    ) -> list[dict[str, Any]]:
+        """Generates fast UI element bounding box proposals (< 20ms) from the given image frame.
         Uses neural inference via FastONNXUIDetector if available, with graceful fallback to OpenCV contouring.
         """
         if self.fast_detector and self.fast_detector.is_available():
@@ -125,12 +123,11 @@ class LocalNeuralGrounder:
     def ground_subpane(
         self,
         image: Image.Image,
-        offset: Tuple[int, int] = (0, 0),
+        offset: tuple[int, int] = (0, 0),
         anchor_id: str = "default",
         task_intent: str = "ground_ui",
-    ) -> List[Dict[str, Any]]:
-        """
-        Detector boxes for a sub-pane ROI, named by local Gemma where possible.
+    ) -> list[dict[str, Any]]:
+        """Detector boxes for a sub-pane ROI, named by local Gemma where possible.
 
         Geometry always comes from the ONNX/CV detector. Gemma only labels the
         numbered boxes (Set-of-Marks), so a Gemma failure just leaves names empty.
@@ -139,7 +136,8 @@ class LocalNeuralGrounder:
         proposals = self.generate_proposals(image, offset=(0, 0))
         if self.enable_gemma3 and self.gemma3_grounder and proposals:
             boxes = [
-                (p["bbox"]["x"], p["bbox"]["y"], p["bbox"]["width"], p["bbox"]["height"]) for p in proposals
+                (p["bbox"]["x"], p["bbox"]["y"], p["bbox"]["width"], p["bbox"]["height"])
+                for p in proposals
             ]
             labels = self.gemma3_grounder.marks.label_marks(image, boxes, app_key=anchor_id)
             for i, info in labels.items():
@@ -151,7 +149,9 @@ class LocalNeuralGrounder:
             p["bbox"] = {**p["bbox"], "x": p["bbox"]["x"] + ox, "y": p["bbox"]["y"] + oy}
         return proposals
 
-    def _run_onnx_inference(self, image: Image.Image, offset: Tuple[int, int]) -> List[Dict[str, Any]]:
+    def _run_onnx_inference(
+        self, image: Image.Image, offset: tuple[int, int]
+    ) -> list[dict[str, Any]]:
         """Runs batched ONNX tensor inference on the frame."""
         if self.fast_detector and self.fast_detector.is_available():
             proposals = self.fast_detector.detect(image, offset=offset)
@@ -162,16 +162,15 @@ class LocalNeuralGrounder:
     def _generate_cv_proposals(
         self,
         image: Image.Image,
-        offset: Tuple[int, int] = (0, 0),
-    ) -> List[Dict[str, Any]]:
-        """
-        Extracts candidate button, icon, and input regions using OpenCV edge and gradient morphology.
-        """
+        offset: tuple[int, int] = (0, 0),
+    ) -> list[dict[str, Any]]:
+        """Extracts candidate button, icon, and input regions using OpenCV edge and gradient morphology."""
         ox, oy = offset
-        proposals: List[Dict[str, Any]] = []
+        proposals: list[dict[str, Any]] = []
 
         try:
             import cv2
+
             img_np = np.array(image.convert("RGB"))
             gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
             h, w = gray.shape
@@ -192,19 +191,27 @@ class LocalNeuralGrounder:
                     continue
 
                 # Classify rough type based on aspect ratio
-                class_name = "icon_button" if (bw <= 36 and bh <= 36) else "text_input" if bw > bh * 3 else "push_button"
+                class_name = (
+                    "icon_button"
+                    if (bw <= 36 and bh <= 36)
+                    else "text_input"
+                    if bw > bh * 3
+                    else "push_button"
+                )
 
-                proposals.append({
-                    "bbox": {
-                        "x": ox + x,
-                        "y": oy + y,
-                        "width": bw,
-                        "height": bh,
-                    },
-                    "confidence": 0.82,
-                    "class_name": class_name,
-                    "text": "",
-                })
+                proposals.append(
+                    {
+                        "bbox": {
+                            "x": ox + x,
+                            "y": oy + y,
+                            "width": bw,
+                            "height": bh,
+                        },
+                        "confidence": 0.82,
+                        "class_name": class_name,
+                        "text": "",
+                    }
+                )
 
         except Exception as e:
             logger.debug(f"Error in CV proposal generator: {e}")

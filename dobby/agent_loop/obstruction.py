@@ -1,5 +1,4 @@
-"""
-Autonomous Obstruction and Semantic Modal Dialog Triage & Policy Router.
+"""Autonomous Obstruction and Semantic Modal Dialog Triage & Policy Router.
 
 Replaces naive auto-clicking with risk-aware semantic triage:
 - Tier 0 (BENIGN_DISMISSIBLE): Auto-dismisses tips, cookie consent banners, telemetry prompts.
@@ -8,33 +7,31 @@ Replaces naive auto-clicking with risk-aware semantic triage:
 - Tier 3 (DESTRUCTIVE_OR_SYSTEM): Blocks execution on license failures or destructive file mutations.
 """
 
+import logging
 import re
 import time
-import logging
-from typing import Optional, Dict, Any, List, Tuple, Callable
+from collections.abc import Callable
+from typing import Any
 
 from dobby.hal.base import IDesktopHAL
 from dobby.perception.atspi import ATSPIInspector
 from dobby.perception.ax import get_accessibility_inspector
 from dobby.types import (
-    UIElement,
-    BoundingBox,
-    ModalRiskTier,
     ModalButtonOption,
     ModalEscalationPayload,
+    ModalRiskTier,
     ModalTriageResult,
+    UIElement,
 )
 
 logger = logging.getLogger(__name__)
 
 # (dialog_text, button_labels) -> {"risk_tier", "suggested_button", "confidence", "reason", "source"}
-ModalClassifier = Callable[[str, List[str]], Dict[str, Any]]
+ModalClassifier = Callable[[str, list[str]], dict[str, Any]]
 
 
 class SemanticModalRouter:
-    """
-    Classifies modal dialogs into risk tiers and routes execution policy.
-    """
+    """Classifies modal dialogs into risk tiers and routes execution policy."""
 
     DESTRUCTIVE_KEYWORDS = re.compile(
         r"\b(overwrite|delete|remove|discard|lose changes|force|corrupt|license|flexlm|expired|terminate|kill|reset project|drop)\b",
@@ -55,16 +52,27 @@ class SemanticModalRouter:
 
     # Buttons a model verdict may ever press on its own. Anything else escalates.
     SAFE_DISMISS_LABELS = {
-        "ok", "close", "got it", "dismiss", "x", "no thanks", "acknowledge", "not now", "later", "skip",
+        "ok",
+        "close",
+        "got it",
+        "dismiss",
+        "x",
+        "no thanks",
+        "acknowledge",
+        "not now",
+        "later",
+        "skip",
     }
 
-    def __init__(self, classifier: Optional[ModalClassifier] = None, min_confidence: float = 0.8) -> None:
+    def __init__(
+        self, classifier: ModalClassifier | None = None, min_confidence: float = 0.8
+    ) -> None:
         self.classifier = classifier
         self.min_confidence = min_confidence
         self.last_source = "rules"
-        self.last_reason: Optional[str] = None
+        self.last_reason: str | None = None
 
-    def _ask_classifier(self, text: str, buttons: List[ModalButtonOption]) -> Optional[Dict[str, Any]]:
+    def _ask_classifier(self, text: str, buttons: list[ModalButtonOption]) -> dict[str, Any] | None:
         if self.classifier is None:
             return None
         try:
@@ -80,10 +88,9 @@ class SemanticModalRouter:
         self,
         window_title: str,
         body_text: str,
-        buttons: List[ModalButtonOption],
-    ) -> Tuple[ModalRiskTier, Optional[ModalButtonOption], Optional[ModalEscalationPayload]]:
-        """
-        Evaluates dialog title, body text, and button options to determine policy.
+        buttons: list[ModalButtonOption],
+    ) -> tuple[ModalRiskTier, ModalButtonOption | None, ModalEscalationPayload | None]:
+        """Evaluates dialog title, body text, and button options to determine policy.
 
         Returns:
             Tuple of (risk_tier, auto_click_button_if_safe, escalation_payload_if_unsafe).
@@ -112,7 +119,11 @@ class SemanticModalRouter:
         # 2. Tier 0: Benign dismissible dialogs (Tips, cookies, telemetry)
         if self.BENIGN_TITLES.search(combined_text):
             safe_btn = next(
-                (b for b in buttons if b.label.lower() in {"close", "ok", "got it", "dismiss", "x", "no thanks"}),
+                (
+                    b
+                    for b in buttons
+                    if b.label.lower() in {"close", "ok", "got it", "dismiss", "x", "no thanks"}
+                ),
                 None,
             )
             if safe_btn:
@@ -137,7 +148,8 @@ class SemanticModalRouter:
                 if tier_value == ModalRiskTier.DESTRUCTIVE_OR_SYSTEM.value:
                     for b in buttons:
                         b.inferred_consequence = (
-                            "Safe abort" if re.search(r"\b(cancel|no|abort|exit)\b", b.label, re.IGNORECASE)
+                            "Safe abort"
+                            if re.search(r"\b(cancel|no|abort|exit)\b", b.label, re.IGNORECASE)
                             else "Destructive state mutation (model verdict)"
                         )
                     payload = ModalEscalationPayload(
@@ -151,7 +163,8 @@ class SemanticModalRouter:
                 suggested = (verdict.get("suggested_button") or "").lower().strip()
                 confident = float(verdict.get("confidence") or 0.0) >= self.min_confidence
                 if (
-                    tier_value in (ModalRiskTier.BENIGN_DISMISSIBLE.value, ModalRiskTier.INFORMATIVE_ACK.value)
+                    tier_value
+                    in (ModalRiskTier.BENIGN_DISMISSIBLE.value, ModalRiskTier.INFORMATIVE_ACK.value)
                     and confident
                     and suggested in self.SAFE_DISMISS_LABELS
                 ):
@@ -165,7 +178,9 @@ class SemanticModalRouter:
             lbl = b.label.lower()
             if any(kw in lbl for kw in {"cancel", "no", "abort", "discard", "leave"}):
                 b.inferred_consequence = "Preserve current state"
-            elif any(kw in lbl for kw in {"save", "yes", "re-run", "launch", "apply", "run", "continue"}):
+            elif any(
+                kw in lbl for kw in {"save", "yes", "re-run", "launch", "apply", "run", "continue"}
+            ):
                 b.inferred_consequence = "Mutate workflow path"
             else:
                 b.inferred_consequence = "Branching choice"
@@ -180,8 +195,7 @@ class SemanticModalRouter:
 
 
 class ObstructionInterceptor:
-    """
-    Intelligent modal dialog interceptor and policy coordinator.
+    """Intelligent modal dialog interceptor and policy coordinator.
     Scans for blocking dialogs, classifies their risk tier, auto-dismisses safe dialogs,
     and escalates critical/branching choices to the orchestrator.
     """
@@ -189,19 +203,20 @@ class ObstructionInterceptor:
     def __init__(
         self,
         hal: IDesktopHAL,
-        atspi_inspector: Optional[ATSPIInspector] = None,
-        modal_classifier: Optional[ModalClassifier] = None,
+        atspi_inspector: ATSPIInspector | None = None,
+        modal_classifier: ModalClassifier | None = None,
         min_confidence: float = 0.8,
     ) -> None:
         self.hal = hal
         self.atspi = atspi_inspector or get_accessibility_inspector()
-        self.router = SemanticModalRouter(classifier=modal_classifier, min_confidence=min_confidence)
-        self.pending_escalation: Optional[ModalEscalationPayload] = None
-        self.pending_buttons: Dict[str, ModalButtonOption] = {}
+        self.router = SemanticModalRouter(
+            classifier=modal_classifier, min_confidence=min_confidence
+        )
+        self.pending_escalation: ModalEscalationPayload | None = None
+        self.pending_buttons: dict[str, ModalButtonOption] = {}
 
-    def inspect_active_dialog(self) -> Optional[Tuple[str, str, List[ModalButtonOption]]]:
-        """
-        Inspects the accessibility tree and window manager for active modal dialogs.
+    def inspect_active_dialog(self) -> tuple[str, str, list[ModalButtonOption]] | None:
+        """Inspects the accessibility tree and window manager for active modal dialogs.
         Returns (window_title, body_text, buttons) if a dialog is present, else None.
         """
         # 1. Check window hierarchy for transient dialog windows
@@ -213,7 +228,16 @@ class ObstructionInterceptor:
             # Check if active window is clearly an alert or dialog
             is_dialog_win = any(
                 kw in active_title.lower()
-                for kw in ["dialog", "alert", "warning", "error", "question", "confirm", "tip", "notice"]
+                for kw in [
+                    "dialog",
+                    "alert",
+                    "warning",
+                    "error",
+                    "question",
+                    "confirm",
+                    "tip",
+                    "notice",
+                ]
             )
         except Exception:
             active_title = ""
@@ -227,9 +251,9 @@ class ObstructionInterceptor:
         if not elements:
             return None
 
-        dialog_elements: List[UIElement] = []
-        body_texts: List[str] = []
-        button_options: List[ModalButtonOption] = []
+        dialog_elements: list[UIElement] = []
+        body_texts: list[str] = []
+        button_options: list[ModalButtonOption] = []
         dialog_title = active_title
 
         # Look for dialog containers
@@ -274,8 +298,7 @@ class ObstructionInterceptor:
         return (dialog_title or "System Dialog", body_str, button_options)
 
     def triage_and_resolve(self) -> ModalTriageResult:
-        """
-        Performs semantic triage on active obstructions.
+        """Performs semantic triage on active obstructions.
         Auto-resolves safe dialogs, or halts and returns an escalation payload.
         """
         inspection = self.inspect_active_dialog()
@@ -346,19 +369,17 @@ class ObstructionInterceptor:
 
     def resolve_pending_modal(
         self,
-        button_id: Optional[str] = None,
-        button_label: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Executes explicit orchestrator choice on an escalated modal.
-        """
+        button_id: str | None = None,
+        button_label: str | None = None,
+    ) -> dict[str, Any]:
+        """Executes explicit orchestrator choice on an escalated modal."""
         if not self.pending_escalation or not self.pending_buttons:
             return {
                 "success": False,
                 "error": "No escalated modal dialog is currently pending decision",
             }
 
-        target_btn: Optional[ModalButtonOption] = None
+        target_btn: ModalButtonOption | None = None
 
         if button_id and button_id in self.pending_buttons:
             target_btn = self.pending_buttons[button_id]
@@ -373,7 +394,9 @@ class ObstructionInterceptor:
                     break
 
         if not target_btn:
-            available = [f"{b.button_id} ('{b.label}')" for b in self.pending_escalation.detected_buttons]
+            available = [
+                f"{b.button_id} ('{b.label}')" for b in self.pending_escalation.detected_buttons
+            ]
             return {
                 "success": False,
                 "error": f"Button '{button_id or button_label}' not found on dialog. Available: {', '.join(available)}",
@@ -395,24 +418,35 @@ class ObstructionInterceptor:
             "message": f"Successfully resolved modal dialog by clicking '{target_btn.label}'",
         }
 
-    def find_obstructions(self) -> List[UIElement]:
+    def find_obstructions(self) -> list[UIElement]:
         """Backward-compatible scan returning dismissal button candidates."""
         if not self.atspi.is_available:
             return []
 
         elements = self.atspi.inspect_desktop(filter_interactable=True)
-        dismiss_keywords = ["block", "dismiss", "close", "cancel", "not now", "reject", "got it", "x"]
+        dismiss_keywords = [
+            "block",
+            "dismiss",
+            "close",
+            "cancel",
+            "not now",
+            "reject",
+            "got it",
+            "x",
+        ]
         candidates = []
 
         for elem in elements:
             name_lower = (elem.name or "").lower().strip()
-            if elem.interactable and any(kw == name_lower or f" {kw} " in f" {name_lower} " for kw in dismiss_keywords):
+            if elem.interactable and any(
+                kw == name_lower or f" {kw} " in f" {name_lower} " for kw in dismiss_keywords
+            ):
                 candidates.append(elem)
 
         return candidates
 
     # Backward compatibility
-    def dismiss_if_present(self, max_attempts: int = 2) -> Dict[str, Any]:
+    def dismiss_if_present(self, max_attempts: int = 2) -> dict[str, Any]:
         """Backward-compatible wrapper mapping to triage_and_resolve."""
         result = self.triage_and_resolve()
         if result.detected and result.auto_dismissed:
@@ -432,7 +466,9 @@ class ObstructionInterceptor:
             time.sleep(0.1)
             return {
                 "obstruction_cleared": True,
-                "actions_taken": [f"Clicked dismissal button '{target.name}' at {target.bbox.center}"],
+                "actions_taken": [
+                    f"Clicked dismissal button '{target.name}' at {target.bbox.center}"
+                ],
                 "attempts": 1,
                 "triage_result": result.model_dump(),
             }

@@ -16,13 +16,14 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from PIL import Image, ImageChops, ImageStat
 
 # Snapshot callback: returns a frame dict (without frame_id) and an optional image.
-SnapshotFn = Callable[[], "tuple[Dict[str, Any], Optional[Image.Image]]"]
+SnapshotFn = Callable[[], "tuple[dict[str, Any], Image.Image | None]"]
 
 INPUT_ACTIONS = (
     "mouse_move",
@@ -42,7 +43,7 @@ def sanitize_name(name: str) -> str:
     return clean[:64] or "cassette"
 
 
-def pixel_delta(a: Optional[Image.Image], b: Optional[Image.Image]) -> float:
+def pixel_delta(a: Image.Image | None, b: Image.Image | None) -> float:
     """Fraction of pixels (0..1, coarse) that changed between two frames."""
     if a is None or b is None:
         return 0.0
@@ -72,12 +73,12 @@ class LiveCassetteRecorder:
         self.capture_images = capture_images
         self.settle_ms = max(0, int(settle_ms))
         self._sleep = sleep
-        self.frames: List[Dict[str, Any]] = []
-        self.transitions: List[Dict[str, Any]] = []
-        self.errors: List[str] = []
-        self._images: Dict[str, Image.Image] = {}
-        self._last_image: Optional[Image.Image] = None
-        self.started_at: Optional[float] = None
+        self.frames: list[dict[str, Any]] = []
+        self.transitions: list[dict[str, Any]] = []
+        self.errors: list[str] = []
+        self._images: dict[str, Image.Image] = {}
+        self._last_image: Image.Image | None = None
+        self.started_at: float | None = None
         self.active = False
 
     # ------------------------------------------------------------------ frames
@@ -92,7 +93,9 @@ class LiveCassetteRecorder:
         frame = dict(frame)
         frame["frame_id"] = frame_id
         frame.setdefault("phase", "QUIESCENT")
-        frame["pixel_delta_from_prev"] = pixel_delta(self._last_image, image) if self.frames else 0.0
+        frame["pixel_delta_from_prev"] = (
+            pixel_delta(self._last_image, image) if self.frames else 0.0
+        )
         if image is not None:
             self._last_image = image
             if self.capture_images:
@@ -103,7 +106,7 @@ class LiveCassetteRecorder:
 
     # ----------------------------------------------------------------- control
 
-    def start(self) -> Dict[str, Any]:
+    def start(self) -> dict[str, Any]:
         if self.root.exists() and (self.root / "index.json").exists():
             raise FileExistsError(f"cassette '{self.name}' already exists at {self.root}")
         self.started_at = time.time()
@@ -111,7 +114,7 @@ class LiveCassetteRecorder:
         first = self._snapshot()
         return {"name": self.name, "path": str(self.root), "first_frame": first}
 
-    def after_action(self, action: str, args: Dict[str, Any]) -> Optional[str]:
+    def after_action(self, action: str, args: dict[str, Any]) -> str | None:
         """Called by the session after an input action has been sent."""
         if not self.active or not self.frames:
             return None
@@ -124,7 +127,7 @@ class LiveCassetteRecorder:
         )
         return post
 
-    def payload(self) -> Dict[str, Any]:
+    def payload(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "recorded_at": self.started_at,
@@ -132,7 +135,7 @@ class LiveCassetteRecorder:
             "transitions": self.transitions,
         }
 
-    def stop(self) -> Dict[str, Any]:
+    def stop(self) -> dict[str, Any]:
         """Writes the cassette folder and returns a summary."""
         self.active = False
         self.root.mkdir(parents=True, exist_ok=True)

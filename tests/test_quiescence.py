@@ -4,30 +4,31 @@ Tests X11QuiescenceMonitor, PostConditionContract, and FeedbackLoopController qu
 """
 
 import os
-import pytest
-from unittest.mock import MagicMock, patch
 
-from dobby.hal.quiescence import X11QuiescenceMonitor
-from dobby.types import (
-    ExecutionPhase,
-    StateAssertionType,
-    PostConditionAssertion,
-    PostConditionContract,
-    BoundingBox,
-    WindowInfo,
-    UIElement,
-)
+import pytest
+
 from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.hal.base import IDesktopHAL
+from dobby.hal.quiescence import X11QuiescenceMonitor
+from dobby.types import (
+    BoundingBox,
+    ExecutionPhase,
+    PostConditionAssertion,
+    PostConditionContract,
+    StateAssertionType,
+    WindowInfo,
+)
 
 
 class MockHAL(IDesktopHAL):
     """Mock Desktop HAL for deterministic unit testing."""
+
     def get_screen_size(self):
         return (1920, 1080)
 
     def capture_screen(self, region=None):
         from PIL import Image
+
         return Image.new("RGB", (100, 100), color="white")
 
     def get_cursor_position(self):

@@ -72,25 +72,44 @@ Clicks on Send / Delete / Pay-like buttons ask Allow/Deny
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import contextlib
-
 from ..mode import is_secure
-from .client import NullOverlay, OverlayBlocked, OverlayClient, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
+from ..personality import normalize_level
+from .client import (
+    NullOverlay,
+    OverlayBlocked,
+    OverlayClient,
+    OverlayDenied,
+    OverlayInterrupted,
+    OverlayPaused,
+    OverlayStopped,
+)
 from .hal import OverlayHAL, unwrap
 from .inputlock import lock_mode
 from .protocol import OVERLAY_WINDOW_TITLE, PROTOCOL_VERSION
-from ..personality import normalize_level
 
 __all__ = [
-    "NullOverlay", "OverlayClient", "OverlayHAL", "OverlayStopped", "OverlayInterrupted",
-    "OverlayDenied", "OverlayBlocked", "OverlayPaused",
-    "unwrap", "make_overlay", "find_overlay_hal", "step",
-    "wrap_hal", "overlay_enabled", "OVERLAY_WINDOW_TITLE", "PROTOCOL_VERSION",
+    "OVERLAY_WINDOW_TITLE",
+    "PROTOCOL_VERSION",
+    "NullOverlay",
+    "OverlayBlocked",
+    "OverlayClient",
+    "OverlayDenied",
+    "OverlayHAL",
+    "OverlayInterrupted",
+    "OverlayPaused",
+    "OverlayStopped",
+    "find_overlay_hal",
+    "make_overlay",
+    "overlay_enabled",
+    "step",
+    "unwrap",
+    "wrap_hal",
 ]
 
 _TRUE = {"1", "true", "yes", "on"}
@@ -103,7 +122,7 @@ def _admin_secure() -> bool:
     return current().forces_secure
 
 
-def overlay_enabled(env: Optional[Dict[str, str]] = None, platform: str = sys.platform) -> bool:
+def overlay_enabled(env: dict[str, str] | None = None, platform: str = sys.platform) -> bool:
     env = os.environ if env is None else env
     flag = env.get("DOBBY_OVERLAY", "").strip().lower()
     if flag in _FALSE and not _admin_secure():
@@ -117,9 +136,9 @@ def overlay_enabled(env: Optional[Dict[str, str]] = None, platform: str = sys.pl
     return True
 
 
-def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
     env = os.environ if env is None else env
-    cfg: Dict[str, Any] = {}
+    cfg: dict[str, Any] = {}
     if env.get("DOBBY_OVERLAY_COLOR"):
         cfg["color"] = env["DOBBY_OVERLAY_COLOR"]
         cfg["color_fixed"] = True  # no per-Dobby colour from the registry
@@ -156,7 +175,9 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         except ValueError:
             pass
     turbo_flag = env.get("DOBBY_OVERLAY_TURBO", "").strip().lower()
-    if not _admin_secure() and (turbo_flag in _TRUE or (turbo_flag not in _FALSE and not is_secure(env))):
+    if not _admin_secure() and (
+        turbo_flag in _TRUE or (turbo_flag not in _FALSE and not is_secure(env))
+    ):
         cfg["turbo"] = True  # default: turbo; ``--secure`` / DOBBY_MODE=secure turns the prompts on
     if env.get("DOBBY_OVERLAY_TRAIL", "").strip().lower() in _FALSE:
         cfg["trail"] = False
@@ -189,7 +210,7 @@ def overlay_config(env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     return cfg
 
 
-def make_overlay(enabled: Optional[bool] = None) -> NullOverlay:
+def make_overlay(enabled: bool | None = None) -> NullOverlay:
     if enabled is None:
         enabled = overlay_enabled()
     if not enabled:
@@ -201,7 +222,7 @@ def make_overlay(enabled: Optional[bool] = None) -> NullOverlay:
     return OverlayClient(config=overlay_config(), log_path=log_path, track_dir=tracks)
 
 
-def wrap_hal(hal: Any, overlay: Optional[NullOverlay] = None, **kwargs: Any) -> Any:
+def wrap_hal(hal: Any, overlay: NullOverlay | None = None, **kwargs: Any) -> Any:
     """Wrap ``hal`` in :class:`OverlayHAL` when the overlay is enabled."""
     if isinstance(hal, OverlayHAL):
         return hal
@@ -215,8 +236,11 @@ def wrap_hal(hal: Any, overlay: Optional[NullOverlay] = None, **kwargs: Any) -> 
         # and secure clients at once. Turbo: no prompts at all, not even for ⌘Q.
         kwargs.setdefault("policy", is_secure)
         kwargs.setdefault("grants", AppGrants())  # secure: "Let Dobby use …?" once per app
-        kwargs.setdefault("confirm_clicks", _admin_secure() or
-                          os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE)
+        kwargs.setdefault(
+            "confirm_clicks",
+            _admin_secure()
+            or os.environ.get("DOBBY_CONFIRM_CLICKS", "").strip().lower() not in _FALSE,
+        )
         return OverlayHAL(hal, overlay, **kwargs)
     from ..policy import current
 
@@ -235,12 +259,19 @@ def wrap_hal(hal: Any, overlay: Optional[NullOverlay] = None, **kwargs: Any) -> 
 class DenyingOverlay(NullOverlay):
     """No overlay under an admin policy: nobody can say Allow, so the answer is Deny."""
 
-    def confirm(self, text: str, secs: float = 30.0, detail: str = "", allow: str = "Allow",
-                deny: str = "Deny", kind: str = "danger") -> bool:
+    def confirm(
+        self,
+        text: str,
+        secs: float = 30.0,
+        detail: str = "",
+        allow: str = "Allow",
+        deny: str = "Deny",
+        kind: str = "danger",
+    ) -> bool:
         return False
 
 
-def find_overlay_hal(hal: Any) -> Optional[OverlayHAL]:
+def find_overlay_hal(hal: Any) -> OverlayHAL | None:
     """Find the OverlayHAL inside a HAL or DesktopSession, if any."""
     seen = 0
     while hal is not None and seen < 5:
@@ -253,7 +284,7 @@ def find_overlay_hal(hal: Any) -> Optional[OverlayHAL]:
     return None
 
 
-def step(hal: Any, text: str, risk: Optional[str] = None, confirm: bool = False):
+def step(hal: Any, text: str, risk: str | None = None, confirm: bool = False):
     """``with step(hal, "Run synthesis", risk="caution"): ...`` for tool code.
 
     Works with any HAL; a no-op context when the overlay is not in use.

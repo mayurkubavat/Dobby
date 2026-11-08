@@ -1,7 +1,5 @@
 """Linux background clicks: press a button through AT-SPI, never a text field."""
 
-from types import SimpleNamespace
-
 from dobby.perception.atspi import ATSPIInspector
 
 

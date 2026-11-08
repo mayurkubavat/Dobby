@@ -29,13 +29,19 @@ Kinds:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any
 
 
-def _types() -> Tuple[Tuple[Type[BaseException], str], ...]:
+def _types() -> tuple[tuple[type[BaseException], str], ...]:
     # Imported lazily: dobby.overlay and dobby.control import optional bits.
     from dobby.control.controller import ControlBusy, ControlChanged, ControlStopped
-    from dobby.overlay.client import OverlayBlocked, OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
+    from dobby.overlay.client import (
+        OverlayBlocked,
+        OverlayDenied,
+        OverlayInterrupted,
+        OverlayPaused,
+        OverlayStopped,
+    )
 
     # Most specific first: OverlayDenied / OverlayInterrupted / OverlayPaused
     # are OverlayStopped subclasses.
@@ -51,33 +57,54 @@ def _types() -> Tuple[Tuple[Type[BaseException], str], ...]:
     )
 
 
-_ADVICE: Dict[str, Tuple[bool, bool, str]] = {
+_ADVICE: dict[str, tuple[bool, bool, str]] = {
     # kind: (look_again, retry_ok, what to do)
-    "stopped": (False, False,
-                "The person pressed Stop. End this task now and tell them where you stopped. "
-                "Do not retry or continue unless they ask again."),
-    "denied": (False, False,
-               "The person denied this step. Do not do it again or reach the same result another way. "
-               "Explain what you wanted to do and ask them how to go on."),
-    "blocked": (False, False,
-                "Dobby is not allowed to do this in that app. Do not try it another way (another tool, "
-                "the shell, a shortcut). Tell the person what you wanted to do there; they can allow it in "
-                "~/.dobby/apps.json or do that step themselves."),
-    "interrupted": (True, True,
-                    "The person used the mouse or keyboard while Dobby worked, so this step was skipped. "
-                    "Take a fresh look at the screen, then decide the next step. Do not replay old coordinates."),
-    "paused": (True, False,
-               "The person paused Dobby and has not resumed it. Call wait_for_wake to wait for them, "
-               "or end your turn and ask what they want."),
-    "control_changed": (True, True,
-                        "Another agent used the desktop since your last look. This step was skipped and you "
-                        "now have control: look at the screen again, then decide."),
-    "control_busy": (False, True,
-                     "Another agent is using the desktop. Try again shortly or call control_status."),
+    "stopped": (
+        False,
+        False,
+        "The person pressed Stop. End this task now and tell them where you stopped. "
+        "Do not retry or continue unless they ask again.",
+    ),
+    "denied": (
+        False,
+        False,
+        "The person denied this step. Do not do it again or reach the same result another way. "
+        "Explain what you wanted to do and ask them how to go on.",
+    ),
+    "blocked": (
+        False,
+        False,
+        "Dobby is not allowed to do this in that app. Do not try it another way (another tool, "
+        "the shell, a shortcut). Tell the person what you wanted to do there; they can allow it in "
+        "~/.dobby/apps.json or do that step themselves.",
+    ),
+    "interrupted": (
+        True,
+        True,
+        "The person used the mouse or keyboard while Dobby worked, so this step was skipped. "
+        "Take a fresh look at the screen, then decide the next step. Do not replay old coordinates.",
+    ),
+    "paused": (
+        True,
+        False,
+        "The person paused Dobby and has not resumed it. Call wait_for_wake to wait for them, "
+        "or end your turn and ask what they want.",
+    ),
+    "control_changed": (
+        True,
+        True,
+        "Another agent used the desktop since your last look. This step was skipped and you "
+        "now have control: look at the screen again, then decide.",
+    ),
+    "control_busy": (
+        False,
+        True,
+        "Another agent is using the desktop. Try again shortly or call control_status.",
+    ),
 }
 
 
-def kind_of(exc: BaseException) -> Optional[str]:
+def kind_of(exc: BaseException) -> str | None:
     """The handoff kind for ``exc``, or None when it is an ordinary error."""
     try:
         types = _types()
@@ -94,7 +121,7 @@ def is_handoff(exc: BaseException) -> bool:
     return kind_of(exc) is not None
 
 
-def classify(exc: BaseException) -> Optional[Dict[str, Any]]:
+def classify(exc: BaseException) -> dict[str, Any] | None:
     """A tool result describing the handoff, or None for an ordinary error."""
     kind = kind_of(exc)
     if kind is None:

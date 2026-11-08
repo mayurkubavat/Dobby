@@ -12,10 +12,10 @@ Kept free of engine imports so connecting is fast.
 from __future__ import annotations
 
 import sys
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     argv = list(sys.argv if argv is None else argv)
     command = next((a for a in argv[1:] if not a.startswith("-")), "")
     if command == "serve":

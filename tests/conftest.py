@@ -4,11 +4,10 @@ import os
 import sys
 
 import pytest
-from typing import Tuple, List, Optional
 from PIL import Image
 
 from dobby.hal.base import IDesktopHAL
-from dobby.types import WindowInfo, BoundingBox
+from dobby.types import BoundingBox, WindowInfo
 
 
 class MockDesktopHAL(IDesktopHAL):
@@ -19,20 +18,20 @@ class MockDesktopHAL(IDesktopHAL):
         self.height = height
         self.cursor_x = 100
         self.cursor_y = 100
-        self.typed_text: List[str] = []
-        self.clicks: List[Tuple[int, int, str, int]] = []
-        self.hotkeys: List[List[str]] = []
-        self.scrolls: List[Tuple[int, int]] = []
+        self.typed_text: list[str] = []
+        self.clicks: list[tuple[int, int, str, int]] = []
+        self.hotkeys: list[list[str]] = []
+        self.scrolls: list[tuple[int, int]] = []
 
-    def get_screen_size(self) -> Tuple[int, int]:
+    def get_screen_size(self) -> tuple[int, int]:
         return self.width, self.height
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Image.Image:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
         w = region[2] if region else self.width
         h = region[3] if region else self.height
         return Image.new("RGB", (w, h), color=(40, 44, 52))
 
-    def get_cursor_position(self) -> Tuple[int, int]:
+    def get_cursor_position(self) -> tuple[int, int]:
         return self.cursor_x, self.cursor_y
 
     def mouse_move(self, x: int, y: int) -> None:
@@ -43,7 +42,9 @@ class MockDesktopHAL(IDesktopHAL):
         self.mouse_move(x, y)
         self.clicks.append((x, y, button, click_count))
 
-    def mouse_drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3) -> None:
+    def mouse_drag(
+        self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3
+    ) -> None:
         self.mouse_move(end_x, end_y)
 
     def mouse_scroll(self, dx: int, dy: int) -> None:
@@ -55,10 +56,10 @@ class MockDesktopHAL(IDesktopHAL):
     def keyboard_press_key(self, key_name: str) -> None:
         self.typed_text.append(f"<{key_name}>")
 
-    def keyboard_hotkey(self, keys: List[str]) -> None:
+    def keyboard_hotkey(self, keys: list[str]) -> None:
         self.hotkeys.append(keys)
 
-    def list_windows(self) -> List[WindowInfo]:
+    def list_windows(self) -> list[WindowInfo]:
         return [
             WindowInfo(
                 window_id="0x1000",
@@ -76,7 +77,7 @@ class MockDesktopHAL(IDesktopHAL):
             ),
         ]
 
-    def get_active_window(self) -> Optional[WindowInfo]:
+    def get_active_window(self) -> WindowInfo | None:
         for win in self.list_windows():
             if win.is_active:
                 return win
@@ -120,7 +121,10 @@ def live_desktop_allowed(env=None, platform: str = sys.platform, **kw) -> bool:
         return True
     if flag in ("0", "false", "no", "off"):
         return False  # force the guard on, e.g. to check what would be skipped
-    if env.get("DOBBY_REPLAY", "").strip().lower() in _TRUE or env.get("DESKTOP_HAL", "").lower() == "replay":
+    if (
+        env.get("DOBBY_REPLAY", "").strip().lower() in _TRUE
+        or env.get("DESKTOP_HAL", "").lower() == "replay"
+    ):
         return True
     if platform.startswith("linux"):
         return _display_is_virtual(env.get("DISPLAY", ""), **kw)
@@ -128,8 +132,10 @@ def live_desktop_allowed(env=None, platform: str = sys.platform, **kw) -> bool:
 
 
 def _refuse(*_a, **_k):
-    pytest.skip("would send real mouse/keyboard input to this desktop "
-                "(set DOBBY_LIVE_DESKTOP_TESTS=1, or run under Xvfb)")
+    pytest.skip(
+        "would send real mouse/keyboard input to this desktop "
+        "(set DOBBY_LIVE_DESKTOP_TESTS=1, or run under Xvfb)"
+    )
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -154,8 +160,11 @@ def _guard_real_desktop_input():
             for name in ("press", "release", "click", "scroll", "move", "type", "tap"):
                 if hasattr(cls, name):
                     mp.setattr(cls, name, _refuse)
-        mp.setattr(mouse.Controller, "position",
-                   property(lambda self: (0, 0), lambda self, value: _refuse()))
+        mp.setattr(
+            mouse.Controller,
+            "position",
+            property(lambda self: (0, 0), lambda self, value: _refuse()),
+        )
     except Exception:  # noqa: BLE001 - pynput missing or no display
         pass
     try:

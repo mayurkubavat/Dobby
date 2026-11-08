@@ -4,13 +4,12 @@ Provides pure visual grounding fallback for applications that lack AT-SPI2
 accessibility trees (e.g. canvas web apps, games, legacy X11 utilities).
 """
 
-from typing import List, Tuple, Optional
+import cv2
 import numpy as np
 from PIL import Image
-import cv2
 
-from dobby.types import UIElement, BoundingBox
 from dobby.config import CONFIG
+from dobby.types import BoundingBox, UIElement
 
 
 class CVDetector:
@@ -33,9 +32,8 @@ class CVDetector:
         image: Image.Image,
         scale_factor: float = 1.0,
         max_elements: int = CONFIG.som_max_elements,
-    ) -> List[UIElement]:
-        """
-        Detects interactable regions in the image.
+    ) -> list[UIElement]:
+        """Detects interactable regions in the image.
 
         Args:
             image: PIL Image (may be scaled down).
@@ -51,7 +49,7 @@ class CVDetector:
         max_allowed_area = int(img_w * img_h * self.max_area_ratio)
 
         # 1. Edge & Contour Detection
-        boxes: List[Tuple[int, int, int, int]] = []
+        boxes: list[tuple[int, int, int, int]] = []
         gray = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
 
         # Contrast enhancement & noise reduction
@@ -107,7 +105,7 @@ class CVDetector:
         filtered_boxes = self._suppress_overlapping_boxes(boxes, self.iou_threshold)
 
         # 4. Convert to UIElement with physical screen coordinates
-        elements: List[UIElement] = []
+        elements: list[UIElement] = []
         inv_scale = 1.0 / scale_factor if scale_factor > 0 else 1.0
 
         for idx, (x, y, w, h) in enumerate(filtered_boxes[:max_elements]):
@@ -141,15 +139,15 @@ class CVDetector:
         return elements
 
     def _suppress_overlapping_boxes(
-        self, boxes: List[Tuple[int, int, int, int]], iou_thresh: float
-    ) -> List[Tuple[int, int, int, int]]:
+        self, boxes: list[tuple[int, int, int, int]], iou_thresh: float
+    ) -> list[tuple[int, int, int, int]]:
         """Suppresses redundant, heavily overlapping, or duplicate bounding boxes."""
         if not boxes:
             return []
 
         # Sort boxes by area ascending (favor compact, specific buttons over giant outer panels)
         sorted_boxes = sorted(boxes, key=lambda b: b[2] * b[3])
-        keep: List[Tuple[int, int, int, int]] = []
+        keep: list[tuple[int, int, int, int]] = []
 
         for b1 in sorted_boxes:
             x1, y1, w1, h1 = b1
@@ -173,9 +171,11 @@ class CVDetector:
                 if inter_area > 0:
                     union_area = area1 + area2 - inter_area
                     iou = inter_area / float(union_area) if union_area > 0 else 0
-                    
+
                     # If high IoU or one box is mostly contained in another with similar size
-                    if iou > iou_thresh or (inter_area / float(area1) > 0.85 and area2 / float(area1) < 1.4):
+                    if iou > iou_thresh or (
+                        inter_area / float(area1) > 0.85 and area2 / float(area1) < 1.4
+                    ):
                         suppress = True
                         break
 

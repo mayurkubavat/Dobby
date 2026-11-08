@@ -2,18 +2,14 @@
 Unit tests for Phase 3 GUI-to-Script Skill Crystallization Engine.
 """
 
-import os
-import tempfile
-import pytest
-
+from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.crystallization import (
-    JournalCorrelator,
-    TclTrajectoryCompiler,
-    DynamicSkillRegistry,
     CorrelatedStep,
     CrystallizedSkillSpec,
+    DynamicSkillRegistry,
+    JournalCorrelator,
+    TclTrajectoryCompiler,
 )
-from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.types import BoundingBox, WindowInfo
 
 
@@ -27,6 +23,7 @@ class MockHAL:
 
     def capture_screen(self, region=None):
         from PIL import Image
+
         return Image.new("RGB", (100, 100), color="white")
 
     def mouse_click(self, x, y, button="left", click_count=1):

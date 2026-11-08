@@ -12,7 +12,7 @@ display (the Quartz / Accessibility convention), not screenshot pixels.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 PROTOCOL_VERSION = 4
 
@@ -27,7 +27,7 @@ CONFIRM_KINDS = ("danger", "access")
 EVENTS = ("stop", "pause", "resume", "user_input", "user_idle", "wake", "sleep")
 
 # op -> (required fields, optional fields)
-OPS: Dict[str, tuple] = {
+OPS: dict[str, tuple] = {
     "cursor.move": (("x", "y"), ("ms", "verb", "probe", "app")),
     "cursor.click": ((), ("button", "count")),
     "cursor.state": (("state",), ()),
@@ -67,7 +67,7 @@ class ProtocolError(ValueError):
     pass
 
 
-def validate(msg: Dict[str, Any]) -> Dict[str, Any]:
+def validate(msg: dict[str, Any]) -> dict[str, Any]:
     """Check a message against :data:`OPS`; return it unchanged or raise."""
     if not isinstance(msg, dict):
         raise ProtocolError("message must be an object")
@@ -104,8 +104,8 @@ def validate(msg: Dict[str, Any]) -> Dict[str, Any]:
     return msg
 
 
-def encode(op: str, msg_id: Optional[int] = None, **fields: Any) -> str:
-    msg: Dict[str, Any] = {"op": op}
+def encode(op: str, msg_id: int | None = None, **fields: Any) -> str:
+    msg: dict[str, Any] = {"op": op}
     msg.update({k: v for k, v in fields.items() if v is not None})
     if msg_id is not None:
         msg["id"] = msg_id
@@ -113,7 +113,7 @@ def encode(op: str, msg_id: Optional[int] = None, **fields: Any) -> str:
     return json.dumps(msg, separators=(",", ":")) + "\n"
 
 
-def decode(line: str) -> Dict[str, Any]:
+def decode(line: str) -> dict[str, Any]:
     try:
         msg = json.loads(line)
     except json.JSONDecodeError as exc:
@@ -121,8 +121,8 @@ def decode(line: str) -> Dict[str, Any]:
     return validate(msg)
 
 
-def ack(msg_id: Any, ok: bool = True, error: Optional[str] = None) -> str:
-    out: Dict[str, Any] = {"ack": msg_id, "ok": ok}
+def ack(msg_id: Any, ok: bool = True, error: str | None = None) -> str:
+    out: dict[str, Any] = {"ack": msg_id, "ok": ok}
     if error:
         out["error"] = error
     return json.dumps(out, separators=(",", ":")) + "\n"
@@ -131,12 +131,12 @@ def ack(msg_id: Any, ok: bool = True, error: Optional[str] = None) -> str:
 def event(name: str, **fields: Any) -> str:
     if name not in EVENTS:
         raise ProtocolError(f"unknown event: {name!r}")
-    out: Dict[str, Any] = {"event": name}
+    out: dict[str, Any] = {"event": name}
     out.update(fields)
     return json.dumps(out, separators=(",", ":")) + "\n"
 
 
-def window_id_int(window_id: Any) -> Optional[int]:
+def window_id_int(window_id: Any) -> int | None:
     """Window ids arrive as int, decimal string or hex string ("0x1a2")."""
     if window_id is None:
         return None

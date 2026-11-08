@@ -14,13 +14,23 @@ from dobby.screen_state.settle import wait_until_settled
 from dobby.screen_state.visual import decide_visual_element
 from dobby.types import BoundingBox, WindowInfo
 
-WIN = WindowInfo(window_id="7", title="Doc", bbox=BoundingBox(x=0, y=0, width=400, height=300),
-                 is_active=True, app_name="Editor")
+WIN = WindowInfo(
+    window_id="7",
+    title="Doc",
+    bbox=BoundingBox(x=0, y=0, width=400, height=300),
+    is_active=True,
+    app_name="Editor",
+)
 
 
 def node(role, name, x, y, w=80, h=24, states=("enabled",)):
-    return {"role": role, "name": name, "bbox": {"x": x, "y": y, "width": w, "height": h},
-            "states": list(states), "interactable": True}
+    return {
+        "role": role,
+        "name": name,
+        "bbox": {"x": x, "y": y, "width": w, "height": h},
+        "states": list(states),
+        "interactable": True,
+    }
 
 
 def frame(shade=255, box=None):
@@ -86,11 +96,13 @@ def test_small_caret_blink_still_counts_as_settled():
 def test_detector_boxes_become_unnamed_icons_only_where_nothing_is_known():
     s = build_state(
         [node("push button", "Save", 300, 250)],
-        detector_boxes=[(305, 252, 40, 20),      # inside Save -> dropped
-                        (10, 10, 24, 24),        # new icon
-                        (0, 0, 400, 300),        # panel containing Save -> dropped
-                        (12, 12, 20, 20),        # inside the first icon -> dropped
-                        (900, 900, 20, 20)],     # outside the window -> dropped
+        detector_boxes=[
+            (305, 252, 40, 20),  # inside Save -> dropped
+            (10, 10, 24, 24),  # new icon
+            (0, 0, 400, 300),  # panel containing Save -> dropped
+            (12, 12, 20, 20),  # inside the first icon -> dropped
+            (900, 900, 20, 20),
+        ],  # outside the window -> dropped
         window=WIN,
     )
     icons = [e for e in s.elements if e.source == "detector"]
@@ -106,21 +118,43 @@ class Win(SimpleNamespace):
 
 
 def test_occlusion_by_window_in_front_and_clear_when_target_is_front():
-    front = Win(window_id="9", title="Alert", app_name="Other", bbox=BoundingBox(x=50, y=50, width=200, height=100))
+    front = Win(
+        window_id="9",
+        title="Alert",
+        app_name="Other",
+        bbox=BoundingBox(x=50, y=50, width=200, height=100),
+    )
     target = Win(window_id="7", title="Doc", app_name="Editor", bbox=WIN.bbox)
     hal = SimpleNamespace(list_windows=lambda: [front, target])
     occ = check_occlusion(hal, (100, 80, 40, 20), (120, 90), target_window_id="7")
     assert occ.covered and "Alert" in occ.reason
     hal2 = SimpleNamespace(list_windows=lambda: [target, front])
-    assert check_occlusion(hal2, (100, 80, 40, 20), (120, 90), target_window_id="7").covered is False
+    assert (
+        check_occlusion(hal2, (100, 80, 40, 20), (120, 90), target_window_id="7").covered is False
+    )
 
 
 def test_occlusion_by_hit_test_and_unknown_without_checks():
-    hal = SimpleNamespace(list_windows=lambda: [])
-    sheet = lambda x, y: {"role": "dialog", "name": "Save changes?", "bbox": {"x": 0, "y": 0, "width": 400, "height": 200}}
-    assert check_occlusion(hal, (100, 80, 40, 20), (120, 90), "7", "push button", hit_test=sheet).covered
-    itself = lambda x, y: {"role": "push button", "name": "OK", "bbox": {"x": 100, "y": 80, "width": 40, "height": 20}}
-    assert check_occlusion(hal, (100, 80, 40, 20), (120, 90), "7", "push button", hit_test=itself).covered is False
+    hal = SimpleNamespace(list_windows=list)
+    sheet = lambda x, y: {
+        "role": "dialog",
+        "name": "Save changes?",
+        "bbox": {"x": 0, "y": 0, "width": 400, "height": 200},
+    }
+    assert check_occlusion(
+        hal, (100, 80, 40, 20), (120, 90), "7", "push button", hit_test=sheet
+    ).covered
+    itself = lambda x, y: {
+        "role": "push button",
+        "name": "OK",
+        "bbox": {"x": 100, "y": 80, "width": 40, "height": 20},
+    }
+    assert (
+        check_occlusion(
+            hal, (100, 80, 40, 20), (120, 90), "7", "push button", hit_test=itself
+        ).covered
+        is False
+    )
     assert check_occlusion(hal, (100, 80, 40, 20), (120, 90), "7").covered is None
 
 
@@ -159,7 +193,10 @@ class FakeGrounder:
         self.boxes = boxes
 
     def generate_proposals(self, image, offset=(0, 0)):
-        return [{"bbox": {"x": x + offset[0], "y": y + offset[1], "width": w, "height": h}} for x, y, w, h in self.boxes]
+        return [
+            {"bbox": {"x": x + offset[0], "y": y + offset[1], "width": w, "height": h}}
+            for x, y, w, h in self.boxes
+        ]
 
 
 class FakeController:
@@ -186,7 +223,12 @@ def test_observe_settles_and_reports_it():
 
 
 def test_act_refuses_covered_target():
-    front = Win(window_id="9", title="Popup", app_name="X", bbox=BoundingBox(x=0, y=0, width=200, height=200))
+    front = Win(
+        window_id="9",
+        title="Popup",
+        app_name="X",
+        bbox=BoundingBox(x=0, y=0, width=200, height=200),
+    )
     target = Win(window_id="7", title="Doc", app_name="Editor", bbox=WIN.bbox)
     ctl = FakeController([node("push button", "OK", 10, 10)], hal=FakeHAL(windows=[front, target]))
     t = StateTracker()
@@ -221,31 +263,55 @@ class FakeOllama:
             top = [("yes", math.log(self.yes)), ("no", math.log(1 - self.yes))]
         else:
             top = [(self.letter, math.log(0.9)), ("Z", math.log(0.1))]
-        return {"message": {"content": top[0][0]},
-                "logprobs": [{"token": top[0][0], "logprob": top[0][1],
-                              "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top]}]}
+        return {
+            "message": {"content": top[0][0]},
+            "logprobs": [
+                {
+                    "token": top[0][0],
+                    "logprob": top[0][1],
+                    "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top],
+                }
+            ],
+        }
 
 
 def test_visual_choice_marks_icons_and_maps_letter_to_eid():
-    ctl = FakeController([node("push button", "Save", 300, 250)], icons=[(110, 60, 24, 24), (150, 60, 24, 24)])
+    ctl = FakeController(
+        [node("push button", "Save", 300, 250)], icons=[(110, 60, 24, 24), (150, 60, 24, 24)]
+    )
     fake = FakeOllama(letter="B")
-    out = decide_visual_element(ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "zoom to fit")
-    assert out["marks"] == 3 and out["gate"]["verdict"] == "escalate" and "suggestion" in out["gate"]["reason"]
+    out = decide_visual_element(
+        ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "zoom to fit"
+    )
+    assert (
+        out["marks"] == 3
+        and out["gate"]["verdict"] == "escalate"
+        and "suggestion" in out["gate"]["reason"]
+    )
     assert out["element"]["source"] == "detector" and out["element"]["bbox"]["x"] == 150
-    assert all("images" in b["messages"][1] for b in fake.bodies) and len(fake.bodies) == 2  # choice + close-up
+    assert (
+        all("images" in b["messages"][1] for b in fake.bodies) and len(fake.bodies) == 2
+    )  # choice + close-up
 
 
 def test_visual_choice_close_up_no_escalates():
     ctl = FakeController([], icons=[(110, 60, 24, 24)])
-    out = decide_visual_element(ctl, StateTracker(), GemmaDecider(GemmaClient(transport=FakeOllama(yes=0.1))), "zoom")
+    out = decide_visual_element(
+        ctl, StateTracker(), GemmaDecider(GemmaClient(transport=FakeOllama(yes=0.1))), "zoom"
+    )
     assert out["gate"]["verdict"] == "escalate" and "close-up" in out["gate"]["reason"]
 
 
 def test_text_lane_escalation_falls_back_to_visual():
     ctl = FakeController([node("push button", "Cancel", 300, 250)], icons=[(10, 10, 24, 24)])
     fake = FakeOllama(letter="A", yes=0.1)  # text pick gets a "no" -> escalate -> visual also "no"
-    out = decide_next_element(ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "zoom to fit",
-                              visual_fallback=True)
+    out = decide_next_element(
+        ctl,
+        StateTracker(),
+        GemmaDecider(GemmaClient(transport=fake)),
+        "zoom to fit",
+        visual_fallback=True,
+    )
     assert out["source"] == "visual" and out["text_lane"]["gate"]["verdict"] == "escalate"
 
 
@@ -253,14 +319,28 @@ def test_text_lane_escalation_falls_back_to_visual():
 
 
 def test_visual_choice_skips_menu_bar_and_off_window_elements():
-    win = WindowInfo(window_id="7", title="Doc", bbox=BoundingBox(x=100, y=100, width=400, height=300),
-                     is_active=True, app_name="Editor")
+    win = WindowInfo(
+        window_id="7",
+        title="Doc",
+        bbox=BoundingBox(x=100, y=100, width=400, height=300),
+        is_active=True,
+        app_name="Editor",
+    )
     hal = FakeHAL()
     hal.get_active_window = lambda: win
-    ctl = FakeController([node("menu item", "View", 60, 0, 40, 22), node("push button", "", 120, 120, 30, 30)], hal=hal)
+    ctl = FakeController(
+        [node("menu item", "View", 60, 0, 40, 22), node("push button", "", 120, 120, 30, 30)],
+        hal=hal,
+    )
     fake = FakeOllama(letter="A")
-    out = decide_visual_element(ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "open search")
-    assert out["marks"] == 1 and out["element"]["bbox"]["x"] == 120 and out["gate"]["verdict"] == "escalate"
+    out = decide_visual_element(
+        ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "open search"
+    )
+    assert (
+        out["marks"] == 1
+        and out["element"]["bbox"]["x"] == 120
+        and out["gate"]["verdict"] == "escalate"
+    )
 
 
 def test_degenerate_detector_falls_back_to_contours_and_scales_retina():
@@ -271,10 +351,12 @@ def test_degenerate_detector_falls_back_to_contours_and_scales_retina():
             return [{"bbox": {"x": 10 * i, "y": 0, "width": 257, "height": 113}} for i in range(8)]
 
         def _generate_cv_proposals(self, image, offset=(0, 0)):
-            return [{"bbox": {"x": 40, "y": 20, "width": 48, "height": 48}},      # 24x24 pt icon
-                    {"bbox": {"x": 0, "y": 0, "width": 700, "height": 40}}]       # toolbar strip, too big
+            return [
+                {"bbox": {"x": 40, "y": 20, "width": 48, "height": 48}},  # 24x24 pt icon
+                {"bbox": {"x": 0, "y": 0, "width": 700, "height": 40}},
+            ]  # toolbar strip, too big
 
-    hal = FakeHAL(shots=[Image.new("RGB", (800, 600))])                          # 2x capture of a 400x300 window
+    hal = FakeHAL(shots=[Image.new("RGB", (800, 600))])  # 2x capture of a 400x300 window
     ctl = SimpleNamespace(hal=hal, neural_grounder=Grounder())
     assert looks_degenerate([(0, 0, 257, 113)] * 8)
     assert detect_icon_boxes(ctl, (100, 50, 400, 300)) == [(120, 60, 24, 24)]
@@ -292,18 +374,29 @@ def test_visual_lane_never_offers_window_controls_or_frame_corners():
     from dobby.screen_state.observe import detect_icon_boxes
 
     hal = FakeHAL()
-    ctl = FakeController([node("push button", "", 8, 6, 14, 14),           # close button (title bar, left)
-                          node("push button", "", 200, 150, 30, 30)], hal=hal)
-    out = decide_visual_element(ctl, StateTracker(), GemmaDecider(GemmaClient(transport=FakeOllama())), "do it")
+    ctl = FakeController(
+        [
+            node("push button", "", 8, 6, 14, 14),  # close button (title bar, left)
+            node("push button", "", 200, 150, 30, 30),
+        ],
+        hal=hal,
+    )
+    out = decide_visual_element(
+        ctl, StateTracker(), GemmaDecider(GemmaClient(transport=FakeOllama())), "do it"
+    )
     assert out["marks"] == 1 and out["element"]["bbox"]["x"] == 200
 
     class Grounder:
         def generate_proposals(self, image, offset=(0, 0)):
-            return [{"bbox": {"x": 0, "y": 0, "width": 22, "height": 19}},        # window corner
-                    {"bbox": {"x": 376, "y": 278, "width": 24, "height": 22}},    # opposite corner
-                    {"bbox": {"x": 100, "y": 100, "width": 24, "height": 24}},
-                    {"bbox": {"x": 150, "y": 100, "width": 24, "height": 24}},
-                    {"bbox": {"x": 200, "y": 100, "width": 24, "height": 24}}]
+            return [
+                {"bbox": {"x": 0, "y": 0, "width": 22, "height": 19}},  # window corner
+                {"bbox": {"x": 376, "y": 278, "width": 24, "height": 22}},  # opposite corner
+                {"bbox": {"x": 100, "y": 100, "width": 24, "height": 24}},
+                {"bbox": {"x": 150, "y": 100, "width": 24, "height": 24}},
+                {"bbox": {"x": 200, "y": 100, "width": 24, "height": 24}},
+            ]
 
-    boxes = detect_icon_boxes(SimpleNamespace(hal=FakeHAL(), neural_grounder=Grounder()), (0, 0, 400, 300))
+    boxes = detect_icon_boxes(
+        SimpleNamespace(hal=FakeHAL(), neural_grounder=Grounder()), (0, 0, 400, 300)
+    )
     assert sorted(b[0] for b in boxes) == [100, 150, 200]

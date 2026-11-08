@@ -32,12 +32,25 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from . import sessions
 
-ACTION_KEYS = ("pause_toggle", "pause", "resume", "stop", "pause_all", "resume_all", "stop_all",
-               "clear_finished", "show_hidden", "hide", "allow", "deny")
+ACTION_KEYS = (
+    "pause_toggle",
+    "pause",
+    "resume",
+    "stop",
+    "pause_all",
+    "resume_all",
+    "stop_all",
+    "clear_finished",
+    "show_hidden",
+    "hide",
+    "allow",
+    "deny",
+)
 
 
 def _root():
@@ -46,7 +59,7 @@ def _root():
     return control_root()
 
 
-def agents() -> List[Dict[str, Any]]:
+def agents() -> list[dict[str, Any]]:
     """Every Dobby agent on this computer (shared sessions and private ones)."""
     try:
         from dobby.control import commands
@@ -56,13 +69,12 @@ def agents() -> List[Dict[str, Any]]:
         return []
 
 
-def status() -> Dict[str, Any]:
+def status() -> dict[str, Any]:
     return {"server_pid": os.getpid(), "sessions": sessions.snapshot(), "agents": agents()}
 
 
-def action(key: str, pid: Optional[int] = None, prompt_id: Optional[int] = None) -> Dict[str, Any]:
+def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> dict[str, Any]:
     from dobby.control import commands
-
     from dobby.overlay import topbar as tb
 
     from . import prompts
@@ -110,12 +122,13 @@ def action(key: str, pid: Optional[int] = None, prompt_id: Optional[int] = None)
 WORKING_WINDOW_S = 15.0  # a session counts as working this long after its last tool call
 
 
-def session_states(snapshot: Optional[List[Dict[str, Any]]] = None,
-                   now: Optional[float] = None) -> Dict[int, Dict[str, Any]]:
+def session_states(
+    snapshot: list[dict[str, Any]] | None = None, now: float | None = None
+) -> dict[int, dict[str, Any]]:
     """Map shared-Dobby sessions onto the menu's per-pid states."""
     snapshot = sessions.snapshot() if snapshot is None else snapshot
     now = time.time() if now is None else now
-    out: Dict[int, Dict[str, Any]] = {}
+    out: dict[int, dict[str, Any]] = {}
     for s in snapshot:
         if not s.get("pid"):
             continue
@@ -138,7 +151,7 @@ def _view(hiding=None):
     from . import prompts
 
     try:
-        states: Dict[int, Dict[str, Any]] = dict(tb.read_states())  # private Dobbys' overlays
+        states: dict[int, dict[str, Any]] = dict(tb.read_states())  # private Dobbys' overlays
     except Exception:  # noqa: BLE001
         states = {}
     states.update(session_states())
@@ -151,14 +164,14 @@ def _view(hiding=None):
     return tb.topbar_view(everyone, states, hiding=hiding)
 
 
-def topbar() -> Dict[str, Any]:
+def topbar() -> dict[str, Any]:
     """The menu as JSON (``dobby.overlay.topbar.View.to_dict``)."""
     from dobby.overlay import topbar as tb
 
     return _view(tb.Hiding.load()).to_dict()
 
 
-def handle(request: Dict[str, Any], quit_cb: Optional[Callable[[], None]] = None) -> Dict[str, Any]:
+def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -> dict[str, Any]:
     rid = request.get("id")
     op = request.get("op")
     try:
@@ -177,9 +190,15 @@ def handle(request: Dict[str, Any], quit_cb: Optional[Callable[[], None]] = None
         elif op == "answer":
             from . import prompts
 
-            body = {"answered": prompts.answer(int(request.get("prompt_id") or 0), bool(request.get("ok")))}
+            body = {
+                "answered": prompts.answer(
+                    int(request.get("prompt_id") or 0), bool(request.get("ok"))
+                )
+            }
         elif op == "action":
-            body = action(str(request.get("key") or ""), request.get("pid"), request.get("prompt_id"))
+            body = action(
+                str(request.get("key") or ""), request.get("pid"), request.get("prompt_id")
+            )
         elif op == "quit":
             if quit_cb is not None:
                 quit_cb()

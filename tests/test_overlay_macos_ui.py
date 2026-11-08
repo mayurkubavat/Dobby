@@ -30,8 +30,12 @@ def make(tmp_path):
         # The older tests below check the classic bar; modern tests ask for it.
         # Plain wording: these check the bar, test_personality checks the voice.
         # No menu bar item unless a test asks: it would sit in the real menu bar.
-        base = {"bar_lock": str(tmp_path / "bar.lock"), "style": "classic", "personality": "off",
-                "menu_bar": False}
+        base = {
+            "bar_lock": str(tmp_path / "bar.lock"),
+            "style": "classic",
+            "personality": "off",
+            "menu_bar": False,
+        }
         base.update(cfg)
         c = mac_helper.OverlayController(base, out=out, interactive=False)
         c._claim_bar()
@@ -255,9 +259,11 @@ def test_stop_while_awake_goes_back_to_sleep(make):
 def test_menu_offers_wake_and_sleep(make):
     c, _ = make()
     _asleep(c)
+
     def titles():
         menu = c._build_menu("Idle")
         return [menu.itemAtIndex_(i) for i in range(menu.numberOfItems())]
+
     wake = next(i for i in titles() if i.title() == "Wake Dobby")
     assert wake.target() is c.target and wake.action() == "menuWake:"
     c.target.menuWake_(None)
@@ -281,7 +287,9 @@ def test_ai_waiting_bar_invites_a_click(make):
     c, _ = make()
     _asleep(c)
     c.handle({"op": "sleep.wait", "reason": "finished the report"})
-    assert c.pill.mode == "ready" and c.pill.label.stringValue() == "Dobby is sleeping · click to wake"
+    assert (
+        c.pill.mode == "ready" and c.pill.label.stringValue() == "Dobby is sleeping · click to wake"
+    )
     assert "finished the report" in c.pill.view.toolTip()
     c.handle({"op": "sleep.done"})
     assert c.pill.label.stringValue() == "Dobby is sleeping"
@@ -306,7 +314,10 @@ def test_label_click_with_waiting_ai_hands_back(make):
     c.handle({"op": "sleep.wait"})
     c.on_pill_label()
     assert _events(out) == ["wake"]
-    assert c.pill.mode == "awake" and c.pill.label.stringValue() == "Dobby is awake · handing back to the AI"
+    assert (
+        c.pill.mode == "awake"
+        and c.pill.label.stringValue() == "Dobby is awake · handing back to the AI"
+    )
     assert c.awake_until - time.monotonic() > 60  # stays until the AI acts
     c.handle({"op": "sleep.done"})  # wait_for_wake returned
     assert c.pill.label.stringValue() == "Dobby is awake · handing back to the AI"
@@ -330,8 +341,11 @@ def test_wake_from_menu_while_paused_resumes_for_a_waiting_ai(make):
     c.handle({"op": "sleep.wait"})
     c.set_paused(True)
     menu = c._build_menu("Paused")
-    wake = next(menu.itemAtIndex_(i) for i in range(menu.numberOfItems())
-                if menu.itemAtIndex_(i).title() == "Wake Dobby")
+    wake = next(
+        menu.itemAtIndex_(i)
+        for i in range(menu.numberOfItems())
+        if menu.itemAtIndex_(i).title() == "Wake Dobby"
+    )
     c.target.menuWake_(wake)
     assert not c.paused and _events(out) == ["pause", "resume", "wake"]
     assert c.pill.mode == "awake"
@@ -424,11 +438,15 @@ def test_menu_bar_item_focus_style_menu(make, tmp_path, monkeypatch):
 
     monkeypatch.setattr(topbar, "ICON_DIR", str(tmp_path / "icons"))
     monkeypatch.setattr(topbar, "STATUS_DIR", str(tmp_path / "status"))
-    agents = [{"pid": 11, "name": "Mail Dobby", "paused": False, "holding": True, "waiting": False},
-              {"pid": 22, "name": "Xcode Dobby", "paused": True, "holding": False, "waiting": False}]
+    agents = [
+        {"pid": 11, "name": "Mail Dobby", "paused": False, "holding": True, "waiting": False},
+        {"pid": 22, "name": "Xcode Dobby", "paused": True, "holding": False, "waiting": False},
+    ]
     c, _ = make(menu_bar=True)
     monkeypatch.setattr(c, "_agents", lambda: agents)
-    monkeypatch.setattr(topbar, "read_states", lambda *a, **k: {11: {"mode": "working", "steps": 3}})
+    monkeypatch.setattr(
+        topbar, "read_states", lambda *a, **k: {11: {"mode": "working", "steps": 3}}
+    )
     assert c.status_item is not None
     c._refresh_topbar(force=True)
     button = c.status_item.button()
@@ -507,8 +525,15 @@ def test_bar_menu_button_opens_dobbys_menu(make):
     menu, view, loc = opened[0]
     assert view is c.pill.view
     titles = [menu.itemAtIndex_(i).title() for i in range(menu.numberOfItems())]
-    for want in ("Dobby: Idle", "Wake Dobby", "Recent steps", "Pause", "Stop", "Show overlay",
-                 "Show control bar (⌃⌥H)"):
+    for want in (
+        "Dobby: Idle",
+        "Wake Dobby",
+        "Recent steps",
+        "Pause",
+        "Stop",
+        "Show overlay",
+        "Show control bar (⌃⌥H)",
+    ):
         assert want in titles
     assert any(t.startswith("Turbo mode") for t in titles)
     assert any("trail" in t.lower() for t in titles)
@@ -544,7 +569,9 @@ def test_tag_is_clickable_where_it_is_drawn(make):
     assert hs.shown and hs.window.isVisible()
     assert not hs.window.ignoresMouseEvents()
     x, y, w, h = hs.rect
-    assert w == pytest.approx(max(p.tag.width for p in c.panels), abs=1.0) and w > 30  # snapped to points
+    assert (
+        w == pytest.approx(max(p.tag.width for p in c.panels), abs=1.0) and w > 30
+    )  # snapped to points
     f = hs.window.frame()
     assert (f.origin.x, f.size.width) == pytest.approx((x, w))
     assert f.origin.y == pytest.approx(c.primary_h - y - h)
@@ -647,7 +674,9 @@ def test_modern_working_bar_shows_step_and_timer_with_icons(make):
     c, _ = _modern(make)
     c.handle({"op": "intent", "text": "Click ‘Send’"})
     text = c.pill.label.stringValue()
-    assert c.pill.mode == "working" and text.startswith("Dobby is working · Click ‘Send’ · step 1 · 0:0")
+    assert c.pill.mode == "working" and text.startswith(
+        "Dobby is working · Click ‘Send’ · step 1 · 0:0"
+    )
     assert c.pill.primary.image() is not None and c.pill.secondary.image() is not None
     assert c.pill.secondary.toolTip().startswith("Stop")
     assert not c.pill.menu_btn.isHidden()
@@ -656,15 +685,21 @@ def test_modern_working_bar_shows_step_and_timer_with_icons(make):
 def test_modern_agent_colour_name_and_dots(make):
     c, _ = _modern(make)
     c.server_pid = 222
-    c._apply_agents([{"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF", "waiting": True},
-                     {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True}])
+    c._apply_agents(
+        [
+            {"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF", "waiting": True},
+            {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
+        ]
+    )
     assert c.ok_hex == "#14B8A6" and c.agent_label == "Dobby · claude-code"
     assert not c.pill.dots_btn.isHidden() and c.pill.dots_btn.image() is not None
 
 
-_IDLE_AGENTS = [{"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
-                {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
-                {"pid": 333, "name": "cursor", "started": 3, "color": "#EC4899"}]
+_IDLE_AGENTS = [
+    {"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
+    {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
+    {"pid": 333, "name": "cursor", "started": 3, "color": "#EC4899"},
+]
 
 
 def test_modern_idle_dobbys_add_no_dots(make):
@@ -742,13 +777,16 @@ def test_modern_trail_keeps_three_dots(make):
 
 def test_modern_paused_turns_pointer_and_tag_amber(make):
     import Quartz
+
     from dobby.overlay import mac_helper
 
     c, _ = _modern(make)
     c._mark_active()
     c._refresh_pill()
     c.set_paused(True)
-    assert Quartz.CGColorEqualToColor(c.panels[0].arrow.fillColor(), mac_helper._cg(c.colors["caution"]))
+    assert Quartz.CGColorEqualToColor(
+        c.panels[0].arrow.fillColor(), mac_helper._cg(c.colors["caution"])
+    )
 
 
 def test_modern_one_step_per_action(make):
@@ -782,7 +820,9 @@ def test_moving_to_allow_deny_does_not_skip_the_next_step(make):
         c._on_user_input(kind)
     assert not c.takeover and "user_input" not in _events(out)
     c.on_pill("primary")  # Allow
-    assert {"ack": 7, "ok": True} in [{k: m[k] for k in ("ack", "ok")} for m in _lines(out) if "ack" in m]
+    assert {"ack": 7, "ok": True} in [
+        {k: m[k] for k in ("ack", "ok")} for m in _lines(out) if "ack" in m
+    ]
 
 
 def test_a_click_elsewhere_while_working_is_a_take_over(make):

@@ -12,13 +12,13 @@ from dobby.overlay import (
     NullOverlay,
     OverlayClient,
     OverlayHAL,
+    overlay_config,
     overlay_enabled,
     unwrap,
     wrap_hal,
 )
 from dobby.overlay import geometry as g
 from dobby.overlay import protocol as p
-from dobby.overlay import overlay_config
 
 
 # --------------------------------------------------------------- protocol
@@ -29,18 +29,25 @@ def test_encode_decode_roundtrip():
 
 
 def test_encode_drops_none_fields():
-    assert json.loads(p.encode("cursor.move", None, x=1, y=2, ms=None)) == {"op": "cursor.move", "x": 1, "y": 2}
+    assert json.loads(p.encode("cursor.move", None, x=1, y=2, ms=None)) == {
+        "op": "cursor.move",
+        "x": 1,
+        "y": 2,
+    }
 
 
-@pytest.mark.parametrize("msg", [
-    {"op": "nope"},
-    {"op": "cursor.move", "x": 1},
-    {"op": "cursor.move", "x": "1", "y": 2},
-    {"op": "cursor.state", "state": "dancing"},
-    {"op": "glow.track"},
-    {"op": "hide", "extra": 1},
-    [],
-])
+@pytest.mark.parametrize(
+    "msg",
+    [
+        {"op": "nope"},
+        {"op": "cursor.move", "x": 1},
+        {"op": "cursor.move", "x": "1", "y": 2},
+        {"op": "cursor.state", "state": "dancing"},
+        {"op": "glow.track"},
+        {"op": "hide", "extra": 1},
+        [],
+    ],
+)
 def test_validate_rejects(msg):
     with pytest.raises(p.ProtocolError):
         p.validate(msg)
@@ -51,7 +58,9 @@ def test_decode_bad_json():
         p.decode("{not json")
 
 
-@pytest.mark.parametrize("raw,expected", [(42, 42), ("42", 42), ("0x2a", 42), ("abc", None), (None, None)])
+@pytest.mark.parametrize(
+    "raw,expected", [(42, 42), ("42", 42), ("0x2a", 42), ("abc", None), (None, None)]
+)
 def test_window_id_int(raw, expected):
     assert p.window_id_int(raw) == expected
 
@@ -124,25 +133,48 @@ def test_overlay_enabled_rules():
 
 
 def test_overlay_config():
-    cfg = overlay_config({"DOBBY_OVERLAY_COLOR": "#00ff00", "DOBBY_OVERLAY_SPEED": "0", "DOBBY_OVERLAY_LABEL": "D"})
-    assert cfg == {"color": "#00ff00", "color_fixed": True, "speed": 0.0, "label": "D", "turbo": True}
-    assert overlay_config({"DOBBY_OVERLAY_SPEED": "fast"}) == {"turbo": True}  # turbo is the default
-    assert overlay_config({"DOBBY_OVERLAY_CAPTURE_VISIBLE": "0", "DOBBY_MODE": "secure"}) == {"capture_visible": False}
-    assert overlay_config({"DOBBY_OVERLAY_TURBO": "1", "DOBBY_OVERLAY_RESUME": "manual",
-                           "DOBBY_OVERLAY_IDLE_SECS": "0.1", "DOBBY_OVERLAY_TRAIL": "0"}) == {
-        "turbo": True, "takeover_resume": "manual", "idle_secs": 0.5, "trail": False}
+    cfg = overlay_config(
+        {"DOBBY_OVERLAY_COLOR": "#00ff00", "DOBBY_OVERLAY_SPEED": "0", "DOBBY_OVERLAY_LABEL": "D"}
+    )
+    assert cfg == {
+        "color": "#00ff00",
+        "color_fixed": True,
+        "speed": 0.0,
+        "label": "D",
+        "turbo": True,
+    }
+    assert overlay_config({"DOBBY_OVERLAY_SPEED": "fast"}) == {
+        "turbo": True
+    }  # turbo is the default
+    assert overlay_config({"DOBBY_OVERLAY_CAPTURE_VISIBLE": "0", "DOBBY_MODE": "secure"}) == {
+        "capture_visible": False
+    }
+    assert overlay_config(
+        {
+            "DOBBY_OVERLAY_TURBO": "1",
+            "DOBBY_OVERLAY_RESUME": "manual",
+            "DOBBY_OVERLAY_IDLE_SECS": "0.1",
+            "DOBBY_OVERLAY_TRAIL": "0",
+        }
+    ) == {"turbo": True, "takeover_resume": "manual", "idle_secs": 0.5, "trail": False}
 
 
 def test_overlay_config_narration_is_on_unless_turned_off():
     assert "narrate" not in overlay_config({})
-    assert overlay_config({"DOBBY_OVERLAY_NARRATE": "0", "DOBBY_MODE": "secure"}) == {"narrate": False}
+    assert overlay_config({"DOBBY_OVERLAY_NARRATE": "0", "DOBBY_MODE": "secure"}) == {
+        "narrate": False
+    }
     assert "narrate" not in overlay_config({"DOBBY_OVERLAY_NARRATE": "1"})
 
 
 def test_overlay_config_menu_bar_item_on_unless_turned_off():
     assert "menu_bar" not in overlay_config({})  # the helpers default to on
-    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "1", "DOBBY_MODE": "secure"}) == {"menu_bar": True}
-    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "0", "DOBBY_MODE": "secure"}) == {"menu_bar": False}
+    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "1", "DOBBY_MODE": "secure"}) == {
+        "menu_bar": True
+    }
+    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "0", "DOBBY_MODE": "secure"}) == {
+        "menu_bar": False
+    }
 
 
 def test_wrap_hal_is_noop_when_disabled():
@@ -151,7 +183,8 @@ def test_wrap_hal_is_noop_when_disabled():
 
 
 # --------------------------------------------------------------- client
-FAKE_HELPER = textwrap.dedent("""
+FAKE_HELPER = (
+    textwrap.dedent("""
     import json, sys
     log = open(sys.argv[1], "a")
     print(json.dumps({"ready": True, "version": %d}), flush=True)
@@ -173,7 +206,9 @@ FAKE_HELPER = textwrap.dedent("""
             print(json.dumps({"ack": msg["id"], "ok": True}), flush=True)
         if msg.get("op") == "bye":
             break
-""") % p.PROTOCOL_VERSION
+""")
+    % p.PROTOCOL_VERSION
+)
 
 
 @pytest.fixture
@@ -181,7 +216,9 @@ def fake_client(tmp_path):
     script = tmp_path / "helper.py"
     script.write_text(FAKE_HELPER)
     log = tmp_path / "log.jsonl"
-    client = OverlayClient(cmd=[sys.executable, str(script), str(log)], ack_timeout=0.5, startup_timeout=5)
+    client = OverlayClient(
+        cmd=[sys.executable, str(script), str(log)], ack_timeout=0.5, startup_timeout=5
+    )
     yield client, log
     client.close()
 
@@ -202,7 +239,15 @@ def test_client_roundtrip(fake_client):
     assert client.hide() is True
     assert client.show() is True
     client.close()
-    assert _ops(log) == ["cursor.move", "cursor.click", "cursor.state", "glow.track", "hide", "show", "bye"]
+    assert _ops(log) == [
+        "cursor.move",
+        "cursor.click",
+        "cursor.state",
+        "glow.track",
+        "hide",
+        "show",
+        "bye",
+    ]
 
 
 def test_client_ack_timeout_does_not_block(fake_client):
@@ -223,8 +268,10 @@ def test_client_disables_when_helper_missing(tmp_path):
 
 def test_client_disables_on_protocol_mismatch(tmp_path):
     script = tmp_path / "old.py"
-    script.write_text("import json,sys\nprint(json.dumps({'ready': True, 'version': 999}), flush=True)\n"
-                      "[None for _ in sys.stdin]\n")
+    script.write_text(
+        "import json,sys\nprint(json.dumps({'ready': True, 'version': 999}), flush=True)\n"
+        "[None for _ in sys.stdin]\n"
+    )
     client = OverlayClient(cmd=[sys.executable, str(script)], ack_timeout=0.3)
     client.move(1, 1)
     time.sleep(0.2)
@@ -323,7 +370,10 @@ class FakeHAL:
         return window_id != "missing"
 
     def list_windows(self):
-        return [SimpleNamespace(title="Vivado"), SimpleNamespace(title=p.OVERLAY_WINDOW_TITLE + " - Python")]
+        return [
+            SimpleNamespace(title="Vivado"),
+            SimpleNamespace(title=p.OVERLAY_WINDOW_TITLE + " - Python"),
+        ]
 
     def capture_screen(self, region=None):
         self.events.append(("hal.capture", region))
@@ -343,44 +393,73 @@ def wrapped():
 def test_click_points_first_then_acts_then_ripples(wrapped):
     hal, ev = wrapped
     assert hal.mouse_click(5, 6, "right", 1) == "clicked"
-    assert ev == [("checkpoint",), ("move", 5, 6, None, True, "Right-click", True),
-                  ("hal.click", 5, 6, "right", 1), ("click", "right", 1)]
+    assert ev == [
+        ("checkpoint",),
+        ("move", 5, 6, None, True, "Right-click", True),
+        ("hal.click", 5, 6, "right", 1),
+        ("click", "right", 1),
+    ]
 
 
 def test_coordinate_converter_applies_to_overlay_only():
     ov = RecordingOverlay()
     hal = OverlayHAL(FakeHAL(ov.calls), ov, to_points=lambda x, y: (x / 2, y / 2))
     hal.mouse_move(100, 50)
-    assert ov.calls == [("checkpoint",), ("move", 50.0, 25.0, None, True, "Move", False), ("hal.move", 100, 50)]
+    assert ov.calls == [
+        ("checkpoint",),
+        ("move", 50.0, 25.0, None, True, "Move", False),
+        ("hal.move", 100, 50),
+    ]
 
 
 def test_drag_follows_in_parallel(wrapped):
     hal, ev = wrapped
     hal.mouse_drag(0, 0, 10, 10, 0.5)
-    assert ev == [("checkpoint",), ("move", 0, 0, None, True, "Drag", True), ("move", 10, 10, 500, False),
-                  ("hal.drag", 0, 0, 10, 10), ("clear_box",)]
+    assert ev == [
+        ("checkpoint",),
+        ("move", 0, 0, None, True, "Drag", True),
+        ("move", 10, 10, 500, False),
+        ("hal.drag", 0, 0, 10, 10),
+        ("clear_box",),
+    ]
 
 
 def test_typing_badge_reset_even_on_error(wrapped):
     hal, ev = wrapped
     with pytest.raises(RuntimeError):
         hal.keyboard_type("boom")
-    assert ev == [("checkpoint",), ("intent", "Type \u201cboom\u201d"), ("state", "typing"),
-                  ("hal.type", "boom"), ("state", "idle")]
+    assert ev == [
+        ("checkpoint",),
+        ("intent", "Type \u201cboom\u201d"),
+        ("state", "typing"),
+        ("hal.type", "boom"),
+        ("state", "idle"),
+    ]
 
 
 def test_focus_tracks_only_on_success(wrapped):
     hal, ev = wrapped
     assert hal.focus_window("0x1") is True
     assert hal.focus_window("missing") is False
-    assert ev == [("checkpoint",), ("hal.focus", "0x1"), ("track", "0x1"), ("checkpoint",), ("hal.focus", "missing")]
+    assert ev == [
+        ("checkpoint",),
+        ("hal.focus", "0x1"),
+        ("track", "0x1"),
+        ("checkpoint",),
+        ("hal.focus", "missing"),
+    ]
 
 
 def test_capture_hides_overlay(wrapped):
     hal, ev = wrapped
     assert hal.capture_screen((0, 0, 10, 10)) == "image"
-    assert ev == [("hide",), ("hal.capture", (0, 0, 10, 10)), ("show",), ("scan", (0, 0, 10, 10)),
-                  ("state", "thinking")]
+    assert ev == [
+        ("hide",),
+        ("hal.capture", (0, 0, 10, 10)),
+        ("show",),
+        ("scan", (0, 0, 10, 10)),
+        ("state", "thinking"),
+    ]
 
 
 def test_capture_skips_handshake_when_inactive():
@@ -433,9 +512,13 @@ def test_protocol_v2_ops():
     assert p.decode(p.encode("cursor.move", 1, x=1, y=2, verb="Click", probe=True))["probe"] is True
     assert p.decode(p.encode("risk", None, level="danger"))["level"] == "danger"
     assert p.decode(p.encode("confirm", 3, text="ok?", secs=5))["secs"] == 5
-    for bad in ({"op": "risk", "level": "spicy"}, {"op": "scan", "x": 1},
-                {"op": "cursor.move", "x": 1, "y": 1, "probe": "yes"},
-                {"op": "intent", "text": 5}, {"op": "target.box", "x": 1, "y": 1, "w": True, "h": 1}):
+    for bad in (
+        {"op": "risk", "level": "spicy"},
+        {"op": "scan", "x": 1},
+        {"op": "cursor.move", "x": 1, "y": 1, "probe": "yes"},
+        {"op": "intent", "text": 5},
+        {"op": "target.box", "x": 1, "y": 1, "w": True, "h": 1},
+    ):
         with pytest.raises(p.ProtocolError):
             p.validate(bad)
     assert json.loads(p.event("stop")) == {"event": "stop"}
@@ -469,6 +552,7 @@ def test_client_pause_then_resume(fake_client):
     client.intent("EMIT:pause")
     client.move(1, 1, ms=0)
     import threading as _t
+
     _t.Timer(0.3, lambda: client.intent("EMIT:resume")).start()
     t0 = time.monotonic()
     client.checkpoint(max_wait=5)
@@ -546,6 +630,7 @@ def test_wait_for_wake_clears_pause_and_takeover_on_wake(fake_client):
 def test_wait_for_wake_can_be_cancelled(fake_client):
     client, log = fake_client
     import threading as _t
+
     cancel = _t.Event()
     _t.Timer(0.2, cancel.set).start()
     r = client.wait_for_wake(timeout_s=10, cancel=cancel)
@@ -562,8 +647,11 @@ def test_wait_for_wake_unavailable_without_helper(tmp_path):
 def test_wait_for_wake_is_thread_safe(fake_client):
     client, _ = fake_client
     import threading as _t
+
     out = []
-    waiters = [_t.Thread(target=lambda: out.append(client.wait_for_wake(timeout_s=5))) for _ in range(2)]
+    waiters = [
+        _t.Thread(target=lambda: out.append(client.wait_for_wake(timeout_s=5))) for _ in range(2)
+    ]
     for w in waiters:
         w.start()
     time.sleep(0.3)
@@ -604,6 +692,7 @@ def test_client_takeover_skips_step_after_idle(fake_client):
     client.intent("EMIT:user_input")
     client.move(1, 1, ms=0)
     import threading as _t
+
     _t.Timer(0.3, lambda: client.intent("EMIT:user_idle")).start()
     with pytest.raises(OverlayInterrupted):
         client.checkpoint(max_wait=5)
@@ -624,7 +713,9 @@ def test_client_confirm(fake_client):
 def test_client_writes_track(tmp_path):
     script = tmp_path / "helper.py"
     script.write_text(FAKE_HELPER)
-    client = OverlayClient(cmd=[sys.executable, str(script), str(tmp_path / "log")], track_dir=tmp_path / "tracks")
+    client = OverlayClient(
+        cmd=[sys.executable, str(script), str(tmp_path / "log")], track_dir=tmp_path / "tracks"
+    )
     client.move(5, 6, ms=0, verb="Click", probe=True)
     client.hide()
     client.risk("caution")
@@ -683,9 +774,8 @@ def test_step_denied():
     ov = RecordingOverlay()
     ov.answer = False
     hal = OverlayHAL(FakeHAL(ov.calls), ov)
-    with pytest.raises(OverlayStopped):
-        with hal.step("Delete the run", risk="danger"):
-            hal.mouse_click(1, 2)
+    with pytest.raises(OverlayStopped), hal.step("Delete the run", risk="danger"):
+        hal.mouse_click(1, 2)
     assert not any(c[0] == "hal.click" for c in ov.calls)
 
 
@@ -731,7 +821,9 @@ def test_state_at_reconstructs_overlay():
     s = an.state_at(ev, 10.2)
     assert s.cursor == (50, 40) and s.intent == "Click" and s.box == (40, 30, 30, 20)
     s = an.state_at(ev, 11.5)
-    assert s.box is None and s.risk == "danger" and s.intent == "Press \u2318Q" and len(s.trail) == 1
+    assert (
+        s.box is None and s.risk == "danger" and s.intent == "Press \u2318Q" and len(s.trail) == 1
+    )
     s = an.state_at(ev, 13.5)
     assert s.cursor == (120, 90) and [n for n, _ in s.trail] == [1, 3]
     assert an.state_at(ev, 14.5).trail == []
@@ -744,7 +836,9 @@ def test_annotate_draws_pointer_and_box():
     assert out.size == base.size
     assert out.getpixel((51, 45)) != (255, 255, 255)  # inside the arrow
     assert out.getpixel((150, 120)) == (255, 255, 255)  # untouched area
-    scaled = an.annotate(Image.new("RGB", (400, 300), "white"), an.state_at(_track(), 10.2), scale=2)
+    scaled = an.annotate(
+        Image.new("RGB", (400, 300), "white"), an.state_at(_track(), 10.2), scale=2
+    )
     assert scaled.getpixel((102, 90)) != (255, 255, 255)
 
 
@@ -768,6 +862,7 @@ def test_render_gif_and_frames(tmp_path):
 
 def test_annotate_chip_grows_with_detail_and_uses_risk_colour():
     from PIL import Image
+
     from dobby.overlay.annotate import TrackState, annotate
 
     bg = Image.new("RGB", (400, 80), (255, 255, 255))
@@ -876,7 +971,7 @@ def test_others_showing_ignores_own_and_dead_helpers(tmp_path):
     mark_waiting(d, os.getppid(), True)
     assert others_showing(d, os.getpid())
     mark_waiting(d, os.getppid(), False)
-    mark_waiting(d, 2 ** 22 + 12345, True)  # no such process: stale marker dropped
+    mark_waiting(d, 2**22 + 12345, True)  # no such process: stale marker dropped
     assert not others_showing(d, os.getpid())
 
 

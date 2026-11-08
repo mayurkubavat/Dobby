@@ -10,7 +10,7 @@ import os
 import sys
 import tempfile
 import time
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 try:
     from mcp.server.mcpserver import MCPServer
@@ -21,15 +21,16 @@ except ImportError:
     class ToolError(RuntimeError):
         pass
 
-from dobby.hal.factory import get_desktop_hal
+
 from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.agent_loop.trajectory import TrajectoryEngine
-from dobby.types import FindElementResult, DiagnosticsResult
 from dobby.config import CONFIG
-from dobby.toolset import ToolSetManager, ToolDefinition, OutputMode
 from dobby.control import ControlChanged, adopt_client_name, get_controller
+from dobby.hal.factory import get_desktop_hal
+from dobby.toolset import OutputMode, ToolDefinition, ToolSetManager
+from dobby.types import DiagnosticsResult
 
-_TOOL_LIST_NOTIFICATIONS: List[str] = []
+_TOOL_LIST_NOTIFICATIONS: list[str] = []
 
 # One line per tool call (name, duration, outcome) plus tracebacks, in
 # ~/.dobby/logs/server.log. Never stdout: that carries the MCP protocol.
@@ -37,31 +38,40 @@ tool_log = logging.getLogger("dobby.tools")
 SERVER_LOG = os.path.expanduser("~/.dobby/logs/server.log")
 
 
-def setup_server_log(path: str = SERVER_LOG, max_bytes: int = 1_000_000, backups: int = 2) -> Optional[logging.Handler]:
+def setup_server_log(
+    path: str = SERVER_LOG, max_bytes: int = 1_000_000, backups: int = 2
+) -> logging.Handler | None:
     """Attach a small rotating file log to the ``dobby`` loggers. Silent if the file can't be opened."""
     from logging.handlers import RotatingFileHandler
 
     root = logging.getLogger("dobby")
     for h in root.handlers:
-        if isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", "") == os.path.abspath(path):
+        if isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", "") == os.path.abspath(
+            path
+        ):
             return h
     try:
         if os.path.abspath(path) == os.path.abspath(SERVER_LOG):
             # ~/.dobby holds logs, app grants and model choices: this user only.
             from pathlib import Path
+
             from dobby.hub.paths import ensure_private_dir
 
             ensure_private_dir(Path(SERVER_LOG).parent.parent)
             ensure_private_dir(Path(SERVER_LOG).parent)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        handler = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8")
+        handler = RotatingFileHandler(
+            path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
+        )
         try:
             os.chmod(path, 0o600)
         except OSError:
             pass
     except OSError:
         return None
-    handler.setFormatter(logging.Formatter(f"%(asctime)s [{os.getpid()}] %(levelname)s %(name)s: %(message)s"))
+    handler.setFormatter(
+        logging.Formatter(f"%(asctime)s [{os.getpid()}] %(levelname)s %(name)s: %(message)s")
+    )
     handler.setLevel(logging.INFO)
     root.addHandler(handler)
     if root.level == logging.NOTSET or root.level > logging.INFO:
@@ -105,7 +115,7 @@ def _returns_dict(fn: Any) -> bool:
     except Exception:  # noqa: BLE001
         ret = getattr(fn, "__annotations__", {}).get("return")
     origin = typing.get_origin(ret) or ret
-    return origin in (dict, Dict)
+    return origin in (dict, dict)
 
 
 def _handoff_guard(fn: Any) -> Any:
@@ -124,7 +134,7 @@ def _handoff_guard(fn: Any) -> Any:
 
     as_dict = _returns_dict(fn)
 
-    def answer(exc: BaseException) -> Dict[str, Any]:
+    def answer(exc: BaseException) -> dict[str, Any]:
         result = classify(exc)
         if result is None:
             tool_log.error("%s raised %s: %s", fn.__name__, type(exc).__name__, exc, exc_info=exc)
@@ -134,12 +144,14 @@ def _handoff_guard(fn: Any) -> Any:
         return result
 
     if inspect.iscoroutinefunction(fn):
+
         @functools.wraps(fn)
         async def guarded_async(*args: Any, **kwargs: Any) -> Any:
             try:
                 return await fn(*args, **kwargs)
             except Exception as exc:  # noqa: BLE001 - re-raised unless a handoff
                 return answer(exc)
+
         return guarded_async
 
     @functools.wraps(fn)
@@ -148,6 +160,7 @@ def _handoff_guard(fn: Any) -> Any:
             return fn(*args, **kwargs)
         except Exception as exc:  # noqa: BLE001 - re-raised unless a handoff
             return answer(exc)
+
     return guarded
 
 
@@ -181,7 +194,9 @@ class DobbyServer(MCPServer):
             tool_log.warning("%s refused by admin policy %s", name, rules.source)
             raise ToolError(rules.tool_refusal(name))
         if not toolset_manager.is_tool_active(name):
-            raise ToolError(f"Tool '{name}' is outside the active tool profile. Call manage_toolsets to enable it.")
+            raise ToolError(
+                f"Tool '{name}' is outside the active tool profile. Call manage_toolsets to enable it."
+            )
         _adopt_client_name(context)
         from dobby.hub import sessions as _sessions
 
@@ -190,11 +205,22 @@ class DobbyServer(MCPServer):
         try:
             result = await self._call_in_scope(name, arguments, context)
         except BaseException as exc:
-            tool_log.error("%s failed after %.2fs: %s: %s", name, time.monotonic() - started, type(exc).__name__, exc)
+            tool_log.error(
+                "%s failed after %.2fs: %s: %s",
+                name,
+                time.monotonic() - started,
+                type(exc).__name__,
+                exc,
+            )
             raise
         is_error = bool(getattr(result, "is_error", getattr(result, "isError", False)))
-        tool_log.log(logging.ERROR if is_error else logging.INFO, "%s %s %.2fs",
-                     name, "error" if is_error else "ok", time.monotonic() - started)
+        tool_log.log(
+            logging.ERROR if is_error else logging.INFO,
+            "%s %s %.2fs",
+            name,
+            "error" if is_error else "ok",
+            time.monotonic() - started,
+        )
         return _image_as_content(result)
 
     async def _call_in_scope(self, name, arguments, context):
@@ -233,7 +259,9 @@ def _image_as_content(result: Any) -> Any:
     return CallToolResult(
         content=[
             TextContent(type="text", text=json.dumps(header, indent=2, default=str)),
-            ImageContent(type="image", data=image, mime_type=payload.get("mime_type") or "image/jpeg"),
+            ImageContent(
+                type="image", data=image, mime_type=payload.get("mime_type") or "image/jpeg"
+            ),
         ],
         structured_content={"result": header} if wrapped else header,
     )
@@ -320,7 +348,7 @@ toolset_manager = ToolSetManager(
 )
 
 # Register tools with ToolSetManager for dynamic capability gating
-_TOOL_DOMAINS: Dict[str, tuple[str, str]] = {
+_TOOL_DOMAINS: dict[str, tuple[str, str]] = {
     # Core tools. The cheap perception tiers (AX tree, OCR, local yes/no) stay in core so
     # the minimal profile can avoid screenshots.
     "take_screenshot": ("core", "Captures desktop screen with visual perception"),
@@ -335,7 +363,10 @@ _TOOL_DOMAINS: Dict[str, tuple[str, str]] = {
     "request_control": ("core", "Waits for and takes control of the desktop"),
     "release_control": ("core", "Gives desktop control to a waiting agent"),
     "hold_control": ("core", "Keeps desktop control through a fragile multi-step flow"),
-    "wait_for_wake": ("core", "Stays available after a task until the user clicks Dobby's bar to wake it"),
+    "wait_for_wake": (
+        "core",
+        "Stays available after a task until the user clicks Dobby's bar to wake it",
+    ),
     # Window management
     "list_windows": ("window_mgmt", "Lists active top-level windows"),
     "get_active_window": ("window_mgmt", "Gets currently active window"),
@@ -360,13 +391,34 @@ _TOOL_DOMAINS: Dict[str, tuple[str, str]] = {
     "configure_vision": ("advanced_vision", "Configures runtime vision parameters"),
     "get_vision_diagnostics": ("advanced_vision", "Returns perception system health"),
     "ask_screen": ("core", "Answers visual questions via OCR/Gemma"),
-    "get_screen_state": ("advanced_vision", "Numbered text-only view of the active window (AX + OCR) with valid operations"),
-    "act_on_element": ("advanced_vision", "Clicks or types on a screen-state element after re-binding it on a fresh frame"),
-    "decide_next_element": ("advanced_vision", "Local Gemma picks the next screen-state element for a goal, gated by risk"),
-    "get_model_roles": ("advanced_vision", "Shows which local model does each job and which candidates are installed"),
-    "set_model_role": ("advanced_vision", "Points one job (text, vision, visual_pick, triage) at another local model"),
-    "decide_visual_element": ("advanced_vision", "Local Gemma picks a control from a marked-up screenshot when it has no text label"),
-    "choose_option": ("advanced_vision", "Local Gemma picks one option with calibrated probabilities, gated by risk"),
+    "get_screen_state": (
+        "advanced_vision",
+        "Numbered text-only view of the active window (AX + OCR) with valid operations",
+    ),
+    "act_on_element": (
+        "advanced_vision",
+        "Clicks or types on a screen-state element after re-binding it on a fresh frame",
+    ),
+    "decide_next_element": (
+        "advanced_vision",
+        "Local Gemma picks the next screen-state element for a goal, gated by risk",
+    ),
+    "get_model_roles": (
+        "advanced_vision",
+        "Shows which local model does each job and which candidates are installed",
+    ),
+    "set_model_role": (
+        "advanced_vision",
+        "Points one job (text, vision, visual_pick, triage) at another local model",
+    ),
+    "decide_visual_element": (
+        "advanced_vision",
+        "Local Gemma picks a control from a marked-up screenshot when it has no text label",
+    ),
+    "choose_option": (
+        "advanced_vision",
+        "Local Gemma picks one option with calibrated probabilities, gated by risk",
+    ),
     "read_screen_text": ("core", "Extracts screen text via local OCR"),
     "find_visual_element": ("advanced_vision", "Finds visual elements without accessibility names"),
     # Plugins
@@ -378,10 +430,16 @@ _TOOL_DOMAINS: Dict[str, tuple[str, str]] = {
     "start_skill_recording": ("skills", "Begins recording trajectory"),
     "stop_skill_recording": ("skills", "Stops recording and returns session journal"),
     "crystallize_skill": ("skills", "Crystallizes recorded session into reusable macro"),
-    "execute_crystallized_skill": ("skills", "Executes crystallized skill with parameter substitution"),
+    "execute_crystallized_skill": (
+        "skills",
+        "Executes crystallized skill with parameter substitution",
+    ),
     "list_crystallized_skills": ("skills", "Lists all crystallized skills"),
     "delete_crystallized_skill": ("skills", "Deletes crystallized skill"),
-    "start_cassette_recording": ("skills", "Records live actions and screen state as a replayable cassette"),
+    "start_cassette_recording": (
+        "skills",
+        "Records live actions and screen state as a replayable cassette",
+    ),
     "stop_cassette_recording": ("skills", "Stops cassette recording and writes index.json"),
     # VDOM
     "capture_vdom": ("vdom", "Captures unified Virtual DOM snapshot"),
@@ -395,16 +453,15 @@ for _name, (_dom, _desc) in _TOOL_DOMAINS.items():
 @mcp_server.tool()
 def take_screenshot(
     mode: str = "annotated_som",
-    app_filter: Optional[str] = None,
-    region: Optional[List[int]] = None,
-    window_id: Optional[str] = None,
+    app_filter: str | None = None,
+    region: list[int] | None = None,
+    window_id: str | None = None,
     clip_to_active_window: bool = False,
-    strategy_override: Optional[str] = None,
+    strategy_override: str | None = None,
     zoom_factor: float = 1.0,
     include_image: bool = False,
-) -> Dict[str, Any]:
-    """
-    Captures the desktop screen with visual perception and Set-of-Marks.
+) -> dict[str, Any]:
+    """Captures the desktop screen with visual perception and Set-of-Marks.
 
     The default payload is the mark list (id, role, name, center) and a resource
     URI for the image. Pass include_image=True to inline image_base64.
@@ -432,20 +489,22 @@ def take_screenshot(
     return _screenshot_summary(result.model_dump(), include_image)
 
 
-def _screenshot_summary(payload: Dict[str, Any], include_image: bool) -> Dict[str, Any]:
+def _screenshot_summary(payload: dict[str, Any], include_image: bool) -> dict[str, Any]:
     """Marks header by default. The image bytes are a resource unless inlined."""
     marks = []
     for mark in payload.get("marks") or []:
         bbox = mark.get("bbox") or {}
         cx = int(bbox.get("x", 0)) + int(bbox.get("width", 0)) // 2
         cy = int(bbox.get("y", 0)) + int(bbox.get("height", 0)) // 2
-        marks.append({
-            "id": mark.get("id"),
-            "role": mark.get("role"),
-            "name": mark.get("name"),
-            "center": [cx, cy],
-        })
-    summary: Dict[str, Any] = {
+        marks.append(
+            {
+                "id": mark.get("id"),
+                "role": mark.get("role"),
+                "name": mark.get("name"),
+                "center": [cx, cy],
+            }
+        )
+    summary: dict[str, Any] = {
         "ok": True,
         "kind": "screenshot",
         "width": payload["width"],
@@ -485,12 +544,11 @@ def _screenshot_summary(payload: Dict[str, Any], include_image: bool) -> Dict[st
 
 @mcp_server.tool()
 def capture_window(
-    window_id: Optional[str] = None,
-    title_filter: Optional[str] = None,
+    window_id: str | None = None,
+    title_filter: str | None = None,
     mode: str = "annotated_som",
-) -> Dict[str, Any]:
-    """
-    High-efficiency perception tool that captures strictly the target or active window.
+) -> dict[str, Any]:
+    """High-efficiency perception tool that captures strictly the target or active window.
     Slashes multimodal token consumption by 60-80% compared to capturing a full 4K display.
 
     Args:
@@ -498,7 +556,9 @@ def capture_window(
         title_filter: Substring to match window title (e.g. 'Chrome', 'Terminal', 'Verdi').
         mode: 'annotated_som', 'annotated_cv', or 'raw'.
     """
-    target_win = controller.window_clipper.resolve_target_window(window_id=window_id, title_filter=title_filter)
+    target_win = controller.window_clipper.resolve_target_window(
+        window_id=window_id, title_filter=title_filter
+    )
     win_id = target_win.window_id if target_win else None
     result = controller.capture_state(
         mode=mode,
@@ -511,9 +571,8 @@ def capture_window(
 @mcp_server.tool()
 def dismiss_obstructions(
     max_attempts: int = 2,
-) -> Dict[str, Any]:
-    """
-    Autonomous defense & modal triage: Detects and classifies blocking modal popups.
+) -> dict[str, Any]:
+    """Autonomous defense & modal triage: Detects and classifies blocking modal popups.
     Safely auto-dismisses benign popups and acknowledges informative completion notices,
     while halting and returning an escalation payload for workflow-branching or destructive dialogs.
 
@@ -529,11 +588,10 @@ def dismiss_obstructions(
 
 @mcp_server.tool()
 def resolve_modal_dialog(
-    button_id: Optional[str] = None,
-    button_label: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Resolves an escalated modal dialog by clicking the specified button option.
+    button_id: str | None = None,
+    button_label: str | None = None,
+) -> dict[str, Any]:
+    """Resolves an escalated modal dialog by clicking the specified button option.
     Allows the orchestrator to safely make decisions on branching or destructive modals (0 visual tokens).
 
     Args:
@@ -549,11 +607,10 @@ def resolve_modal_dialog(
 @mcp_server.tool()
 def manage_cache(
     action: str = "stats",
-    app_key: Optional[str] = None,
-    query: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Manages the Self-Healing Action & Locator Cache.
+    app_key: str | None = None,
+    query: str | None = None,
+) -> dict[str, Any]:
+    """Manages the Self-Healing Action & Locator Cache.
 
     Args:
         action: 'stats' (view telemetry), 'verify' (proactive health check against live screen),
@@ -578,7 +635,9 @@ def manage_cache(
         try:
             screen = hal.capture_screen()
             win = hal.get_active_window()
-            return controller.action_cache.proactive_verify_all(app_key=target_app, live_screen=screen, current_window=win)
+            return controller.action_cache.proactive_verify_all(
+                app_key=target_app, live_screen=screen, current_window=win
+            )
         except Exception as e:
             return {"success": False, "error": f"Failed to execute proactive {act}: {e}"}
     return {"success": False, "error": f"Unknown action: '{action}'"}
@@ -587,11 +646,10 @@ def manage_cache(
 @mcp_server.tool()
 def manage_toolsets(
     action: str = "list_domains",
-    domains: Optional[List[str]] = None,
-    output_mode: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Manages MCP tool domains and out-of-band payload offloading to save AI prompt tokens.
+    domains: list[str] | None = None,
+    output_mode: str | None = None,
+) -> dict[str, Any]:
+    """Manages MCP tool domains and out-of-band payload offloading to save AI prompt tokens.
 
     Args:
         action: 'list_domains', 'enable', 'disable', or 'set_output_mode'.
@@ -606,14 +664,13 @@ def manage_toolsets(
 
 @mcp_server.tool()
 def get_accessibility_tree(
-    app_name_filter: Optional[str] = None,
+    app_name_filter: str | None = None,
     max_depth: int = 16,
     filter_interactable: bool = True,
     diff_only: bool = False,
-    output_mode: Optional[str] = None,
+    output_mode: str | None = None,
 ) -> Any:
-    """
-    Directly queries OS accessibility bus (AXUIElement on macOS, AT-SPI2 on Linux)
+    """Directly queries OS accessibility bus (AXUIElement on macOS, AT-SPI2 on Linux)
     for the live semantic UI tree. Provides ground-truth element names, roles, and
     physical bounding boxes without visual hallucination.
 
@@ -635,10 +692,17 @@ def get_accessibility_tree(
         diff_only=diff_only,
     )
     if isinstance(res, dict):
-        return toolset_manager.format_output("get_accessibility_tree", res, output_mode_override=output_mode)
+        return toolset_manager.format_output(
+            "get_accessibility_tree", res, output_mode_override=output_mode
+        )
     elif isinstance(res, list):
-        payload = {"count": len(res), "nodes": [n.model_dump() if hasattr(n, "model_dump") else n for n in res]}
-        formatted = toolset_manager.format_output("get_accessibility_tree", payload, output_mode_override=output_mode)
+        payload = {
+            "count": len(res),
+            "nodes": [n.model_dump() if hasattr(n, "model_dump") else n for n in res],
+        }
+        formatted = toolset_manager.format_output(
+            "get_accessibility_tree", payload, output_mode_override=output_mode
+        )
         if formatted.get("offloaded", False):
             return formatted
         return res
@@ -648,12 +712,11 @@ def get_accessibility_tree(
 @mcp_server.tool()
 def find_element(
     query: str,
-    role: Optional[str] = None,
+    role: str | None = None,
     fuzzy: bool = True,
-    strategy: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Autonomously searches for a UI element by text, accessible name, or role.
+    strategy: str | None = None,
+) -> dict[str, Any]:
+    """Autonomously searches for a UI element by text, accessible name, or role.
     Extremely token-efficient: resolves physical (x, y) coordinates with ZERO screenshot tokens.
 
     Args:
@@ -676,17 +739,16 @@ def find_element(
 
 @mcp_server.tool()
 def click(
-    mark_id: Optional[int] = None,
-    x: Optional[int] = None,
-    y: Optional[int] = None,
-    query: Optional[str] = None,
+    mark_id: int | None = None,
+    x: int | None = None,
+    y: int | None = None,
+    query: str | None = None,
     button: str = "left",
     click_count: int = 1,
     verify_delta: bool = True,
-    expected_outcome: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """
-    Clicks on a UI element either by Set-of-Marks ID, text query, or physical (x, y) coordinates.
+    expected_outcome: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Clicks on a UI element either by Set-of-Marks ID, text query, or physical (x, y) coordinates.
 
     Args:
         mark_id: Numeric badge ID from last screenshot.
@@ -700,7 +762,9 @@ def click(
     Returns:
         Verification result detailing success, delta detected, and visual change ratio.
     """
-    target_x, target_y = controller.resolve_target_coordinates(query=query, mark_id=mark_id, x=x, y=y)
+    target_x, target_y = controller.resolve_target_coordinates(
+        query=query, mark_id=mark_id, x=x, y=y
+    )
 
     if expected_outcome:
         verdict = controller.bicameral.execute_step(
@@ -726,17 +790,16 @@ def click(
 @mcp_server.tool()
 def click_and_type(
     text: str,
-    query: Optional[str] = None,
-    mark_id: Optional[int] = None,
-    x: Optional[int] = None,
-    y: Optional[int] = None,
+    query: str | None = None,
+    mark_id: int | None = None,
+    x: int | None = None,
+    y: int | None = None,
     clear_first: bool = False,
     press_enter: bool = False,
     delay_ms: float = CONFIG.typing_delay_ms,
     verify_delta: bool = True,
-) -> Dict[str, Any]:
-    """
-    High-level atomic compound action: Focuses an element (by query, mark_id, or x,y),
+) -> dict[str, Any]:
+    """High-level atomic compound action: Focuses an element (by query, mark_id, or x,y),
     optionally clears existing text (Ctrl+A -> Backspace), types string with natural cadence,
     and optionally presses Enter.
 
@@ -770,9 +833,8 @@ def find_and_click(
     button: str = "left",
     click_count: int = 1,
     verify_delta: bool = True,
-) -> Dict[str, Any]:
-    """
-    Autonomous one-shot action: Finds an element by text query and clicks it with verified delta.
+) -> dict[str, Any]:
+    """Autonomous one-shot action: Finds an element by text query and clicks it with verified delta.
 
     Args:
         query: Target text or label (e.g. 'Flash-Lite', 'Argon', 'Send').
@@ -790,10 +852,8 @@ def find_and_click(
 
 
 @mcp_server.tool()
-def move_cursor(x: int, y: int) -> Dict[str, Any]:
-    """
-    Moves the mouse pointer to absolute coordinates (x, y) without clicking.
-    """
+def move_cursor(x: int, y: int) -> dict[str, Any]:
+    """Moves the mouse pointer to absolute coordinates (x, y) without clicking."""
     hal.mouse_move(x, y)
     return {"success": True, "cursor_position": [x, y]}
 
@@ -806,10 +866,9 @@ def drag_and_drop(
     end_y: int,
     duration_sec: float = 0.3,
     verify_delta: bool = True,
-) -> Dict[str, Any]:
-    """
-    Smoothly drags mouse pointer from start coordinates to end coordinates.
-    """
+) -> dict[str, Any]:
+    """Smoothly drags mouse pointer from start coordinates to end coordinates."""
+
     def _do_drag():
         hal.mouse_drag(start_x, start_y, end_x, end_y, duration_sec=duration_sec)
 
@@ -826,10 +885,8 @@ def scroll(
     direction: str = "down",
     amount: int = 3,
     verify_delta: bool = True,
-) -> Dict[str, Any]:
-    """
-    Emulates mouse wheel scroll at current cursor location.
-    """
+) -> dict[str, Any]:
+    """Emulates mouse wheel scroll at current cursor location."""
     dx, dy = 0, 0
     if direction == "up":
         dy = amount
@@ -858,9 +915,8 @@ def scroll_until_visible(
     max_scrolls: int = 6,
     scroll_amount: int = 6,
     verify_delta: bool = True,
-) -> Dict[str, Any]:
-    """
-    Autonomous scroll loop: Iteratively scrolls the viewport until the query element is found.
+) -> dict[str, Any]:
+    """Autonomous scroll loop: Iteratively scrolls the viewport until the query element is found.
 
     Args:
         query: Text or label to find.
@@ -884,10 +940,9 @@ def type_text(
     press_enter: bool = False,
     delay_ms: float = CONFIG.typing_delay_ms,
     verify_delta: bool = True,
-) -> Dict[str, Any]:
-    """
-    Types text into the currently focused desktop element.
-    """
+) -> dict[str, Any]:
+    """Types text into the currently focused desktop element."""
+
     def _do_type():
         hal.keyboard_type(text, delay_ms=delay_ms)
         if press_enter:
@@ -902,10 +957,9 @@ def type_text(
 
 
 @mcp_server.tool()
-def press_key(key: str, verify_delta: bool = True) -> Dict[str, Any]:
-    """
-    Presses and releases a single key.
-    """
+def press_key(key: str, verify_delta: bool = True) -> dict[str, Any]:
+    """Presses and releases a single key."""
+
     def _do_press():
         hal.keyboard_press_key(key)
 
@@ -918,10 +972,8 @@ def press_key(key: str, verify_delta: bool = True) -> Dict[str, Any]:
 
 
 @mcp_server.tool()
-def hotkey(combo: str, verify_delta: bool = True) -> Dict[str, Any]:
-    """
-    Sends a keyboard chord shortcut (e.g. 'ctrl+c', 'alt+tab', 'ctrl+a').
-    """
+def hotkey(combo: str, verify_delta: bool = True) -> dict[str, Any]:
+    """Sends a keyboard chord shortcut (e.g. 'ctrl+c', 'alt+tab', 'ctrl+a')."""
     keys = [k.strip() for k in combo.split("+")]
 
     def _do_hotkey():
@@ -936,34 +988,30 @@ def hotkey(combo: str, verify_delta: bool = True) -> Dict[str, Any]:
 
 
 @mcp_server.tool()
-def list_windows() -> List[Dict[str, Any]]:
-    """
-    Lists open desktop windows, titles, geometry bounds, and active focus status.
-    """
+def list_windows() -> list[dict[str, Any]]:
+    """Lists open desktop windows, titles, geometry bounds, and active focus status."""
     windows = hal.list_windows()
     return [win.model_dump() for win in windows]
 
 
 @mcp_server.tool()
-def get_active_window() -> Optional[Dict[str, Any]]:
-    """
-    Returns the currently active / focused window metadata.
-    """
+def get_active_window() -> dict[str, Any] | None:
+    """Returns the currently active / focused window metadata."""
     win = hal.get_active_window()
     return win.model_dump() if win else None
 
 
 @mcp_server.tool()
-def focus_window(window_id: str) -> Dict[str, Any]:
-    """
-    Brings target window to the foreground and grants it focus.
-    """
+def focus_window(window_id: str) -> dict[str, Any]:
+    """Brings target window to the foreground and grants it focus."""
     ok = hal.focus_window(window_id)
     _enable_plugin_domain()
-    result: Dict[str, Any] = {"success": ok, "window_id": window_id}
+    result: dict[str, Any] = {"success": ok, "window_id": window_id}
     if not ok:
         reason = getattr(hal, "last_focus_error", None)
-        result["reason"] = reason if isinstance(reason, str) and reason else "window did not come to the front"
+        result["reason"] = (
+            reason if isinstance(reason, str) and reason else "window did not come to the front"
+        )
     return result
 
 
@@ -987,9 +1035,8 @@ def _enable_plugin_domain() -> None:
 def configure_vision(
     setting: str,
     value: Any,
-) -> Dict[str, Any]:
-    """
-    Dynamically hotswaps runtime settings for grounding, tokens, and safety.
+) -> dict[str, Any]:
+    """Dynamically hotswaps runtime settings for grounding, tokens, and safety.
 
     Args:
         setting: Parameter name:
@@ -1005,7 +1052,11 @@ def configure_vision(
 
     if setting_clean == "grounding_strategy":
         ok = controller.grounding_engine.set_strategy(str(value))
-        return {"success": ok, "setting": setting_clean, "value": controller.grounding_engine.active_strategy}
+        return {
+            "success": ok,
+            "setting": setting_clean,
+            "value": controller.grounding_engine.active_strategy,
+        }
 
     if hasattr(CONFIG, setting_clean):
         setattr(CONFIG, setting_clean, value)
@@ -1015,9 +1066,8 @@ def configure_vision(
 
 
 @mcp_server.tool()
-def get_vision_diagnostics() -> Dict[str, Any]:
-    """
-    Returns diagnostic health check of the Vision MCP server, active display,
+def get_vision_diagnostics() -> dict[str, Any]:
+    """Returns diagnostic health check of the Vision MCP server, active display,
     available perception backends, and current configuration.
     """
     screen_w, screen_h = hal.get_screen_size()
@@ -1040,7 +1090,7 @@ def get_vision_diagnostics() -> Dict[str, Any]:
     return diag.model_dump()
 
 
-def _gemma_diagnostics() -> Optional[Dict[str, Any]]:
+def _gemma_diagnostics() -> dict[str, Any] | None:
     grounder = getattr(getattr(controller, "neural_grounder", None), "gemma3_grounder", None)
     if grounder is None:
         return None
@@ -1053,11 +1103,10 @@ def _gemma_diagnostics() -> Optional[Dict[str, Any]]:
 @mcp_server.tool()
 def ask_screen(
     question: str = "",
-    region: Optional[List[int]] = None,
-    expected_text: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Answers a yes/no question about the screen using the local Gemma model, without
+    region: list[int] | None = None,
+    expected_text: str | None = None,
+) -> dict[str, Any]:
+    """Answers a yes/no question about the screen using the local Gemma model, without
     sending an image back to the client (zero image tokens).
 
     Use it to verify an action ("Did the Save dialog close?", "Is the simulation
@@ -1081,15 +1130,14 @@ def ask_screen(
 @mcp_server.tool()
 def choose_option(
     goal: str,
-    options: List[str],
+    options: list[str],
     question: str = "Which option best advances the goal?",
     state: str = "",
     verb: str = "click",
     authorized: bool = False,
     shortlist_to: int = 12,
-) -> Dict[str, Any]:
-    """
-    Asks the local Gemma model to pick one of ``options`` and gates the answer by risk
+) -> dict[str, Any]:
+    """Asks the local Gemma model to pick one of ``options`` and gates the answer by risk
     (Jev-style typed decision: no text is generated, probabilities come from logprobs).
 
     Use it for cheap, fast choices among known candidates (which element to click,
@@ -1116,7 +1164,10 @@ def choose_option(
 
     grounder = getattr(getattr(controller, "neural_grounder", None), "gemma3_grounder", None)
     if grounder is None:
-        return {"error": "local Gemma is not enabled (enable_gemma3_sidecar)", "gate": {"verdict": "escalate"}}
+        return {
+            "error": "local Gemma is not enabled (enable_gemma3_sidecar)",
+            "gate": {"verdict": "escalate"},
+        }
     k = max(1, min(25, int(shortlist_to)))
     picked = shortlist(goal, list(options), k=k) if len(options) > k else list(options)
     ctx = f"Goal: {goal.strip()}" + (f"\nScreen state:\n{state.strip()}" if state.strip() else "")
@@ -1125,7 +1176,11 @@ def choose_option(
     except (GemmaError, ValueError) as e:
         return {"error": str(e), "gate": {"verdict": "escalate", "reason": "Gemma unavailable"}}
     result = gate(decision, verb, authorized=authorized)
-    return {"decision": decision.as_dict(), "gate": result.as_dict(), "shortlisted": len(picked) < len(options)}
+    return {
+        "decision": decision.as_dict(),
+        "gate": result.as_dict(),
+        "shortlisted": len(picked) < len(options),
+    }
 
 
 _screen_tracker = None
@@ -1142,15 +1197,14 @@ def _tracker():
 
 @mcp_server.tool()
 def get_screen_state(
-    app_name_filter: Optional[str] = None,
+    app_name_filter: str | None = None,
     use_ocr: bool = True,
     max_elements: int = 60,
     as_text: bool = True,
     settle: bool = True,
     include_icons: bool = False,
-) -> Dict[str, Any]:
-    """
-    Observes the active window as a numbered, text-only list of elements (e1, e2, ...)
+) -> dict[str, Any]:
+    """Observes the active window as a numbered, text-only list of elements (e1, e2, ...)
     merged from the accessibility tree and OCR, with the operations valid right now
     (``type`` only when an editable, non-secure field has focus). No image tokens.
 
@@ -1169,10 +1223,20 @@ def get_screen_state(
     """
     from dobby.screen_state.observe import observe
 
-    state = observe(controller, _tracker(), app_name_filter=app_name_filter, use_ocr=use_ocr,
-                    settle="auto" if settle else False, use_detector=include_icons)
-    out = {"generation": state.generation, "element_count": len(state.elements), "operations": state.operations,
-           "settle": state.settle}
+    state = observe(
+        controller,
+        _tracker(),
+        app_name_filter=app_name_filter,
+        use_ocr=use_ocr,
+        settle="auto" if settle else False,
+        use_detector=include_icons,
+    )
+    out = {
+        "generation": state.generation,
+        "element_count": len(state.elements),
+        "operations": state.operations,
+        "settle": state.settle,
+    }
     if as_text:
         out["state"] = state.to_text(max_elements=max(1, int(max_elements)))
     else:
@@ -1185,12 +1249,11 @@ def act_on_element(
     eid: str,
     generation: int,
     action: str = "click",
-    text: Optional[str] = None,
+    text: str | None = None,
     press_enter: bool = False,
-    app_name_filter: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Clicks, double-clicks or types on an element from get_screen_state, after re-binding
+    app_name_filter: str | None = None,
+) -> dict[str, Any]:
+    """Clicks, double-clicks or types on an element from get_screen_state, after re-binding
     it on a fresh observation (by role and label, nearest to its old place).
 
     Refuses when the element is gone, moved too far, disabled, covered by another
@@ -1208,8 +1271,16 @@ def act_on_element(
     """
     from dobby.screen_state.observe import act_on_element as _act
 
-    return _act(controller, _tracker(), eid, generation, action=action, text=text,
-                press_enter=press_enter, app_name_filter=app_name_filter)
+    return _act(
+        controller,
+        _tracker(),
+        eid,
+        generation,
+        action=action,
+        text=text,
+        press_enter=press_enter,
+        app_name_filter=app_name_filter,
+    )
 
 
 @mcp_server.tool()
@@ -1218,11 +1289,10 @@ def decide_next_element(
     verb: str = "click",
     authorized: bool = False,
     shortlist_to: int = 12,
-    app_name_filter: Optional[str] = None,
+    app_name_filter: str | None = None,
     visual_fallback: bool = True,
-) -> Dict[str, Any]:
-    """
-    Observes the screen, shortlists elements by word overlap with the goal, and lets
+) -> dict[str, Any]:
+    """Observes the screen, shortlists elements by word overlap with the goal, and lets
     the local Gemma pick one (probabilities from logprobs), gated by the verb's risk.
     A second yes/no question confirms the pick; if it disagrees, the verdict becomes
     "escalate" (the right target may not be on screen). The app's menu bar is included.
@@ -1243,19 +1313,30 @@ def decide_next_element(
 
     grounder = getattr(getattr(controller, "neural_grounder", None), "gemma3_grounder", None)
     if grounder is None:
-        return {"error": "local Gemma is not enabled (enable_gemma3_sidecar)", "gate": {"verdict": "escalate"}}
+        return {
+            "error": "local Gemma is not enabled (enable_gemma3_sidecar)",
+            "gate": {"verdict": "escalate"},
+        }
     try:
-        return _decide(controller, _tracker(), grounder.decider(role="text"), goal, verb=verb, authorized=authorized,
-                       k=shortlist_to, app_name_filter=app_name_filter, visual_fallback=visual_fallback,
-                       visual_decider=grounder.decider(role="visual_pick"))
+        return _decide(
+            controller,
+            _tracker(),
+            grounder.decider(role="text"),
+            goal,
+            verb=verb,
+            authorized=authorized,
+            k=shortlist_to,
+            app_name_filter=app_name_filter,
+            visual_fallback=visual_fallback,
+            visual_decider=grounder.decider(role="visual_pick"),
+        )
     except (GemmaError, ValueError) as e:
         return {"error": str(e), "gate": {"verdict": "escalate", "reason": "Gemma unavailable"}}
 
 
 @mcp_server.tool()
-def get_model_roles() -> Dict[str, Any]:
-    """
-    Which local model does each job (text, vision, visual_pick, triage), where that
+def get_model_roles() -> dict[str, Any]:
+    """Which local model does each job (text, vision, visual_pick, triage), where that
     choice came from (env, runtime, ~/.dobby/models.json, config, default), whether it
     is installed in Ollama, and known candidate models. Nothing is downloaded.
     """
@@ -1267,15 +1348,16 @@ def get_model_roles() -> Dict[str, Any]:
         "roles": roles_table(installed),
         "models_file": str(MODELS_FILE),
         "icon_detector": CONFIG.icon_detector,
-        "candidates": [dict(p.as_dict(), installed=(p.tag in installed) if installed is not None else None)
-                       for p in KNOWN_MODELS],
+        "candidates": [
+            dict(p.as_dict(), installed=(p.tag in installed) if installed is not None else None)
+            for p in KNOWN_MODELS
+        ],
     }
 
 
 @mcp_server.tool()
-def set_model_role(role: str, model: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Points one job at another local Ollama model for this server session, e.g.
+def set_model_role(role: str, model: str | None = None) -> dict[str, Any]:
+    """Points one job at another local Ollama model for this server session, e.g.
     set_model_role("visual_pick", "qwen2.5vl:7b"). An empty model clears the override.
     Refuses a model that is not installed (pull it yourself first). For a lasting
     choice, write ~/.dobby/models.json or set DOBBY_MODEL_<ROLE> in the client config.
@@ -1288,7 +1370,11 @@ def set_model_role(role: str, model: Optional[str] = None) -> Dict[str, Any]:
 
     grounder = getattr(getattr(controller, "neural_grounder", None), "gemma3_grounder", None)
     if model and grounder is not None and not grounder.client.has_model(model):
-        return {"success": False, "error": f"'{model}' is not installed in Ollama; pull it first", "role": role}
+        return {
+            "success": False,
+            "error": f"'{model}' is not installed in Ollama; pull it first",
+            "role": role,
+        }
     try:
         now = set_role(role, model)
     except ValueError as e:
@@ -1302,10 +1388,9 @@ def decide_visual_element(
     verb: str = "click",
     authorized: bool = False,
     max_marks: int = 20,
-    app_name_filter: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Picks a control from a screenshot when the text view has no name for it (toolbar
+    app_name_filter: str | None = None,
+) -> dict[str, Any]:
+    """Picks a control from a screenshot when the text view has no name for it (toolbar
     icons, canvas apps, custom widgets). The icon detector adds boxes the accessibility
     tree missed; local Gemma sees the window with lettered boxes and picks a letter
     (probabilities from logprobs), then a close-up yes/no check confirms it. Click points
@@ -1324,23 +1409,33 @@ def decide_visual_element(
 
     grounder = getattr(getattr(controller, "neural_grounder", None), "gemma3_grounder", None)
     if grounder is None:
-        return {"error": "local Gemma is not enabled (enable_gemma3_sidecar)", "gate": {"verdict": "escalate"}}
+        return {
+            "error": "local Gemma is not enabled (enable_gemma3_sidecar)",
+            "gate": {"verdict": "escalate"},
+        }
     try:
-        return _visual(controller, _tracker(), grounder.decider(role="visual_pick"), goal, verb=verb, authorized=authorized,
-                       max_marks=max_marks, app_name_filter=app_name_filter)
+        return _visual(
+            controller,
+            _tracker(),
+            grounder.decider(role="visual_pick"),
+            goal,
+            verb=verb,
+            authorized=authorized,
+            max_marks=max_marks,
+            app_name_filter=app_name_filter,
+        )
     except (GemmaError, ValueError) as e:
         return {"error": str(e), "gate": {"verdict": "escalate", "reason": "Gemma unavailable"}}
 
 
 @mcp_server.tool()
 def read_screen_text(
-    region: Optional[List[int]] = None,
-    contains: Optional[str] = None,
+    region: list[int] | None = None,
+    contains: str | None = None,
     regex: bool = False,
-    output_mode: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Reads text on screen with local OCR (Apple Vision on macOS, RapidOCR on Linux/Windows)
+    output_mode: str | None = None,
+) -> dict[str, Any]:
+    """Reads text on screen with local OCR (Apple Vision on macOS, RapidOCR on Linux/Windows)
     and returns lines with boxes and click points. No image is returned, so this costs a
     few hundred text tokens instead of a screenshot.
 
@@ -1359,9 +1454,8 @@ def read_screen_text(
 
 
 @mcp_server.tool()
-def find_visual_element(description: str, region: Optional[List[int]] = None) -> Dict[str, Any]:
-    """
-    Finds an element by description where accessibility gives no names (canvases,
+def find_visual_element(description: str, region: list[int] | None = None) -> dict[str, Any]:
+    """Finds an element by description where accessibility gives no names (canvases,
     custom Qt/Tk widgets, EDA toolbars). Tries local OCR for a visible-text match
     first; otherwise the local detector proposes boxes, local Gemma picks one by
     number, and the click point comes from the detector box, never from the model.
@@ -1382,9 +1476,8 @@ def find_visual_element(description: str, region: Optional[List[int]] = None) ->
 def run_terminal_command(
     command: str,
     timeout_seconds: int = CONFIG.command_timeout_seconds,
-) -> Dict[str, Any]:
-    """
-    Runs one shell command and returns its output, for hybrid CLI navigation.
+) -> dict[str, Any]:
+    """Runs one shell command and returns its output, for hybrid CLI navigation.
 
     Off unless the person set DOBBY_ALLOW_SHELL=1 or the admin policy turns it on.
     Under a policy allow list only listed commands run, without a shell.
@@ -1399,10 +1492,8 @@ def wait_for_ui_change(
     timeout_seconds: float = 5.0,
     poll_interval_sec: float = 0.2,
     min_delta_ratio: float = 0.005,
-) -> Dict[str, Any]:
-    """
-    Blocks until a visual change occurs on the desktop.
-    """
+) -> dict[str, Any]:
+    """Blocks until a visual change occurs on the desktop."""
     initial_img, _, _, _ = controller.pipeline.capture(draw_cursor=False, scale_down=True)
     start_time = time.perf_counter()
 
@@ -1426,10 +1517,9 @@ def wait_for_ui_change(
 
 
 @mcp_server.tool()
-def list_plugins() -> List[Dict[str, Any]]:
-    """
-    Lists all registered UI Application Plugins and reports which is currently active.
-    
+def list_plugins() -> list[dict[str, Any]]:
+    """Lists all registered UI Application Plugins and reports which is currently active.
+
     Returns:
         List of plugin summaries including app_id, name, is_active, and supported sub-panes.
     """
@@ -1441,14 +1531,13 @@ def list_plugins() -> List[Dict[str, Any]]:
 
 @mcp_server.tool()
 def list_plugin_features(
-    plugin_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Returns the declarative feature catalog and hotkeys for an application plugin.
-    
+    plugin_id: str | None = None,
+) -> dict[str, Any]:
+    """Returns the declarative feature catalog and hotkeys for an application plugin.
+
     Args:
         plugin_id: Target plugin identifier ('chrome', 'verdi', etc.). If None, detects active window.
-        
+
     Returns:
         Dictionary containing plugin metadata and list of feature descriptors.
     """
@@ -1473,17 +1562,16 @@ def list_plugin_features(
 @mcp_server.tool()
 def invoke_plugin_feature(
     feature_id: str,
-    plugin_id: Optional[str] = None,
-    args: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """
-    Executes a high-level application capability natively with closed-loop delta verification.
-    
+    plugin_id: str | None = None,
+    args: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Executes a high-level application capability natively with closed-loop delta verification.
+
     Args:
         feature_id: Identifier of the capability (e.g. 'browser.navigate', 'browser.new_tab', 'browser.reload').
         plugin_id: Target plugin identifier. If omitted, routes to the active window's plugin.
         args: Optional parameter dictionary (e.g. {'url': 'https://gemini.google.com'}).
-        
+
     Returns:
         Action outcome with success flag, visual delta, and status message.
     """
@@ -1506,21 +1594,20 @@ def invoke_plugin_feature(
 @mcp_server.tool()
 def capture_pane(
     pane_name: str,
-    window_id: Optional[str] = None,
-    title_filter: Optional[str] = None,
+    window_id: str | None = None,
+    title_filter: str | None = None,
     mode: str = "raw",
-) -> Dict[str, Any]:
-    """
-    Ultra-efficient sub-pane perception tool. Captures strictly a named functional
+) -> dict[str, Any]:
+    """Ultra-efficient sub-pane perception tool. Captures strictly a named functional
     zone of the target or active window (e.g. 'address_bar', 'tab_strip', 'content_area').
     Slashes multimodal token consumption by up to 90% compared to capturing a whole display.
-    
+
     Args:
         pane_name: Identifier of sub-pane ('address_bar', 'tab_strip', 'content_area', etc.).
         window_id: Optional target window ID.
         title_filter: Optional title substring filter (e.g. 'Chrome').
         mode: Grounding mode ('raw', 'cursor_only', 'annotated_som').
-        
+
     Returns:
         ScreenshotResult dictionary with image_base64 and scaled dimensions.
     """
@@ -1535,12 +1622,11 @@ def capture_pane(
 
 @mcp_server.tool()
 def start_skill_recording(
-    journal_path: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    GUI-to-Script Crystallization: Starts recording physical GUI actions and correlations
+    journal_path: str | None = None,
+) -> dict[str, Any]:
+    """GUI-to-Script Crystallization: Starts recording physical GUI actions and correlations
     with application command journal streams (e.g. vivado.jou, novas.cmd).
-    
+
     Args:
         journal_path: Path to application journal file. If omitted, uses default or existing path.
     """
@@ -1566,10 +1652,8 @@ def start_skill_recording(
 
 
 @mcp_server.tool()
-def stop_skill_recording() -> Dict[str, Any]:
-    """
-    Stops active skill recording and returns summary of captured action steps.
-    """
+def stop_skill_recording() -> dict[str, Any]:
+    """Stops active skill recording and returns summary of captured action steps."""
     steps = controller.journal_correlator.stop_recording()
     return {
         "success": True,
@@ -1586,9 +1670,8 @@ def start_cassette_recording(
     capture_images: bool = False,
     capture_ocr: bool = True,
     settle_ms: int = 400,
-) -> Dict[str, Any]:
-    """
-    Starts recording a cassette from this live session. After every input action
+) -> dict[str, Any]:
+    """Starts recording a cassette from this live session. After every input action
     (click, type, key, hotkey, drag, scroll, focus) the server waits settle_ms and
     saves AX nodes, OCR lines, windows and cursor. stop_cassette_recording writes
     the cassette, which replays offline with DESKTOP_HAL=replay, `pytest -m replay`,
@@ -1606,7 +1689,10 @@ def start_cassette_recording(
 
     current = getattr(hal, "recorder", None)
     if current is not None and current.active:
-        return {"success": False, "message": f"Already recording '{current.name}'. Call stop_cassette_recording first."}
+        return {
+            "success": False,
+            "message": f"Already recording '{current.name}'. Call stop_cassette_recording first.",
+        }
     recorder = LiveCassetteRecorder(
         name=name,
         out_dir=CONFIG.cassette_dir,
@@ -1623,9 +1709,8 @@ def start_cassette_recording(
 
 
 @mcp_server.tool()
-def stop_cassette_recording() -> Dict[str, Any]:
-    """
-    Stops the cassette recording and writes <cassette_dir>/<name>/index.json
+def stop_cassette_recording() -> dict[str, Any]:
+    """Stops the cassette recording and writes <cassette_dir>/<name>/index.json
     (plus frames/*.jpg when images were captured). Returns the path and counts.
     """
     recorder = getattr(hal, "recorder", None)
@@ -1641,15 +1726,14 @@ def crystallize_skill(
     skill_name: str,
     task_prompt: str,
     app_target: str = "vivado_2025.1",
-    extracted_entities: Optional[Dict[str, Any]] = None,
-    verification_cmd: Optional[str] = None,
-    description: Optional[str] = None,
-    cassette_path: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Compiles recorded GUI trajectory into a parameterized, deterministic Tcl/CLI skill,
+    extracted_entities: dict[str, Any] | None = None,
+    verification_cmd: str | None = None,
+    description: str | None = None,
+    cassette_path: str | None = None,
+) -> dict[str, Any]:
+    """Compiles recorded GUI trajectory into a parameterized, deterministic Tcl/CLI skill,
     lifting entity literals into Jinja2 parameters and saving to dynamic skill registry.
-    
+
     Args:
         skill_name: Identifier for the new skill (e.g. 'run_sim_fifo').
         task_prompt: Natural language description of the demonstrated task.
@@ -1707,12 +1791,11 @@ def crystallize_skill(
 @mcp_server.tool()
 def execute_crystallized_skill(
     skill_name: str,
-    arguments: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """
-    Executes a crystallized parameterized skill with 0 visual tokens by compiling
+    arguments: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Executes a crystallized parameterized skill with 0 visual tokens by compiling
     the template and executing deterministically via application CLI/Tcl bridge.
-    
+
     Args:
         skill_name: Identifier of the crystallized skill to execute.
         arguments: Dynamic arguments overriding default parameters.
@@ -1790,10 +1873,8 @@ def execute_crystallized_skill(
 
 
 @mcp_server.tool()
-def list_crystallized_skills() -> Dict[str, Any]:
-    """
-    Lists all registered crystallized skills available for zero-visual-token deterministic execution.
-    """
+def list_crystallized_skills() -> dict[str, Any]:
+    """Lists all registered crystallized skills available for zero-visual-token deterministic execution."""
     skills = controller.skill_registry.list_skills()
     return {
         "count": len(skills),
@@ -1804,29 +1885,28 @@ def list_crystallized_skills() -> Dict[str, Any]:
 @mcp_server.tool()
 def delete_crystallized_skill(
     skill_name: str,
-) -> Dict[str, Any]:
-    """
-    Deletes a crystallized skill from the registry.
-    """
+) -> dict[str, Any]:
+    """Deletes a crystallized skill from the registry."""
     deleted = controller.skill_registry.delete_skill(skill_name)
     return {
         "success": deleted,
         "skill_name": skill_name,
-        "message": f"Skill '{skill_name}' deleted." if deleted else f"Skill '{skill_name}' not found.",
+        "message": f"Skill '{skill_name}' deleted."
+        if deleted
+        else f"Skill '{skill_name}' not found.",
     }
 
 
 @mcp_server.tool()
 def capture_vdom(
-    window_id: Optional[str] = None,
-    title_filter: Optional[str] = None,
-    label_with_gemma: Optional[bool] = None,
-    output_mode: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Unified Virtual DOM (vDOM): Captures and indexes UI state by fusing AT-SPI2
+    window_id: str | None = None,
+    title_filter: str | None = None,
+    label_with_gemma: bool | None = None,
+    output_mode: str | None = None,
+) -> dict[str, Any]:
+    """Unified Virtual DOM (vDOM): Captures and indexes UI state by fusing AT-SPI2
     accessibility semantics with local neural/CV proposals in < 30ms (0 cloud tokens).
-    
+
     Args:
         window_id: Optional target window ID to localize capture.
         title_filter: Optional window title substring filter.
@@ -1840,21 +1920,22 @@ def capture_vdom(
     snapshot = controller.capture_vdom(
         window_id=window_id, title_filter=title_filter, label_with_gemma=label_with_gemma
     )
-    return toolset_manager.format_output("capture_vdom", snapshot.model_dump(), output_mode_override=output_mode)
+    return toolset_manager.format_output(
+        "capture_vdom", snapshot.model_dump(), output_mode_override=output_mode
+    )
 
 
 @mcp_server.tool()
 def query_vdom(
     selector: str,
-    window_id: Optional[str] = None,
+    window_id: str | None = None,
     refresh: bool = False,
     limit: int = 10,
-    output_mode: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Zero-Token Spatial & Semantic Query: Searches the in-memory Virtual DOM using CSS-like
+    output_mode: str | None = None,
+) -> dict[str, Any]:
+    """Zero-Token Spatial & Semantic Query: Searches the in-memory Virtual DOM using CSS-like
     selectors and spatial constraints without sending screenshots to multimodal LLMs.
-    
+
     Supported selector syntax:
       - 'push_button[name*="Run Simulation"]'
       - 'text_input:right_of("Period (ns):")'
@@ -1862,18 +1943,20 @@ def query_vdom(
       - 'push_button:below("Summary"):enabled'
       - ':sash_divider'
       - '#vdom_0142'
-      
+
     Args:
         selector: CSS spatial selector string.
         window_id: Optional target window ID if refresh is needed.
         refresh: Whether to capture a fresh snapshot before querying.
         limit: Maximum number of matched nodes to return.
         output_mode: Optional override ('inline', 'file', 'resource') for out-of-band offloading.
-        
+
     Returns:
         Dictionary with count and list of matched VDOMNode models, or out-of-band file offload payload.
     """
-    nodes = controller.query_vdom(selector=selector, window_id=window_id, refresh=refresh, limit=limit)
+    nodes = controller.query_vdom(
+        selector=selector, window_id=window_id, refresh=refresh, limit=limit
+    )
     payload = {
         "count": len(nodes),
         "selector": selector,
@@ -1884,10 +1967,9 @@ def query_vdom(
 
 @mcp_server.tool()
 def execute_trajectory(
-    trajectory_spec: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    Local Macro & Trajectory Dispatcher: Executes a structured multi-step declarative trajectory locally
+    trajectory_spec: dict[str, Any],
+) -> dict[str, Any]:
+    """Local Macro & Trajectory Dispatcher: Executes a structured multi-step declarative trajectory locally
     at native OS speeds, eliminating dozens of intermediate round-trips to multimodal LLMs.
 
     Supported action primitives:
@@ -1929,12 +2011,15 @@ def _control_or_none() -> Any:
     return get_controller(create=False)
 
 
-_CONTROL_OFF = {"ok": True, "shared_control": False,
-                "note": "Shared control is off (DOBBY_CONTROL=0, tests or replay); this agent acts freely."}
+_CONTROL_OFF = {
+    "ok": True,
+    "shared_control": False,
+    "note": "Shared control is off (DOBBY_CONTROL=0, tests or replay); this agent acts freely.",
+}
 
 
 @mcp_server.tool()
-def control_status() -> Dict[str, Any]:
+def control_status() -> dict[str, Any]:
     """Shows which agent controls the desktop, how long, and who is waiting.
 
     Several AI agents can share Dobby. Only the holder can click, type or focus;
@@ -1945,10 +2030,16 @@ def control_status() -> Dict[str, Any]:
     ctl = _control_or_none()
     if ctl is None:
         return {**_CONTROL_OFF, "mode": security_mode(), **_shared_clients()}
-    return {"ok": True, "shared_control": True, "mode": security_mode(), **ctl.status(), **_shared_clients()}
+    return {
+        "ok": True,
+        "shared_control": True,
+        "mode": security_mode(),
+        **ctl.status(),
+        **_shared_clients(),
+    }
 
 
-def _shared_clients() -> Dict[str, Any]:
+def _shared_clients() -> dict[str, Any]:
     """In the shared Dobby: every connected client and which one is asking."""
     from dobby.hub import sessions as _sessions
 
@@ -1959,7 +2050,7 @@ def _shared_clients() -> Dict[str, Any]:
 
 
 @mcp_server.tool()
-def request_control(max_wait_s: Optional[float] = None) -> Dict[str, Any]:
+def request_control(max_wait_s: float | None = None) -> dict[str, Any]:
     """Waits (up to max_wait_s, default the server's max wait) and takes control.
 
     Not required before acting: every acting tool acquires control by itself.
@@ -1977,7 +2068,7 @@ def request_control(max_wait_s: Optional[float] = None) -> Dict[str, Any]:
 
 
 @mcp_server.tool()
-def release_control() -> Dict[str, Any]:
+def release_control() -> dict[str, Any]:
     """Gives up desktop control so a waiting agent can start at once.
 
     Call it when a task is done or while you plan for a long time.
@@ -1990,7 +2081,7 @@ def release_control() -> Dict[str, Any]:
 
 
 @mcp_server.tool()
-def hold_control(seconds: float = 30.0) -> Dict[str, Any]:
+def hold_control(seconds: float = 30.0) -> dict[str, Any]:
     """Keeps control for up to `seconds` (capped) even while idle or past the slice.
 
     For fragile flows that must not be interrupted (a multi-dialog wizard,
@@ -2009,34 +2100,49 @@ def hold_control(seconds: float = 30.0) -> Dict[str, Any]:
 WAIT_FOR_WAKE_CAP_S = 1800
 
 
-def _wait_for_wake_blocking(timeout_s: float, reason: str, cancel: Any = None) -> Dict[str, Any]:
+def _wait_for_wake_blocking(timeout_s: float, reason: str, cancel: Any = None) -> dict[str, Any]:
     """Body of :func:`wait_for_wake`, run in a worker thread."""
     from dobby.overlay import find_overlay_hal
 
     ov_hal = find_overlay_hal(hal)
     if ov_hal is None:
-        return {"ok": True, "woken": False, "stopped": False, "timed_out": False, "waited_s": 0.0,
-                "unavailable": True,
-                "note": "The Dobby overlay is off, so there is no bar to click. End your turn instead."}
+        return {
+            "ok": True,
+            "woken": False,
+            "stopped": False,
+            "timed_out": False,
+            "waited_s": 0.0,
+            "unavailable": True,
+            "note": "The Dobby overlay is off, so there is no bar to click. End your turn instead.",
+        }
     ctl = _control_or_none()
     if ctl is not None:
         ctl.release()  # waiting is not acting: let another agent use the desktop meanwhile
     secs = max(0.0, min(float(timeout_s), WAIT_FOR_WAKE_CAP_S))
-    out: Dict[str, Any] = {"ok": True, **ov_hal.overlay.wait_for_wake(secs, reason or "", cancel=cancel)}
+    out: dict[str, Any] = {
+        "ok": True,
+        **ov_hal.overlay.wait_for_wake(secs, reason or "", cancel=cancel),
+    }
     if out.get("woken"):
-        out["note"] = ("The user woke Dobby. Ask for or continue with their next instruction, "
-                       "and look at the screen again before acting.")
+        out["note"] = (
+            "The user woke Dobby. Ask for or continue with their next instruction, "
+            "and look at the screen again before acting."
+        )
     elif out.get("stopped"):
         out["note"] = "The user pressed Stop. Do not start new desktop work unless they ask."
     elif out.get("timed_out"):
-        out["note"] = "Nobody woke Dobby. Call wait_for_wake again to stay available, or end your turn."
+        out["note"] = (
+            "Nobody woke Dobby. Call wait_for_wake again to stay available, or end your turn."
+        )
     elif out.get("unavailable"):
-        out["note"] = "The overlay is not running, so there is no bar to click. End your turn instead."
+        out["note"] = (
+            "The overlay is not running, so there is no bar to click. End your turn instead."
+        )
     return out
 
 
 @mcp_server.tool()
-async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> Dict[str, Any]:
+async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> dict[str, Any]:
     """Call when you have finished the current task and want to stay available.
 
     Dobby shows "sleeping · click to wake" on screen; when the user clicks the
@@ -2053,7 +2159,8 @@ async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> Dict[str, Any
     cancel = threading.Event()
     try:
         return await anyio.to_thread.run_sync(
-            lambda: _wait_for_wake_blocking(timeout_s, reason, cancel), abandon_on_cancel=True)
+            lambda: _wait_for_wake_blocking(timeout_s, reason, cancel), abandon_on_cancel=True
+        )
     except BaseException:
         cancel.set()  # the client cancelled: take the waiting bar down
         raise
@@ -2096,7 +2203,7 @@ def read_state_resource(name: str) -> str:
 
 
 @mcp_server.tool()
-def compact_history(max_tokens: int = 12000, keep_last_n: int = 2) -> Dict[str, Any]:
+def compact_history(max_tokens: int = 12000, keep_last_n: int = 2) -> dict[str, Any]:
     """Compacts the server-side trajectory log into the 8-part state checkpoint."""
     compacted = controller.compact_history(max_tokens=max_tokens, keep_last_n=keep_last_n)
     return {"messages": compacted, "count": len(compacted)}

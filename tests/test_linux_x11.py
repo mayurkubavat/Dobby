@@ -59,7 +59,8 @@ def spawn(hal):
         p = subprocess.Popen(
             ["zenity", kind, f"--title={title}", "--text=Dobby test", *extra],
             stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, text=True,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
         procs.append(p)
         win = _wait_for(lambda: next((w for w in hal.list_windows() if w.title == title), None))
@@ -73,6 +74,7 @@ def spawn(hal):
 
 
 # ---------------------------------------------------------------- windows
+
 
 def test_display_server_reported(hal):
     assert hal.display_server in ("X11", "XWayland")
@@ -114,6 +116,7 @@ def test_focus_unknown_window_fails(hal):
 
 
 # ---------------------------------------------------------------- AT-SPI
+
 
 @pytest.fixture(scope="module")
 def inspector(hal):
@@ -178,16 +181,23 @@ def test_atspi_without_bus_does_not_abort():
         "print('available', i.is_available)\n"
         "print(len(i.inspect_desktop()), i.hit_test(10, 10))\n"
     )
-    env = {k: v for k, v in os.environ.items() if k not in ("DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS")}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS")
+    }
     env["XDG_RUNTIME_DIR"] = "/nonexistent"
     env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/bus"
-    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30)
+    out = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30
+    )
     assert out.returncode == 0, out.stderr
     assert "available False" in out.stdout
     assert "0 None" in out.stdout
 
 
 # ---------------------------------------------------------------- input
+
 
 def _center(b):
     return b.x + b.width // 2, b.y + b.height // 2
@@ -196,7 +206,9 @@ def _center(b):
 def _entry_dialog(hal, inspector, spawn):
     win, proc = spawn("--entry", capture=True)
     hal.focus_window(win.window_id)
-    entry = _wait_for(lambda: next((e for e in inspector.inspect_desktop() if e.role == "text"), None))
+    entry = _wait_for(
+        lambda: next((e for e in inspector.inspect_desktop() if e.role == "text"), None)
+    )
     assert entry is not None
     return win, proc, entry
 
@@ -266,14 +278,17 @@ def test_capture_of_a_window_past_the_screen_edge(hal):
 
 def test_stop_hotkey_moves_when_ctrl_alt_esc_is_taken(hal, monkeypatch):
     """GNOME/Metacity own Ctrl+Alt+Esc (cycle-panels); Stop must still get a key."""
-    from Xlib import X, XK, display as xdisplay
+    from Xlib import XK, X
+    from Xlib import display as xdisplay
 
     pytest.importorskip("gi")
     from dobby.overlay import x11_helper
 
     assert x11_helper._HOTKEYS["stop"] == ("Escape", "End")
     # Keys of their own, so a desktop shortcut or another Dobby overlay cannot interfere.
-    monkeypatch.setattr(x11_helper, "_HOTKEYS", {"stop": ("bracketleft", "bracketright"), "pause": ("semicolon",)})
+    monkeypatch.setattr(
+        x11_helper, "_HOTKEYS", {"stop": ("bracketleft", "bracketright"), "pause": ("semicolon",)}
+    )
     monkeypatch.setattr(x11_helper, "HOTKEY_LABELS", {})
     squatter, helper = xdisplay.Display(), xdisplay.Display()
     taken = squatter.keysym_to_keycode(XK.string_to_keysym("bracketleft"))
@@ -306,8 +321,14 @@ def test_factory_without_display_fails_closed():
         "except CapabilityUnavailable as e:\n"
         "    print('closed', 'DISPLAY' in str(e))\n"
     )
-    env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY", "DESKTOP_HAL")}
-    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30)
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("DISPLAY", "WAYLAND_DISPLAY", "DESKTOP_HAL")
+    }
+    out = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30
+    )
     assert out.returncode == 0, out.stderr
     assert "closed True" in out.stdout
 
@@ -324,8 +345,11 @@ def test_screen_state_loop_end_to_end(hal, spawn):
     if not ctl.atspi_inspector.is_available:
         pytest.skip("AT-SPI unavailable")
     tracker = StateTracker()
-    state = _wait_for(lambda: (lambda s: s if any(e.label == "OK" for e in s.elements) else None)(
-        observe(ctl, tracker, use_ocr=False)))
+    state = _wait_for(
+        lambda: (lambda s: s if any(e.label == "OK" for e in s.elements) else None)(
+            observe(ctl, tracker, use_ocr=False)
+        )
+    )
     assert state is not None
     assert state.app == "zenity" or (state.window_title or "").startswith("dobby-")
     entry = next(e for e in state.elements if e.source == "ax" and e.role == "text")
@@ -363,8 +387,10 @@ def overlay(hal, tmp_path):
     from dobby.overlay.client import OverlayClient
 
     # Plain wording: these check the bar, test_personality checks the voice.
-    client = OverlayClient(config={"speed": 0, "bar_lock": str(tmp_path / "bar.lock"), "personality": "off"},
-                           log_path=None)
+    client = OverlayClient(
+        config={"speed": 0, "bar_lock": str(tmp_path / "bar.lock"), "personality": "off"},
+        log_path=None,
+    )
     yield client
     client.close()
 
@@ -419,10 +445,20 @@ def test_overlay_confirm_allow_deny_and_timeout(hal, overlay):
 
     for button, expected in (("Allow", True), ("Deny", False)):
         result = {}
-        t = threading.Thread(target=lambda: result.update(ok=overlay.confirm("Run synthesis", secs=10)))
+        t = threading.Thread(
+            target=lambda: result.update(ok=overlay.confirm("Run synthesis", secs=10))
+        )
         t.start()
-        btn = _wait_for(lambda: next((e for e in insp.inspect_desktop(app_name_filter="Dobby Overlay")
-                                      if e.name == button), None))
+        btn = _wait_for(
+            lambda: next(
+                (
+                    e
+                    for e in insp.inspect_desktop(app_name_filter="Dobby Overlay")
+                    if e.name == button
+                ),
+                None,
+            )
+        )
         assert btn is not None, f"{button} button not found"
         hal.mouse_click(btn.bbox.x + btn.bbox.width // 2, btn.bbox.y + btn.bbox.height // 2)
         t.join(timeout=5)
@@ -434,7 +470,9 @@ def _bar_items(insp):
 
 
 def _bar_label(insp, words):
-    found = _wait_for(lambda: next((e for e in _bar_items(insp) if e.role == "label" and words in e.name), None))
+    found = _wait_for(
+        lambda: next((e for e in _bar_items(insp) if e.role == "label" and words in e.name), None)
+    )
     if found is None:
         return None
     time.sleep(0.3)  # the bar re-centres after its text changes

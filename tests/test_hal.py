@@ -2,10 +2,12 @@
 
 import os
 import sys
+
 import pytest
-from dobby.hal.linux import LinuxHAL
-from dobby.hal.factory import get_desktop_hal
+
 from dobby.hal.base import IDesktopHAL
+from dobby.hal.factory import get_desktop_hal
+from dobby.hal.linux import LinuxHAL
 
 _needs_x11 = pytest.mark.skipif(
     sys.platform == "darwin" or sys.platform == "win32" or not os.environ.get("DISPLAY"),

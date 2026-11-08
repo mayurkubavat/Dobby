@@ -4,14 +4,15 @@ Tests for Local Gemma 3 Multimodal Sidecar and Perceptual dHash Cache.
 
 import json
 from unittest.mock import patch
+
 import pytest
 from PIL import Image, ImageDraw
 
 from dobby.gemma.client import GemmaClient, GemmaError, normalize_base_url
 from dobby.types import (
     BoundingBox,
-    ModalRiskTier,
     GroundingSource,
+    ModalRiskTier,
     UIRole,
     VDOMNode,
     VirtualDOMSnapshot,
@@ -51,7 +52,11 @@ def test_dhash_and_hamming_distance():
 def test_semantic_roi_cache():
     cache = SemanticROICache(capacity=2, threshold=4)
     proposals = [
-        {"rel_box": {"x": 10, "y": 10, "width": 50, "height": 30}, "class_name": "push_button", "confidence": 0.95}
+        {
+            "rel_box": {"x": 10, "y": 10, "width": 50, "height": 30},
+            "class_name": "push_button",
+            "confidence": 0.95,
+        }
     ]
 
     h1 = 0x123456789ABCDEF0
@@ -102,21 +107,42 @@ def _grounder(fake, **kw):
 
 
 def test_gemma3_grounder_schema_call_and_cache():
-    fake = FakeOllama(replies=[{
-        "elements": [
-            {"box_2d": [100, 200, 500, 600], "role": "icon_button", "label": "Zoom Fit", "confidence": 0.96},
-            {"box_2d": [600, 100, 900, 800], "role": "waveform_signal", "label": "clk_250m", "confidence": 0.91},
+    fake = FakeOllama(
+        replies=[
+            {
+                "elements": [
+                    {
+                        "box_2d": [100, 200, 500, 600],
+                        "role": "icon_button",
+                        "label": "Zoom Fit",
+                        "confidence": 0.96,
+                    },
+                    {
+                        "box_2d": [600, 100, 900, 800],
+                        "role": "waveform_signal",
+                        "label": "clk_250m",
+                        "confidence": 0.91,
+                    },
+                ]
+            }
         ]
-    }])
+    )
     grounder = _grounder(fake)
     img = _create_sample_image()
 
-    proposals = grounder.ground_roi(image=img, offset=(50, 100), anchor_id="waveform_canvas", task_intent="find_zoom_fit")
+    proposals = grounder.ground_roi(
+        image=img, offset=(50, 100), anchor_id="waveform_canvas", task_intent="find_zoom_fit"
+    )
 
     assert len(proposals) == 2
     # box_2d [100, 200, 500, 600] on a 200x100 crop -> rel (40, 10, 80, 40), plus offset (50, 100)
     p1 = proposals[0]
-    assert (p1["bbox"]["x"], p1["bbox"]["y"], p1["bbox"]["width"], p1["bbox"]["height"]) == (90, 110, 80, 40)
+    assert (p1["bbox"]["x"], p1["bbox"]["y"], p1["bbox"]["width"], p1["bbox"]["height"]) == (
+        90,
+        110,
+        80,
+        40,
+    )
     assert p1["class_name"] == "icon_button"
     assert p1["text"] == "Zoom Fit"
 
@@ -126,7 +152,9 @@ def test_gemma3_grounder_schema_call_and_cache():
     assert body["messages"][1]["images"]
 
     # Same crop again: served from the dHash cache with no Gemma call
-    again = grounder.ground_roi(image=img, offset=(50, 100), anchor_id="waveform_canvas", task_intent="find_zoom_fit")
+    again = grounder.ground_roi(
+        image=img, offset=(50, 100), anchor_id="waveform_canvas", task_intent="find_zoom_fit"
+    )
     assert len(again) == 2
     assert len(fake.chat_calls) == 1
     assert grounder.diagnostics()["roi_cache_hits"] == 1
@@ -141,28 +169,40 @@ def test_gemma3_grounder_returns_empty_on_failure():
 
 
 def test_gemma3_modal_classification_aligned_tiers():
-    fake = FakeOllama(replies=[{
-        "risk_tier": "INFORMATIVE_ACK",
-        "suggested_button": "ok",
-        "confidence": 0.9,
-        "reason": "Synthesis finished notice.",
-    }])
+    fake = FakeOllama(
+        replies=[
+            {
+                "risk_tier": "INFORMATIVE_ACK",
+                "suggested_button": "ok",
+                "confidence": 0.9,
+                "reason": "Synthesis finished notice.",
+            }
+        ]
+    )
     grounder = _grounder(fake)
     result = grounder.classify_modal("Synthesis completed successfully.", button_labels=["OK"])
     assert result["risk_tier"] == ModalRiskTier.INFORMATIVE_ACK.value
     assert result["suggested_button"] == "OK"  # normalized to the real label
     assert result["source"] == "gemma"
-    assert fake.chat_calls[0]["format"]["properties"]["risk_tier"]["enum"] == [t.value for t in ModalRiskTier]
+    assert fake.chat_calls[0]["format"]["properties"]["risk_tier"]["enum"] == [
+        t.value for t in ModalRiskTier
+    ]
 
 
 def test_gemma3_modal_destructive_never_suggests_button():
-    fake = FakeOllama(replies=[{
-        "risk_tier": "DESTRUCTIVE_OR_SYSTEM",
-        "suggested_button": "Discard",
-        "confidence": 0.98,
-        "reason": "Drops waveforms.",
-    }])
-    result = _grounder(fake).classify_modal("Reset simulation and discard waveforms?", button_labels=["Discard", "Cancel"])
+    fake = FakeOllama(
+        replies=[
+            {
+                "risk_tier": "DESTRUCTIVE_OR_SYSTEM",
+                "suggested_button": "Discard",
+                "confidence": 0.98,
+                "reason": "Drops waveforms.",
+            }
+        ]
+    )
+    result = _grounder(fake).classify_modal(
+        "Reset simulation and discard waveforms?", button_labels=["Discard", "Cancel"]
+    )
     assert result["risk_tier"] == ModalRiskTier.DESTRUCTIVE_OR_SYSTEM.value
     assert result["suggested_button"] is None
 
@@ -172,8 +212,26 @@ def test_gemma3_modal_destructive_never_suggests_button():
     [
         FakeOllama(fail=OSError("connection refused")),
         FakeOllama(replies=["not json"]),
-        FakeOllama(replies=[{"risk_tier": "PASSIVE_NOTIFICATION", "suggested_button": "OK", "confidence": 0.9, "reason": ""}]),
-        FakeOllama(replies=[{"risk_tier": "BENIGN_DISMISSIBLE", "suggested_button": "Delete All", "confidence": 0.9, "reason": ""}]),
+        FakeOllama(
+            replies=[
+                {
+                    "risk_tier": "PASSIVE_NOTIFICATION",
+                    "suggested_button": "OK",
+                    "confidence": 0.9,
+                    "reason": "",
+                }
+            ]
+        ),
+        FakeOllama(
+            replies=[
+                {
+                    "risk_tier": "BENIGN_DISMISSIBLE",
+                    "suggested_button": "Delete All",
+                    "confidence": 0.9,
+                    "reason": "",
+                }
+            ]
+        ),
         FakeOllama(models=("gemma3:12b",)),  # configured model not installed
     ],
 )
@@ -188,7 +246,9 @@ def test_gemma3_defaults_use_installed_model():
     grounder = Gemma3Grounder(client=GemmaClient(transport=FakeOllama()))
     assert grounder.text_model == "gemma3:4b"
     assert grounder.is_available()
-    assert not Gemma3Grounder(client=GemmaClient(transport=FakeOllama(models=("gemma3:4b-x",)))).is_available()
+    assert not Gemma3Grounder(
+        client=GemmaClient(transport=FakeOllama(models=("gemma3:4b-x",)))
+    ).is_available()
 
 
 def test_gemma_client_url_normalization_and_stats():
@@ -257,10 +317,21 @@ def test_local_neural_grounder_delegation():
     """ground_subpane keeps detector geometry and only takes names from Gemma."""
     grounder = LocalNeuralGrounder(enable_gemma3=True)
     img = _create_sample_image()
-    detector_box = {"bbox": {"x": 30, "y": 40, "width": 50, "height": 20}, "confidence": 0.82, "class_name": "push_button", "text": ""}
+    detector_box = {
+        "bbox": {"x": 30, "y": 40, "width": 50, "height": 20},
+        "confidence": 0.82,
+        "class_name": "push_button",
+        "text": "",
+    }
 
-    with patch.object(grounder, "generate_proposals", return_value=[dict(detector_box)]), \
-         patch.object(grounder.gemma3_grounder.marks, "label_marks", return_value={0: {"label": "Step", "role": "icon_button"}}) as mock_label:
+    with (
+        patch.object(grounder, "generate_proposals", return_value=[dict(detector_box)]),
+        patch.object(
+            grounder.gemma3_grounder.marks,
+            "label_marks",
+            return_value={0: {"label": "Step", "role": "icon_button"}},
+        ) as mock_label,
+    ):
         proposals = grounder.ground_subpane(img, offset=(10, 20), anchor_id="sim_toolbar")
 
     assert len(proposals) == 1

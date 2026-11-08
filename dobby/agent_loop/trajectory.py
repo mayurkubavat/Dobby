@@ -1,39 +1,36 @@
-"""
-Local Macro & Trajectory Dispatcher (Option 4).
+"""Local Macro & Trajectory Dispatcher (Option 4).
 
 Executes structured multi-step declarative trajectories locally at native OS speeds,
 eliminating intermediate round-trips to multimodal LLMs, cutting latency by 90%
 and reducing visual token consumption to zero.
 """
 
+import json
+import logging
 import os
 import re
-import json
-import time
-import logging
 import tempfile
-from typing import Dict, Any, Optional, List, Tuple, Union
-import jinja2
-from PIL import Image
+import time
+from typing import Any
 
-from dobby.types import (
-    TrajectoryStep,
-    TrajectorySpec,
-    StepExecutionResult,
-    TrajectoryExecutionResult,
-    BoundingBox,
-    WindowInfo,
-    ActionVerificationResult,
-)
+import jinja2
+
 from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.config import CONFIG
+from dobby.types import (
+    ActionVerificationResult,
+    StepExecutionResult,
+    TrajectoryExecutionResult,
+    TrajectorySpec,
+    TrajectoryStep,
+    WindowInfo,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class TrajectoryEngine:
-    """
-    Executes declarative multi-step trajectories against the host desktop and active application plugins.
+    """Executes declarative multi-step trajectories against the host desktop and active application plugins.
     Supports Jinja2 parameter interpolation, per-step delta verification, post-condition assertions,
     and automatic failure recovery.
     """
@@ -44,20 +41,18 @@ class TrajectoryEngine:
 
     def execute_trajectory(
         self,
-        spec: Union[TrajectorySpec, Dict[str, Any]],
-        context_vars: Optional[Dict[str, Any]] = None,
+        spec: TrajectorySpec | dict[str, Any],
+        context_vars: dict[str, Any] | None = None,
     ) -> TrajectoryExecutionResult:
-        """
-        Executes all steps defined in the TrajectorySpec in sequence.
-        """
+        """Executes all steps defined in the TrajectorySpec in sequence."""
         if isinstance(spec, dict):
             traj_spec = TrajectorySpec(**spec)
         else:
             traj_spec = spec
 
         t_traj_start = time.monotonic()
-        step_results: List[StepExecutionResult] = []
-        step_outputs: Dict[str, Any] = {}
+        step_results: list[StepExecutionResult] = []
+        step_outputs: dict[str, Any] = {}
 
         # Merge variables: spec.variables + context_vars
         runtime_vars = {**traj_spec.variables, **(context_vars or {})}
@@ -67,7 +62,7 @@ class TrajectoryEngine:
         )
 
         overall_success = True
-        failed_step_id: Optional[str] = None
+        failed_step_id: str | None = None
         status_message = "Trajectory completed successfully"
 
         for step in traj_spec.steps:
@@ -117,7 +112,9 @@ class TrajectoryEngine:
                     if traj_spec.stop_on_failure:
                         break
                 else:
-                    logger.info(f"Step '{step.step_id}' failed but continue_on_failure=True, proceeding.")
+                    logger.info(
+                        f"Step '{step.step_id}' failed but continue_on_failure=True, proceeding."
+                    )
 
         total_elapsed_ms = (time.monotonic() - t_traj_start) * 1000.0
         successful_steps = sum(1 for r in step_results if r.success)
@@ -131,6 +128,7 @@ class TrajectoryEngine:
             try:
                 screen = self.hal.capture_screen()
                 from dobby.agent_loop.cache import image_to_base64_thumbnail
+
                 final_b64 = image_to_base64_thumbnail(screen, max_dim=1280)
             except Exception as e:
                 logger.debug(f"Could not capture final trajectory screenshot: {e}")
@@ -153,13 +151,13 @@ class TrajectoryEngine:
     def _dispatch_step(
         self,
         step: TrajectoryStep,
-        params: Dict[str, Any],
+        params: dict[str, Any],
     ) -> StepExecutionResult:
         """Dispatches an individual action step and evaluates assertions."""
         t_start = time.monotonic()
         action = step.action.lower().strip()
-        output_data: Dict[str, Any] = {}
-        error: Optional[str] = None
+        output_data: dict[str, Any] = {}
+        error: str | None = None
         success = False
         message = ""
         delta_detected = False
@@ -169,13 +167,19 @@ class TrajectoryEngine:
                 success, output_data, message = self._action_focus_window(params)
 
             elif action == "find_and_click":
-                success, output_data, message, delta_detected = self._action_find_and_click(params, step.verify_delta)
+                success, output_data, message, delta_detected = self._action_find_and_click(
+                    params, step.verify_delta
+                )
 
             elif action == "click":
-                success, output_data, message, delta_detected = self._action_click(params, step.verify_delta)
+                success, output_data, message, delta_detected = self._action_click(
+                    params, step.verify_delta
+                )
 
             elif action == "click_and_type":
-                success, output_data, message, delta_detected = self._action_click_and_type(params, step.verify_delta)
+                success, output_data, message, delta_detected = self._action_click_and_type(
+                    params, step.verify_delta
+                )
 
             elif action == "type_text":
                 success, output_data, message = self._action_type_text(params)
@@ -193,7 +197,9 @@ class TrajectoryEngine:
                 success, output_data, message = self._action_wait(params)
 
             elif action == "wait_for_ui_change":
-                success, output_data, message, delta_detected = self._action_wait_for_ui_change(params)
+                success, output_data, message, delta_detected = self._action_wait_for_ui_change(
+                    params
+                )
 
             elif action == "capture_pane":
                 success, output_data, message = self._action_capture_pane(params)
@@ -257,30 +263,46 @@ class TrajectoryEngine:
     # Action Implementations
     # =========================================================================
 
-    def _action_focus_window(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_focus_window(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         title_query = params.get("title", "")
         window_id = params.get("window_id", "")
         app_name = params.get("app_name", "")
 
         windows = self.hal.list_windows()
-        target_win: Optional[WindowInfo] = None
+        target_win: WindowInfo | None = None
 
         if window_id:
-            target_win = next((w for w in windows if str(w.window_id).lower() == str(window_id).lower()), None)
+            target_win = next(
+                (w for w in windows if str(w.window_id).lower() == str(window_id).lower()), None
+            )
         elif title_query:
-            pattern = re.compile(re.escape(title_query) if ".*" not in title_query else title_query, re.IGNORECASE)
+            pattern = re.compile(
+                re.escape(title_query) if ".*" not in title_query else title_query, re.IGNORECASE
+            )
             target_win = next((w for w in windows if pattern.search(w.title)), None)
         elif app_name:
-            target_win = next((w for w in windows if app_name.lower() in (w.app_name or "").lower()), None)
+            target_win = next(
+                (w for w in windows if app_name.lower() in (w.app_name or "").lower()), None
+            )
 
         if not target_win:
-            return False, {}, f"No window matching criteria (title='{title_query}', app='{app_name}') found"
+            return (
+                False,
+                {},
+                f"No window matching criteria (title='{title_query}', app='{app_name}') found",
+            )
 
         ok = self.hal.focus_window(target_win.window_id)
         time.sleep(0.06)
-        return ok, {"window_id": target_win.window_id, "title": target_win.title}, f"Focused window '{target_win.title}'"
+        return (
+            ok,
+            {"window_id": target_win.window_id, "title": target_win.title},
+            f"Focused window '{target_win.title}'",
+        )
 
-    def _action_find_and_click(self, params: Dict[str, Any], verify_delta: bool) -> Tuple[bool, Dict[str, Any], str, bool]:
+    def _action_find_and_click(
+        self, params: dict[str, Any], verify_delta: bool
+    ) -> tuple[bool, dict[str, Any], str, bool]:
         query = params.get("query", "")
         button = params.get("button", "left")
         click_count = int(params.get("click_count", 1))
@@ -303,7 +325,9 @@ class TrajectoryEngine:
         }
         return res.success, output, res.message, res.delta_detected
 
-    def _action_click(self, params: Dict[str, Any], verify_delta: bool) -> Tuple[bool, Dict[str, Any], str, bool]:
+    def _action_click(
+        self, params: dict[str, Any], verify_delta: bool
+    ) -> tuple[bool, dict[str, Any], str, bool]:
         query = params.get("query")
         mark_id = params.get("mark_id")
         x = params.get("x")
@@ -325,7 +349,9 @@ class TrajectoryEngine:
         output = {"x": tx, "y": ty, "button": button, "delta_detected": res.delta_detected}
         return res.success, output, res.message, res.delta_detected
 
-    def _action_click_and_type(self, params: Dict[str, Any], verify_delta: bool) -> Tuple[bool, Dict[str, Any], str, bool]:
+    def _action_click_and_type(
+        self, params: dict[str, Any], verify_delta: bool
+    ) -> tuple[bool, dict[str, Any], str, bool]:
         text = str(params.get("text", ""))
         query = params.get("query")
         mark_id = params.get("mark_id")
@@ -350,7 +376,7 @@ class TrajectoryEngine:
         output = {"text": text, "enter": press_enter, "delta_detected": res.delta_detected}
         return res.success, output, res.message, res.delta_detected
 
-    def _action_type_text(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_type_text(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         text = str(params.get("text", ""))
         delay_ms = float(params.get("delay_ms", CONFIG.typing_delay_ms))
         press_enter = bool(params.get("press_enter", False))
@@ -362,7 +388,7 @@ class TrajectoryEngine:
 
         return True, {"text": text, "enter": press_enter}, f"Typed '{text}'"
 
-    def _action_hotkey(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_hotkey(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         keys = params.get("keys", [])
         if isinstance(keys, str):
             keys = [k.strip() for k in keys.split("+")]
@@ -370,7 +396,7 @@ class TrajectoryEngine:
         time.sleep(0.05)
         return True, {"keys": keys}, f"Pressed hotkey {'+'.join(keys)}"
 
-    def _action_press_key(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_press_key(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         key = params.get("key", "")
         if not key:
             return False, {}, "Missing 'key' parameter"
@@ -378,25 +404,34 @@ class TrajectoryEngine:
         time.sleep(0.05)
         return True, {"key": key}, f"Pressed key '{key}'"
 
-    def _action_scroll(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_scroll(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         dx = int(params.get("dx", 0))
         dy = int(params.get("dy", 0))
         self.hal.mouse_scroll(dx=dx, dy=dy)
         time.sleep(0.05)
         return True, {"dx": dx, "dy": dy}, f"Scrolled mouse (dx={dx}, dy={dy})"
 
-    def _action_wait(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_wait(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         duration = float(params.get("duration_sec", params.get("seconds", 1.0)))
         time.sleep(duration)
         return True, {"duration_sec": duration}, f"Waited {duration}s"
 
-    def _action_wait_for_ui_change(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str, bool]:
+    def _action_wait_for_ui_change(
+        self, params: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any], str, bool]:
         timeout = float(params.get("timeout", 5.0))
         min_change = float(params.get("min_change_ratio", 0.005))
-        delta_detected, ratio = self.controller.wait_for_ui_change(timeout=timeout, min_change_ratio=min_change)
-        return delta_detected, {"delta_detected": delta_detected, "change_ratio": ratio}, f"Wait for change: delta={delta_detected} (ratio={ratio})", delta_detected
+        delta_detected, ratio = self.controller.wait_for_ui_change(
+            timeout=timeout, min_change_ratio=min_change
+        )
+        return (
+            delta_detected,
+            {"delta_detected": delta_detected, "change_ratio": ratio},
+            f"Wait for change: delta={delta_detected} (ratio={ratio})",
+            delta_detected,
+        )
 
-    def _action_capture_pane(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_capture_pane(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         pane_name = params.get("pane_name", "")
         plugin = self.controller.get_active_plugin()
         win = self.hal.get_active_window()
@@ -420,7 +455,7 @@ class TrajectoryEngine:
         }
         return True, output, f"Captured pane '{pane_name}' ({roi.width}x{roi.height})"
 
-    def _action_capture_vdom(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_capture_vdom(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         selector = params.get("query_selector")
         snapshot = self.controller.capture_vdom()
         matched = []
@@ -438,7 +473,7 @@ class TrajectoryEngine:
             msg += f", matched {len(matched)} nodes for '{selector}'"
         return True, output, msg
 
-    def _action_query_vdom(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_query_vdom(self, params: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
         selector = params.get("selector", "*")
         matched = self.controller.query_vdom(selector=selector)
         output = {
@@ -448,7 +483,9 @@ class TrajectoryEngine:
         }
         return True, output, f"Queried vDOM: {len(matched)} nodes matched '{selector}'"
 
-    def _action_execute_crystallized_skill(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_execute_crystallized_skill(
+        self, params: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any], str]:
         skill_name = params.get("skill_name", "")
         args = params.get("parameters", params.get("arguments", {}))
 
@@ -471,7 +508,11 @@ class TrajectoryEngine:
                     {"command": f"source {temp_path}"},
                 )
                 success = res.get("success", True)
-                output = {"skill_name": skill_name, "rendered_script": rendered_script, "result": res}
+                output = {
+                    "skill_name": skill_name,
+                    "rendered_script": rendered_script,
+                    "result": res,
+                }
                 time.sleep(0.5)
                 return success, output, f"Executed crystallized skill '{skill_name}'"
             finally:
@@ -481,18 +522,30 @@ class TrajectoryEngine:
                     except Exception:
                         pass
 
-        return True, {"skill_name": skill_name, "rendered_script": rendered_script}, f"Rendered skill '{skill_name}'"
+        return (
+            True,
+            {"skill_name": skill_name, "rendered_script": rendered_script},
+            f"Rendered skill '{skill_name}'",
+        )
 
-    def _action_invoke_plugin_feature(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_invoke_plugin_feature(
+        self, params: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any], str]:
         feature_id = params.get("feature_id", "")
         args = params.get("parameters", params.get("args", {}))
         plugin = self.controller.get_active_plugin()
         if not plugin:
             return False, {}, "No active application plugin detected"
         res = plugin.execute_feature(feature_id, self.controller, args)
-        return res.get("success", True), res, res.get("message", f"Executed plugin feature '{feature_id}'")
+        return (
+            res.get("success", True),
+            res,
+            res.get("message", f"Executed plugin feature '{feature_id}'"),
+        )
 
-    def _action_run_terminal_command(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_run_terminal_command(
+        self, params: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any], str]:
         command = params.get("command", "")
         timeout = int(params.get("timeout", 30))
 
@@ -505,7 +558,11 @@ class TrajectoryEngine:
         if res.get("refused"):
             return False, {"command": command, "refused": True}, res["error"]
         if "stdout" not in res:
-            return False, {"command": command, "exit_code": res.get("exit_code", -1)}, res.get("error", "failed")
+            return (
+                False,
+                {"command": command, "exit_code": res.get("exit_code", -1)},
+                res.get("error", "failed"),
+            )
         output = {
             "command": command,
             "exit_code": res["exit_code"],
@@ -515,7 +572,9 @@ class TrajectoryEngine:
         msg = f"Terminal command '{command}' exited with code {res['exit_code']}"
         return bool(res["success"]), output, msg
 
-    def _action_dismiss_obstructions(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any], str]:
+    def _action_dismiss_obstructions(
+        self, params: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any], str]:
         res = self.controller.obstruction_interceptor.dismiss_if_present()
         return True, res, "Evaluated obstruction dismissal"
 
@@ -525,16 +584,16 @@ class TrajectoryEngine:
 
     def _evaluate_assertions(
         self,
-        assertions: List[Dict[str, Any]],
+        assertions: list[dict[str, Any]],
         step_res: StepExecutionResult,
-    ) -> Tuple[bool, List[str]]:
+    ) -> tuple[bool, list[str]]:
         results = []
         details = []
 
         for assertion in assertions:
             if "assert_delta" in assertion:
                 expected = bool(assertion["assert_delta"])
-                passed = (step_res.delta_detected == expected)
+                passed = step_res.delta_detected == expected
                 results.append(passed)
                 details.append(f"assert_delta: expected {expected}, got {step_res.delta_detected}")
 
@@ -562,7 +621,7 @@ class TrajectoryEngine:
             if "assert_exit_code" in assertion:
                 exp_code = int(assertion["assert_exit_code"])
                 actual_code = step_res.output_data.get("exit_code")
-                passed = (actual_code == exp_code)
+                passed = actual_code == exp_code
                 results.append(passed)
                 details.append(f"assert_exit_code {exp_code}: got {actual_code}")
 
@@ -571,7 +630,9 @@ class TrajectoryEngine:
                 reg = assertion.get("region")
                 reg_tuple = tuple(reg) if reg and len(reg) == 4 else None
                 try:
-                    ocr_res = self.controller.read_screen_text(region=reg_tuple, contains=expected_str)
+                    ocr_res = self.controller.read_screen_text(
+                        region=reg_tuple, contains=expected_str
+                    )
                     passed = ocr_res.get("count", 0) > 0
                 except Exception as e:
                     logger.debug(f"assert_screen_text exception: {e}")
@@ -584,7 +645,9 @@ class TrajectoryEngine:
                 reg = assertion.get("region")
                 reg_tuple = tuple(reg) if reg and len(reg) == 4 else None
                 try:
-                    ocr_res = self.controller.read_screen_text(region=reg_tuple, contains=expected_str)
+                    ocr_res = self.controller.read_screen_text(
+                        region=reg_tuple, contains=expected_str
+                    )
                     passed = ocr_res.get("count", 0) == 0
                 except Exception as e:
                     logger.debug(f"assert_screen_text_not_present exception: {e}")
@@ -595,7 +658,7 @@ class TrajectoryEngine:
         all_passed = all(results) if results else True
         return all_passed, details
 
-    def _render_value(self, val: Any, context: Dict[str, Any]) -> Any:
+    def _render_value(self, val: Any, context: dict[str, Any]) -> Any:
         if isinstance(val, str):
             if "{{" in val:
                 try:

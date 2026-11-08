@@ -4,12 +4,9 @@ Reduces token consumption by 70-90% through dynamic region cropping,
 delta-patch isolation, and adaptive thumbnail generation.
 """
 
-from typing import Optional, Tuple, Dict, Any
 from PIL import Image, ImageChops
-import numpy as np
 
 from dobby.types import BoundingBox
-from dobby.config import CONFIG
 
 
 class TokenOptimizer:
@@ -31,9 +28,8 @@ class TokenOptimizer:
         after_img: Image.Image,
         padding: int = 24,
         min_change_pixels: int = 50,
-    ) -> Optional[Tuple[Image.Image, BoundingBox]]:
-        """
-        Detects the localized bounding box where pixels changed between two frames
+    ) -> tuple[Image.Image, BoundingBox] | None:
+        """Detects the localized bounding box where pixels changed between two frames
         and extracts that patch with padding.
 
         Returns:

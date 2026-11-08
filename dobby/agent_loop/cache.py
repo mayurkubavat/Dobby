@@ -12,16 +12,17 @@ Features:
 - Comprehensive cache telemetry and proactive verification
 """
 
-import os
+import base64
 import io
 import json
-import time
-import base64
 import logging
-from typing import Optional, Dict, Tuple, Any, List
-from pydantic import BaseModel, Field
+import os
+import time
+from typing import Any
+
 import numpy as np
 from PIL import Image
+from pydantic import BaseModel, Field
 
 from dobby.types import BoundingBox, WindowInfo
 
@@ -29,8 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def compute_dhash(image: Image.Image) -> int:
-    """
-    Computes a 64-bit difference hash (dHash) for an image crop in < 0.4ms.
+    """Computes a 64-bit difference hash (dHash) for an image crop in < 0.4ms.
     Captures structural gradient morphology invariant to slight brightness shifts.
     """
     try:
@@ -54,7 +54,9 @@ def image_to_base64_thumbnail(image: Image.Image, max_dim: int = 256) -> str:
         w, h = image.size
         scale = min(max_dim / max(1, w), max_dim / max(1, h), 1.0)
         if scale < 1.0:
-            thumb = image.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.BILINEAR)
+            thumb = image.resize(
+                (max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.BILINEAR
+            )
         else:
             thumb = image.copy()
         buf = io.BytesIO()
@@ -65,7 +67,7 @@ def image_to_base64_thumbnail(image: Image.Image, max_dim: int = 256) -> str:
         return ""
 
 
-def base64_to_image(b64_str: str) -> Optional[Image.Image]:
+def base64_to_image(b64_str: str) -> Image.Image | None:
     """Decodes a base64 encoded PNG string into a PIL Image."""
     if not b64_str:
         return None
@@ -83,9 +85,8 @@ def template_match_neighborhood(
     expected_bbox: BoundingBox,
     search_radius: int = 60,
     min_score: float = 0.78,
-) -> Optional[Tuple[BoundingBox, Tuple[int, int], float]]:
-    """
-    Searches within a localized bounding neighborhood around expected_bbox using normalized cross-correlation.
+) -> tuple[BoundingBox, tuple[int, int], float] | None:
+    """Searches within a localized bounding neighborhood around expected_bbox using normalized cross-correlation.
 
     Returns:
         (new_bbox, new_center, match_score) if a match meeting min_score is found, else None.
@@ -135,40 +136,50 @@ def template_match_neighborhood(
 
 class CachedLocator(BaseModel):
     """Cached element signature and coordinates with dynamic self-healing telemetry."""
-    app_key: str = Field(description="Application or window identifier (e.g. 'chrome', 'gedit', 'vivado')")
+
+    app_key: str = Field(
+        description="Application or window identifier (e.g. 'chrome', 'gedit', 'vivado')"
+    )
     query: str = Field(description="Target search query or label")
     bbox: BoundingBox = Field(description="Physical desktop bounding box")
-    center_coords: Tuple[int, int] = Field(description="Physical (x, y) coordinates for clicking")
+    center_coords: tuple[int, int] = Field(description="Physical (x, y) coordinates for clicking")
     role: str = Field(default="unknown", description="Semantic role (button, text_entry, etc.)")
     hit_count: int = Field(default=1, description="Number of successful replayed clicks")
-    heal_count: int = Field(default=0, description="Number of times auto-reanchored without re-grounding")
+    heal_count: int = Field(
+        default=0, description="Number of times auto-reanchored without re-grounding"
+    )
     created_at: float = Field(default_factory=time.time)
     last_verified_at: float = Field(default_factory=time.time)
 
     # Dynamic Self-Healing Geometry
-    window_title: Optional[str] = Field(default=None, description="Title of host window when recorded")
-    window_bbox: Optional[BoundingBox] = Field(default=None, description="Host window bounding box when recorded")
-    window_offset: Optional[Tuple[int, int]] = Field(default=None, description="(offset_x, offset_y) from host window top-left")
-    window_relative_bbox: Optional[Tuple[float, float, float, float]] = Field(
+    window_title: str | None = Field(default=None, description="Title of host window when recorded")
+    window_bbox: BoundingBox | None = Field(
+        default=None, description="Host window bounding box when recorded"
+    )
+    window_offset: tuple[int, int] | None = Field(
+        default=None, description="(offset_x, offset_y) from host window top-left"
+    )
+    window_relative_bbox: tuple[float, float, float, float] | None = Field(
         default=None, description="(rel_x, rel_y, rel_w, rel_h) fractional coordinates"
     )
-    subpane_id: Optional[str] = Field(default=None, description="Sub-pane ID if localized")
-    vdom_selector: Optional[str] = Field(default=None, description="vDOM CSS spatial selector")
+    subpane_id: str | None = Field(default=None, description="Sub-pane ID if localized")
+    vdom_selector: str | None = Field(default=None, description="vDOM CSS spatial selector")
 
     # Perceptual Signatures
-    visual_dhash: Optional[int] = Field(default=None, description="64-bit dHash of element crop")
-    template_b64: Optional[str] = Field(default=None, description="Base64 encoded thumbnail template")
-    last_drift: Optional[Tuple[int, int]] = Field(default=None, description="Last recorded (dx, dy) healing drift")
+    visual_dhash: int | None = Field(default=None, description="64-bit dHash of element crop")
+    template_b64: str | None = Field(default=None, description="Base64 encoded thumbnail template")
+    last_drift: tuple[int, int] | None = Field(
+        default=None, description="Last recorded (dx, dy) healing drift"
+    )
 
 
 class ActionCache:
-    """
-    Manages persistent storage and self-healing lifecycle for element locators.
+    """Manages persistent storage and self-healing lifecycle for element locators.
     Supports window-relative coordinate re-projection, pre-flight visual verification,
     and localized neighborhood template auto-reanchoring.
     """
 
-    def __init__(self, cache_file_path: Optional[str] = None) -> None:
+    def __init__(self, cache_file_path: str | None = None) -> None:
         if cache_file_path is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             cache_dir = os.path.join(base_dir, ".cache")
@@ -178,8 +189,8 @@ class ActionCache:
             self.cache_file = cache_file_path
             os.makedirs(os.path.dirname(os.path.abspath(self.cache_file)), exist_ok=True)
 
-        self._cache: Dict[str, CachedLocator] = {}
-        self.relational_anchors: Dict[str, Any] = {}
+        self._cache: dict[str, CachedLocator] = {}
+        self.relational_anchors: dict[str, Any] = {}
         self._load()
 
     def remember_anchor(self, app_key: str, query: str, anchor: Any) -> None:
@@ -195,7 +206,7 @@ class ActionCache:
         if not os.path.exists(self.cache_file):
             return
         try:
-            with open(self.cache_file, "r", encoding="utf-8") as f:
+            with open(self.cache_file, encoding="utf-8") as f:
                 raw_data = json.load(f)
             for k, v in raw_data.items():
                 self._cache[k] = CachedLocator(**v)
@@ -212,7 +223,7 @@ class ActionCache:
         except Exception as e:
             logger.debug(f"Could not save action cache to '{self.cache_file}': {e}")
 
-    def get(self, app_key: str, query: str) -> Optional[CachedLocator]:
+    def get(self, app_key: str, query: str) -> CachedLocator | None:
         """Retrieves cached locator if exists."""
         key = self._make_key(app_key, query)
         return self._cache.get(key)
@@ -222,16 +233,14 @@ class ActionCache:
         app_key: str,
         query: str,
         bbox: BoundingBox,
-        center_coords: Tuple[int, int],
+        center_coords: tuple[int, int],
         role: str = "unknown",
-        window_info: Optional[WindowInfo] = None,
-        visual_crop: Optional[Image.Image] = None,
-        subpane_id: Optional[str] = None,
-        vdom_selector: Optional[str] = None,
+        window_info: WindowInfo | None = None,
+        visual_crop: Image.Image | None = None,
+        subpane_id: str | None = None,
+        vdom_selector: str | None = None,
     ) -> CachedLocator:
-        """
-        Records or updates a verified locator with geometry and perceptual fingerprints.
-        """
+        """Records or updates a verified locator with geometry and perceptual fingerprints."""
         key = self._make_key(app_key, query)
 
         # Compute window relative offsets if window_info is provided
@@ -304,15 +313,14 @@ class ActionCache:
         self,
         app_key: str,
         query: str,
-        live_screen: Optional[Image.Image] = None,
-        current_window: Optional[WindowInfo] = None,
+        live_screen: Image.Image | None = None,
+        current_window: WindowInfo | None = None,
         search_radius: int = 60,
         min_match_score: float = 0.78,
         dhash_threshold: int = 6,
         auto_heal: bool = True,
-    ) -> Tuple[str, Optional[CachedLocator]]:
-        """
-        Resolves cached locator with dynamic window re-projection, pre-flight visual verification,
+    ) -> tuple[str, CachedLocator | None]:
+        """Resolves cached locator with dynamic window re-projection, pre-flight visual verification,
         and localized neighborhood auto-reanchoring.
 
         Returns:
@@ -334,7 +342,11 @@ class ActionCache:
         candidate_center = entry.center_coords
         window_reprojected = False
 
-        if current_window is not None and entry.window_bbox is not None and entry.window_offset is not None:
+        if (
+            current_window is not None
+            and entry.window_bbox is not None
+            and entry.window_offset is not None
+        ):
             # Check if window moved
             cur_wbox = current_window.bbox
             orig_wbox = entry.window_bbox
@@ -373,7 +385,10 @@ class ActionCache:
                             query=query,
                             new_bbox=candidate_bbox,
                             new_center=candidate_center,
-                            drift=(candidate_bbox.x - entry.bbox.x, candidate_bbox.y - entry.bbox.y),
+                            drift=(
+                                candidate_bbox.x - entry.bbox.x,
+                                candidate_bbox.y - entry.bbox.y,
+                            ),
                             window_info=current_window,
                         )
                         return "WINDOW_REPROJECTED", entry
@@ -404,7 +419,14 @@ class ActionCache:
                             new_center=healed_center,
                             drift=(dx, dy),
                             window_info=current_window,
-                            new_crop=live_screen.crop((healed_bbox.x, healed_bbox.y, healed_bbox.right, healed_bbox.bottom)),
+                            new_crop=live_screen.crop(
+                                (
+                                    healed_bbox.x,
+                                    healed_bbox.y,
+                                    healed_bbox.right,
+                                    healed_bbox.bottom,
+                                )
+                            ),
                         )
                         return "HEALED", healed_entry
 
@@ -432,11 +454,11 @@ class ActionCache:
         app_key: str,
         query: str,
         new_bbox: BoundingBox,
-        new_center: Tuple[int, int],
-        drift: Tuple[int, int] = (0, 0),
-        window_info: Optional[WindowInfo] = None,
-        new_crop: Optional[Image.Image] = None,
-    ) -> Optional[CachedLocator]:
+        new_center: tuple[int, int],
+        drift: tuple[int, int] = (0, 0),
+        window_info: WindowInfo | None = None,
+        new_crop: Image.Image | None = None,
+    ) -> CachedLocator | None:
         """Updates locator with healed coordinates and drift telemetry."""
         key = self._make_key(app_key, query)
         if key in self._cache:
@@ -450,7 +472,10 @@ class ActionCache:
             if window_info is not None:
                 entry.window_title = window_info.title
                 entry.window_bbox = window_info.bbox
-                entry.window_offset = (new_bbox.x - window_info.bbox.x, new_bbox.y - window_info.bbox.y)
+                entry.window_offset = (
+                    new_bbox.x - window_info.bbox.x,
+                    new_bbox.y - window_info.bbox.y,
+                )
 
             if new_crop is not None:
                 entry.visual_dhash = compute_dhash(new_crop)
@@ -482,11 +507,9 @@ class ActionCache:
         self,
         app_key: str,
         live_screen: Image.Image,
-        current_window: Optional[WindowInfo] = None,
-    ) -> Dict[str, Any]:
-        """
-        Proactively evaluates the health of all cached locators for an application.
-        """
+        current_window: WindowInfo | None = None,
+    ) -> dict[str, Any]:
+        """Proactively evaluates the health of all cached locators for an application."""
         verified = []
         healed = []
         stale = []
@@ -520,7 +543,7 @@ class ActionCache:
             "stale": stale,
         }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Returns comprehensive cache telemetry and health metrics."""
         total_hits = sum(e.hit_count for e in self._cache.values())
         total_heals = sum(e.heal_count for e in self._cache.values())

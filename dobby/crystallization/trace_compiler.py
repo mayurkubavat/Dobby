@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from dobby.hal.errors import CassetteMismatch
 from dobby.types import CorrelatedStep, CrystallizedMacro, TraceStep
@@ -14,17 +14,17 @@ class TraceCompiler:
 
     def compile_steps(
         self,
-        steps: List[CorrelatedStep],
+        steps: list[CorrelatedStep],
         name: str,
         app_id: str,
         description: str = "",
-        entities: Optional[Dict[str, Any]] = None,
+        entities: dict[str, Any] | None = None,
         native_template: str = "",
         native_kind: str = "none",
     ) -> CrystallizedMacro:
         entities = entities or {}
-        trace: List[TraceStep] = []
-        params: Dict[str, Dict[str, Any]] = {}
+        trace: list[TraceStep] = []
+        params: dict[str, dict[str, Any]] = {}
         for step in steps:
             query = step.ui_target_text or ""
             for key, literal in sorted(entities.items(), key=lambda item: -len(str(item[1]))):
@@ -39,7 +39,7 @@ class TraceCompiler:
             if step.ui_target_text:
                 action = "find_and_click"
                 selector = {"ocr_label": step.ui_target_text}
-                args: Dict[str, Any] = {"query": query or step.ui_target_text}
+                args: dict[str, Any] = {"query": query or step.ui_target_text}
             else:
                 action = step.gui_intent or "click"
                 selector = {"unresolved": True}
@@ -71,7 +71,9 @@ def replay_macro(macro: CrystallizedMacro, hal: Any) -> None:
         label = step.args.get("query") or step.selector.get("ocr_label")
         if label and hasattr(hal, "read_screen_text"):
             # Strip jinja so the cassette can still see the recorded label.
-            plain = re.sub(r"\{\{\s*\w+\s*\}\}", "", str(label)).strip() or str(step.selector.get("ocr_label") or "")
+            plain = re.sub(r"\{\{\s*\w+\s*\}\}", "", str(label)).strip() or str(
+                step.selector.get("ocr_label") or ""
+            )
             if plain:
                 found = hal.read_screen_text(contains=plain)
                 if found.get("count", 0) == 0:

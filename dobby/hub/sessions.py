@@ -12,7 +12,7 @@ import itertools
 import threading
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 _ids = itertools.count(1)
 
@@ -21,16 +21,16 @@ _ids = itertools.count(1)
 class SessionInfo:
     id: int
     name: str
-    pid: Optional[int]
+    pid: int | None
     mode: str
     connected_at: float = field(default_factory=time.time)
-    last_call: Optional[float] = None
-    last_tool: Optional[str] = None
+    last_call: float | None = None
+    last_tool: str | None = None
     calls: int = 0
-    app: Optional[str] = None
-    step: Optional[int] = None
-    steps: Optional[int] = None
-    elapsed: Optional[float] = None
+    app: str | None = None
+    step: int | None = None
+    steps: int | None = None
+    elapsed: float | None = None
     first_name: str = ""  # "Tibble": shown as "Tibble · <client>"
     client: str = ""
 
@@ -38,18 +38,20 @@ class SessionInfo:
     def turbo(self) -> bool:
         return self.mode != "secure"
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         out = asdict(self)
         out["turbo"] = self.turbo
         return out
 
 
 _lock = threading.Lock()
-_sessions: Dict[int, SessionInfo] = {}
-CURRENT: contextvars.ContextVar[Optional[SessionInfo]] = contextvars.ContextVar("dobby_session", default=None)
+_sessions: dict[int, SessionInfo] = {}
+CURRENT: contextvars.ContextVar[SessionInfo | None] = contextvars.ContextVar(
+    "dobby_session", default=None
+)
 
 
-def open_session(name: str, pid: Optional[int], mode: str) -> SessionInfo:
+def open_session(name: str, pid: int | None, mode: str) -> SessionInfo:
     info = SessionInfo(id=next(_ids), name=name, pid=pid, mode=mode)
     with _lock:
         _sessions[info.id] = info
@@ -70,7 +72,7 @@ def note_call(tool: str) -> None:
     info.last_tool = tool
 
 
-def rename(name: Optional[str]) -> None:
+def rename(name: str | None) -> None:
     """The client told us who it is (MCP ``clientInfo.name``)."""
     from dobby.control.names import display
 
@@ -85,6 +87,6 @@ def count() -> int:
         return len(_sessions)
 
 
-def snapshot() -> List[Dict[str, Any]]:
+def snapshot() -> list[dict[str, Any]]:
     with _lock:
         return [s.as_dict() for s in sorted(_sessions.values(), key=lambda s: s.id)]

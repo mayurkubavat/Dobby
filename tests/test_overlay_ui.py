@@ -13,8 +13,16 @@ ARROW_W, ARROW_H, CHIP_H = 13 * 1.25, 21.5 * 1.25, 20.0
 
 
 def view(**kw):
-    base = dict(paused=False, takeover=False, takeover_resume="auto", working=False, turbo=False,
-                current_mode="hidden", bar_mode="always", owner=True)
+    base = dict(
+        paused=False,
+        takeover=False,
+        takeover_resume="auto",
+        working=False,
+        turbo=False,
+        current_mode="hidden",
+        bar_mode="always",
+        owner=True,
+    )
     base.update(kw)
     return bar_view(**base)
 
@@ -49,7 +57,9 @@ class TestBarStates:
         v = view(paused=True, takeover=True, working=True, current_mode="stopped")
         assert v[:4] == ("paused", "Dobby is paused", "Resume", "Stop") and v[4] == "caution"
 
-    @pytest.mark.parametrize("resume,text", [("auto", "waits until you stop"), ("manual", "You're in control")])
+    @pytest.mark.parametrize(
+        "resume,text", [("auto", "waits until you stop"), ("manual", "You're in control")]
+    )
     def test_takeover_text(self, resume, text):
         v = view(takeover=True, takeover_resume=resume)
         assert v[0] == "takeover" and text in v[1] and v[2] == "Resume now"
@@ -58,7 +68,9 @@ class TestBarStates:
         v = view(current_mode="stopped", working=True)
         assert v[:4] == ("stopped", "Dobby stopped", "OK", "Hide") and v[4] == "danger"
 
-    @pytest.mark.parametrize("working,text", [(True, "Dobby ⚡ Turbo"), (False, "Dobby ⚡ Turbo · sleeping")])
+    @pytest.mark.parametrize(
+        "working,text", [(True, "Dobby ⚡ Turbo"), (False, "Dobby ⚡ Turbo · sleeping")]
+    )
     def test_turbo_labels(self, working, text):
         assert view(turbo=True, working=working)[1].startswith(text)
 
@@ -66,11 +78,16 @@ class TestBarStates:
 class TestBarAwake:
     def test_awake_without_a_waiting_ai_says_so(self):
         v = view(awake=True)
-        assert v[0] == "awake" and v[1] == "Dobby is awake · no AI is waiting — ask your AI for a task"
+        assert (
+            v[0] == "awake" and v[1] == "Dobby is awake · no AI is waiting — ask your AI for a task"
+        )
         assert v[2:] == ("Pause", "Stop", "ok", 1.0)
 
     def test_awake_hands_back_to_a_waiting_ai(self):
-        assert view(awake=True, handoff=True)[:2] == ("awake", "Dobby is awake · handing back to the AI")
+        assert view(awake=True, handoff=True)[:2] == (
+            "awake",
+            "Dobby is awake · handing back to the AI",
+        )
         assert "handing back" in view(awake=True, handoff=True, turbo=True)[1]
 
     def test_sleeping_dot_stays_dimmed(self):
@@ -81,10 +98,15 @@ class TestBarAwake:
         assert view(owner=False, awake=True)[0] == "awake"
         assert view(bar_mode="auto", awake=True)[0] == "awake"
 
-    @pytest.mark.parametrize("kw,mode", [
-        (dict(working=True), "working"), (dict(paused=True), "paused"),
-        (dict(takeover=True), "takeover"), (dict(current_mode="stopped"), "stopped"),
-    ])
+    @pytest.mark.parametrize(
+        "kw,mode",
+        [
+            (dict(working=True), "working"),
+            (dict(paused=True), "paused"),
+            (dict(takeover=True), "takeover"),
+            (dict(current_mode="stopped"), "stopped"),
+        ],
+    )
     def test_awake_loses_to_other_states(self, kw, mode):
         assert view(awake=True, **kw)[0] == mode
 
@@ -92,7 +114,9 @@ class TestBarAwake:
 class TestBarAiWaiting:
     def test_waiting_ai_bar_invites_a_click(self):
         v = view(ai_waiting=True)
-        assert v[:2] == ("ready", "Dobby is sleeping · click to wake") and label_click(v[0]) == "wake"
+        assert (
+            v[:2] == ("ready", "Dobby is sleeping · click to wake") and label_click(v[0]) == "wake"
+        )
         assert "click to wake" in view(ai_waiting=True, turbo=True)[1]
 
     def test_any_helper_shows_its_waiting_ai(self):
@@ -113,49 +137,81 @@ class TestBarAiWaiting:
     def test_tooltips(self):
         assert bar_tip("ready") == "Click to wake Dobby"
         assert bar_tip("ready", True) == "Click to wake Dobby: your AI is waiting for you"
-        assert bar_tip("ready", True, "report done") == "Click to wake Dobby: your AI is waiting for you (report done)"
+        assert (
+            bar_tip("ready", True, "report done")
+            == "Click to wake Dobby: your AI is waiting for you (report done)"
+        )
         assert bar_tip("awake") == "Click to put Dobby to sleep"
         assert bar_tip("working", True) is None
 
 
-@pytest.mark.parametrize("mode,action", [
-    ("ready", "wake"), ("awake", "sleep"), ("working", "none"), ("paused", "none"),
-    ("takeover", "none"), ("stopped", "none"), ("confirm", "none"), ("hidden", "none"),
-])
+@pytest.mark.parametrize(
+    "mode,action",
+    [
+        ("ready", "wake"),
+        ("awake", "sleep"),
+        ("working", "none"),
+        ("paused", "none"),
+        ("takeover", "none"),
+        ("stopped", "none"),
+        ("confirm", "none"),
+        ("hidden", "none"),
+    ],
+)
 def test_bar_label_click(mode, action):
     assert label_click(mode) == action
 
 
-@pytest.mark.parametrize("mode,which,action", [
-    ("confirm", "primary", "allow"), ("confirm", "secondary", "deny"),
-    ("working", "primary", "pause"), ("ready", "primary", "pause"),
-    ("working", "secondary", "stop"), ("ready", "secondary", "stop"),
-    ("awake", "primary", "pause"), ("awake", "secondary", "stop"),
-    ("paused", "primary", "resume"), ("takeover", "primary", "resume"),
-    ("paused", "secondary", "stop"), ("takeover", "secondary", "stop"),
-    ("stopped", "primary", "dismiss"), ("stopped", "secondary", "hide"),
-])
+@pytest.mark.parametrize(
+    "mode,which,action",
+    [
+        ("confirm", "primary", "allow"),
+        ("confirm", "secondary", "deny"),
+        ("working", "primary", "pause"),
+        ("ready", "primary", "pause"),
+        ("working", "secondary", "stop"),
+        ("ready", "secondary", "stop"),
+        ("awake", "primary", "pause"),
+        ("awake", "secondary", "stop"),
+        ("paused", "primary", "resume"),
+        ("takeover", "primary", "resume"),
+        ("paused", "secondary", "stop"),
+        ("takeover", "secondary", "stop"),
+        ("stopped", "primary", "dismiss"),
+        ("stopped", "secondary", "hide"),
+    ],
+)
 def test_bar_buttons(mode, which, action):
     assert bar_click(mode, which) == action
 
 
 # --------------------------------------------------------------- the menu
-@pytest.mark.parametrize("paused,takeover,working,turbo,status,glyph", [
-    (False, False, False, False, "Idle", "◇"),
-    (False, False, True, False, "Working", "◆"),
-    (True, False, True, False, "Paused", "‖"),
-    (False, True, False, False, "You're in control", "✋"),
-    (False, False, True, True, "Working (Turbo)", "⚡"),
-    (True, False, False, True, "Paused (Turbo)", "‖"),
-])
+@pytest.mark.parametrize(
+    "paused,takeover,working,turbo,status,glyph",
+    [
+        (False, False, False, False, "Idle", "◇"),
+        (False, False, True, False, "Working", "◆"),
+        (True, False, True, False, "Paused", "‖"),
+        (False, True, False, False, "You're in control", "✋"),
+        (False, False, True, True, "Working (Turbo)", "⚡"),
+        (True, False, False, True, "Paused (Turbo)", "‖"),
+    ],
+)
 def test_status_glyphs(paused, takeover, working, turbo, status, glyph):
     assert status_of(paused, takeover, working, turbo) == (status, glyph)
     assert len(glyph) == 1  # one glyph keeps the icon clear of the notch
 
 
 def _entries(**kw):
-    base = dict(status="Idle", steps=[], halted=False, turbo=False, overlay_on=True,
-                trail_on=True, bar_shown=True)
+    base = dict(
+        status="Idle",
+        steps=[],
+        halted=False,
+        turbo=False,
+        overlay_on=True,
+        trail_on=True,
+        bar_shown=True,
+    )
     base.update(kw)
     return menu_entries(**base)
 
@@ -166,9 +222,14 @@ def _by_title(entries):
 
 def test_menu_has_every_control():
     m = _by_title(_entries())
-    for title, action in [("Pause", "menuPauseToggle:"), ("Stop", "menuStop:"),
-                          ("Show overlay", "menuToggleOverlay:"), ("Show control bar (⌃⌥H)", "menuTogglePill:"),
-                          ("Show step trail", "menuToggleTrail:"), ("Clear step trail", "menuClearTrail:")]:
+    for title, action in [
+        ("Pause", "menuPauseToggle:"),
+        ("Stop", "menuStop:"),
+        ("Show overlay", "menuToggleOverlay:"),
+        ("Show control bar (⌃⌥H)", "menuTogglePill:"),
+        ("Show step trail", "menuToggleTrail:"),
+        ("Clear step trail", "menuClearTrail:"),
+    ]:
         assert m[title][0] == action
     assert m["Turbo mode (no prompts, ignores take-over)"][0] == "menuToggleTurbo:"
 
@@ -200,9 +261,13 @@ def test_menu_recent_steps_newest_first_and_short():
     assert titles[0] == "Dobby: Idle"
 
 
-@pytest.mark.parametrize("awake,title,action", [
-    (False, "Wake Dobby", "menuWake:"), (True, "Put Dobby to sleep", "menuSleep:"),
-])
+@pytest.mark.parametrize(
+    "awake,title,action",
+    [
+        (False, "Wake Dobby", "menuWake:"),
+        (True, "Put Dobby to sleep", "menuSleep:"),
+    ],
+)
 def test_menu_wake_and_sleep_entry(awake, title, action):
     entries = _entries(awake=awake)
     assert entries[1] == ("-", None, None) and entries[2] == (title, action, None)
@@ -245,6 +310,7 @@ def draw():
     def _draw(**state):
         img = Image.new("RGB", (420, 90), (255, 255, 255))
         return annotate(img, TrackState(cursor=(10, 0), **state))
+
     _ = PIL
     return _draw
 

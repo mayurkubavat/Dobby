@@ -11,8 +11,14 @@ from pathlib import Path
 import pytest
 
 from dobby.control import (
-    ControlBusy, ControlChanged, ControlHAL, Controller, ControlSettings,
-    control_enabled, settings_from_env, wrap_hal,
+    ControlBusy,
+    ControlChanged,
+    ControlHAL,
+    Controller,
+    ControlSettings,
+    control_enabled,
+    settings_from_env,
+    wrap_hal,
 )
 from dobby.control.lease import Agent, decide, empty_state
 from dobby.control.registry import AgentPidCache, list_agents
@@ -34,8 +40,17 @@ SET = ControlSettings(idle_grace=10, slice=60, max_wait=0, hold_cap=120, aging=1
 
 def make(tmp_path, clock, name, pid, priority=0, alive=None, **over):
     settings = ControlSettings(**{**SET.__dict__, **over})
-    return Controller(tmp_path, name=name, priority=priority, settings=settings, pid=pid,
-                      clock=clock, sleep=clock.sleep, alive=alive or (lambda p: True), register=False)
+    return Controller(
+        tmp_path,
+        name=name,
+        priority=priority,
+        settings=settings,
+        pid=pid,
+        clock=clock,
+        sleep=clock.sleep,
+        alive=alive or (lambda p: True),
+        register=False,
+    )
 
 
 def act(ctl):
@@ -175,8 +190,14 @@ def test_higher_priority_waiter_goes_first(tmp_path):
     act(a)
     with LeaseStore(tmp_path).transaction() as st:  # both queued at the same moment
         for w in (b, hi):
-            st["waiters"][w.agent.id] = {"id": w.agent.id, "name": w.agent.name, "pid": w.agent.pid,
-                                         "priority": w.agent.priority, "since": c.t, "seen": c.t}
+            st["waiters"][w.agent.id] = {
+                "id": w.agent.id,
+                "name": w.agent.name,
+                "pid": w.agent.pid,
+                "priority": w.agent.priority,
+                "since": c.t,
+                "seen": c.t,
+            }
     a.release()
     with pytest.raises(ControlBusy):
         act(b)
@@ -235,8 +256,16 @@ def test_status_lists_waiters_and_rules(tmp_path):
     a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
     act(a)
     from dobby.control.lease import LeaseStore
+
     with LeaseStore(tmp_path).transaction() as st:
-        st["waiters"]["x"] = {"id": "x", "name": "Agy", "pid": 2, "priority": 0, "since": c.t, "seen": c.t}
+        st["waiters"]["x"] = {
+            "id": "x",
+            "name": "Agy",
+            "pid": 2,
+            "priority": 0,
+            "since": c.t,
+            "seen": c.t,
+        }
     s = b.status()
     assert s["holder"]["name"] == "Claude" and not s["you_hold_control"]
     assert s["waiting"][0]["name"] == "Agy"
@@ -279,6 +308,7 @@ def test_control_hal_wraps_actions_and_marks_observations(tmp_path):
 def test_wrap_hal_noop_without_controller(monkeypatch):
     monkeypatch.setenv("DOBBY_CONTROL", "0")
     from dobby import control
+
     control.set_controller(None)
     h = FakeHAL()
     assert wrap_hal(h) is h
@@ -291,15 +321,16 @@ def test_control_off_under_pytest_by_default():
 
 
 def test_settings_from_env():
-    s = settings_from_env({"DOBBY_CONTROL_IDLE_GRACE": "4", "DOBBY_CONTROL_SLICE": "x",
-                           "DOBBY_CONTROL_PREEMPT": "1"})
+    s = settings_from_env(
+        {"DOBBY_CONTROL_IDLE_GRACE": "4", "DOBBY_CONTROL_SLICE": "x", "DOBBY_CONTROL_PREEMPT": "1"}
+    )
     assert s.idle_grace == 4 and s.slice == 60 and s.preempt
 
 
 def test_overlay_found_through_control_hal(tmp_path):
     from dobby.hal.session import DesktopSession
     from dobby.overlay import NullOverlay, OverlayHAL, find_overlay_hal
-    from dobby.types import DisplayTopology, DisplayMetrics
+    from dobby.types import DisplayMetrics, DisplayTopology
 
     class Shown(NullOverlay):
         def __init__(self):
@@ -313,8 +344,10 @@ def test_overlay_found_through_control_hal(tmp_path):
     ov = OverlayHAL(FakeHAL(), Shown())
     ctl = make(tmp_path, c, "Agy", 2)
     wrapped = wrap_hal(ov, controller=ctl)
-    topo = DisplayTopology(displays=[DisplayMetrics(display_id="p", origin=(0, 0), size=(1, 1), scale=1.0)],
-                           primary_id="p")
+    topo = DisplayTopology(
+        displays=[DisplayMetrics(display_id="p", origin=(0, 0), size=(1, 1), scale=1.0)],
+        primary_id="p",
+    )
     session = DesktopSession(backend=wrapped, topology=topo, quiescence=None)
     assert find_overlay_hal(session) is ov
     other = make(tmp_path, c, "Claude", 1)
@@ -326,6 +359,7 @@ def test_overlay_found_through_control_hal(tmp_path):
 
 def test_overlay_label_defaults_to_agent_name():
     from dobby.overlay import overlay_config
+
     assert overlay_config({"DOBBY_AGENT_NAME": "Agy"})["label"] == "Agy"
     assert overlay_config({"DOBBY_AGENT_NAME": "Agy", "DOBBY_OVERLAY_LABEL": "X"})["label"] == "X"
 
@@ -374,6 +408,7 @@ def test_dead_pid_not_listed(tmp_path):
 def test_server_tools_report_off_and_on(tmp_path, monkeypatch):
     server = pytest.importorskip("dobby.server")
     from dobby import control
+
     control.set_controller(None)
     monkeypatch.setenv("DOBBY_CONTROL", "0")
     assert server.control_status()["shared_control"] is False

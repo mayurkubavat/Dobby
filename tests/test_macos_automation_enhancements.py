@@ -7,19 +7,19 @@ Validates:
 4. Coarse-to-fine zoom cropping in take_screenshot.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
 from PIL import Image
 
+from dobby.agent_loop.controller import FeedbackLoopController
+from dobby.agent_loop.trajectory import TrajectoryEngine
 from dobby.types import (
-    TrajectoryStep,
-    TrajectorySpec,
     BoundingBox,
+    TrajectorySpec,
+    TrajectoryStep,
     UIElement,
     WindowInfo,
 )
-from dobby.agent_loop.trajectory import TrajectoryEngine
-from dobby.agent_loop.controller import FeedbackLoopController
 
 
 class MockHAL:
@@ -231,7 +231,10 @@ def test_accessibility_tree_diff_only():
         interactable=True,
         states=["enabled"],
     )
-    mock_inspector.inspect_desktop.return_value = [elem1_moved, elem3_new]  # elem2 removed, elem1 modified, elem3 added
+    mock_inspector.inspect_desktop.return_value = [
+        elem1_moved,
+        elem3_new,
+    ]  # elem2 removed, elem1 modified, elem3 added
     res3 = controller.get_accessibility_tree(diff_only=True)
     assert res3["full_tree"] is False
     assert len(res3["added"]) == 1
@@ -264,4 +267,3 @@ def test_take_screenshot_coarse_to_fine_zoom():
     assert res.width == 200
     assert res.height == 200
     assert res.image_base64 is not None
-

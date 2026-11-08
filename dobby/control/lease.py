@@ -28,11 +28,12 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+from typing import Any
 
-State = Dict[str, Any]
+State = dict[str, Any]
 
 
 @dataclass
@@ -55,7 +56,7 @@ class Agent:
     name: str
     pid: int
     priority: int = 0
-    extra: Dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 def pid_alive(pid: int) -> bool:
@@ -117,21 +118,29 @@ def file_lock(path: Path) -> Iterator[None]:
 
 
 def empty_state() -> State:
-    return {"version": 1, "epoch": 0, "world": 0, "holder": None, "last_holder": None, "waiters": {}}
+    return {
+        "version": 1,
+        "epoch": 0,
+        "world": 0,
+        "holder": None,
+        "last_holder": None,
+        "waiters": {},
+    }
 
 
-def _agent_record(agent: Agent) -> Dict[str, Any]:
+def _agent_record(agent: Agent) -> dict[str, Any]:
     return {"id": agent.id, "name": agent.name, "pid": agent.pid, "priority": agent.priority}
 
 
-def effective_priority(waiter: Dict[str, Any], now: float, settings: ControlSettings) -> float:
+def effective_priority(waiter: dict[str, Any], now: float, settings: ControlSettings) -> float:
     waited = max(0.0, now - float(waiter.get("since", now)))
     aging = settings.aging if settings.aging > 0 else float("inf")
     return float(waiter.get("priority", 0)) + waited / aging
 
 
-def prune(state: State, now: float, settings: ControlSettings,
-          alive: Callable[[int], bool] = pid_alive) -> None:
+def prune(
+    state: State, now: float, settings: ControlSettings, alive: Callable[[int], bool] = pid_alive
+) -> None:
     holder = state.get("holder")
     if holder is not None and not alive(int(holder.get("pid", 0))):
         state["holder"] = None
@@ -142,7 +151,9 @@ def prune(state: State, now: float, settings: ControlSettings,
             del waiters[wid]
 
 
-def holder_yields(holder: Dict[str, Any], me: Agent, now: float, settings: ControlSettings) -> Tuple[bool, str]:
+def holder_yields(
+    holder: dict[str, Any], me: Agent, now: float, settings: ControlSettings
+) -> tuple[bool, str]:
     """May ``me`` take the lease from ``holder`` right now?"""
     busy = bool(holder.get("busy")) and now - float(holder.get("last", now)) < settings.busy_timeout
     if busy:
@@ -158,8 +169,13 @@ def holder_yields(holder: Dict[str, Any], me: Agent, now: float, settings: Contr
     return False, "working"
 
 
-def decide(state: State, me: Agent, now: float, settings: ControlSettings,
-           alive: Callable[[int], bool] = pid_alive) -> Tuple[bool, str]:
+def decide(
+    state: State,
+    me: Agent,
+    now: float,
+    settings: ControlSettings,
+    alive: Callable[[int], bool] = pid_alive,
+) -> tuple[bool, str]:
     """Try to give ``me`` the lease and mark it busy. Mutates ``state``.
 
     Returns ``(granted, reason)``. Reasons when granted: ``held`` (already
@@ -185,14 +201,23 @@ def decide(state: State, me: Agent, now: float, settings: ControlSettings,
         if not ok:
             return False, reason
 
-    best = max(waiters.values(), key=lambda w: (effective_priority(w, now, settings), -float(w.get("since", now))))
+    best = max(
+        waiters.values(),
+        key=lambda w: (effective_priority(w, now, settings), -float(w.get("since", now))),
+    )
     if best.get("id") != me.id:
         return False, "queued"
 
     waiters.pop(me.id, None)
     if state.get("last_holder") != me.id:
         state["epoch"] = int(state.get("epoch", 0)) + 1
-    state["holder"] = {**_agent_record(me), "since": now, "last": now, "busy": True, "hold_until": 0.0}
+    state["holder"] = {
+        **_agent_record(me),
+        "since": now,
+        "last": now,
+        "busy": True,
+        "hold_until": 0.0,
+    }
     state["last_holder"] = me.id
     return True, reason
 

@@ -1,5 +1,4 @@
-"""
-Builds :class:`ScreenState` from accessibility elements and OCR lines, and
+"""Builds :class:`ScreenState` from accessibility elements and OCR lines, and
 re-binds an element chosen on one observation to a newer one.
 
 Pure functions over plain data: no desktop backend is touched here, so the
@@ -9,23 +8,45 @@ it to the live HAL, AX inspector and OCR engine.
 
 from __future__ import annotations
 
-import sys
-
 import re
+import sys
 import threading
 import time
-from dataclasses import dataclass, field, replace
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
+from typing import Any
 
 # AT-SPI role names (the AX inspector maps macOS roles onto these).
-EDITABLE_ROLES = {"entry", "text", "combo box", "spin button", "password text", "search field", "editbar"}
+EDITABLE_ROLES = {
+    "entry",
+    "text",
+    "combo box",
+    "spin button",
+    "password text",
+    "search field",
+    "editbar",
+}
 SECURE_ROLES = {"password text"}
 # macOS menu bar band (points from the top of the main screen). Linux and Windows
 # menus live inside the window, so there is no band to treat specially.
 MENU_BAR_HEIGHT = 40 if sys.platform == "darwin" else 0
 CLICKABLE_ROLES = {
-    "push button", "toggle button", "check box", "radio button", "menu item", "link", "page tab",
-    "combo box", "list item", "table cell", "entry", "text", "slider", "spin button", "password text", "icon",
+    "push button",
+    "toggle button",
+    "check box",
+    "radio button",
+    "menu item",
+    "link",
+    "page tab",
+    "combo box",
+    "list item",
+    "table cell",
+    "entry",
+    "text",
+    "slider",
+    "spin button",
+    "password text",
+    "icon",
 }
 SCROLLABLE_ROLES = {"scroll pane", "list", "tree", "tree table", "text"}
 _SECRET_WORDS = re.compile(r"\b(password|passcode|passphrase|pin code|api key)\b", re.I)
@@ -45,11 +66,11 @@ class ScreenElement:
     width: int
     height: int
     source: str = "ax"  # "ax", "ax+ocr" (label from OCR), "ocr", or "detector" (icon box, no name)
-    states: Tuple[str, ...] = ()
+    states: tuple[str, ...] = ()
     position: str = ""
 
     @property
-    def center(self) -> Tuple[int, int]:
+    def center(self) -> tuple[int, int]:
         return (self.x + self.width // 2, self.y + self.height // 2)
 
     @property
@@ -85,7 +106,7 @@ class ScreenElement:
         extra = f" ({', '.join(bits)})" if bits else ""
         return f'{self.eid} {self.role} "{label}"{extra}'
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "eid": self.eid,
             "role": self.role,
@@ -106,21 +127,21 @@ class ScreenState:
     captured_at: float
     app: str = ""
     window_title: str = ""
-    window: Optional[Tuple[int, int, int, int]] = None
-    elements: List[ScreenElement] = field(default_factory=list)
-    text: List[str] = field(default_factory=list)  # OCR lines not attached to any element
-    operations: List[str] = field(default_factory=list)
-    window_id: Optional[str] = None
-    settle: Optional[Dict[str, Any]] = None  # how long observe waited for the screen to stop changing
+    window: tuple[int, int, int, int] | None = None
+    elements: list[ScreenElement] = field(default_factory=list)
+    text: list[str] = field(default_factory=list)  # OCR lines not attached to any element
+    operations: list[str] = field(default_factory=list)
+    window_id: str | None = None
+    settle: dict[str, Any] | None = None  # how long observe waited for the screen to stop changing
 
-    def get(self, eid: str) -> Optional[ScreenElement]:
+    def get(self, eid: str) -> ScreenElement | None:
         for el in self.elements:
             if el.eid == eid:
                 return el
         return None
 
     @property
-    def focused(self) -> Optional[ScreenElement]:
+    def focused(self) -> ScreenElement | None:
         return next((e for e in self.elements if e.focused), None)
 
     @property
@@ -128,12 +149,22 @@ class ScreenState:
         f = self.focused
         return bool(f and f.secure)
 
-    def to_text(self, max_elements: int = 60, max_text_lines: int = 20, elements: Optional[Sequence[ScreenElement]] = None) -> str:
+    def to_text(
+        self,
+        max_elements: int = 60,
+        max_text_lines: int = 20,
+        elements: Sequence[ScreenElement] | None = None,
+    ) -> str:
         """The state as the decider reads it: window, focus, operations, numbered elements, loose text."""
         els = list(elements if elements is not None else self.elements)[:max_elements]
-        head = [f"Window: {self.app or 'unknown app'}" + (f' - "{self.window_title}"' if self.window_title else "")]
+        head = [
+            f"Window: {self.app or 'unknown app'}"
+            + (f' - "{self.window_title}"' if self.window_title else "")
+        ]
         f = self.focused
-        head.append(f"Focused: {f.eid} {f.role} \"{f.label[:60]}\"" if f else "Focused: nothing editable")
+        head.append(
+            f'Focused: {f.eid} {f.role} "{f.label[:60]}"' if f else "Focused: nothing editable"
+        )
         if self.secure_input:
             head.append("Secure input is focused: typing is blocked.")
         head.append("Available operations: " + ", ".join(self.operations))
@@ -144,7 +175,7 @@ class ScreenState:
             head += [f"- {t[:120]}" for t in self.text[:max_text_lines]]
         return "\n".join(head)
 
-    def as_dict(self, max_elements: int = 60) -> Dict[str, Any]:
+    def as_dict(self, max_elements: int = 60) -> dict[str, Any]:
         return {
             "generation": self.generation,
             "captured_at": round(self.captured_at, 3),
@@ -169,7 +200,7 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
-def _bbox(obj: Any) -> Optional[Tuple[int, int, int, int]]:
+def _bbox(obj: Any) -> tuple[int, int, int, int] | None:
     b = _get(obj, "bbox")
     if b is None:
         return None
@@ -179,8 +210,8 @@ def _bbox(obj: Any) -> Optional[Tuple[int, int, int, int]]:
         return None
 
 
-def coarse_position(cx: int, cy: int, frame: Optional[Tuple[int, int, int, int]]) -> str:
-    """"top left" ... "bottom right" within ``frame`` (the window), or "" without one."""
+def coarse_position(cx: int, cy: int, frame: tuple[int, int, int, int] | None) -> str:
+    """ "top left" ... "bottom right" within ``frame`` (the window), or "" without one."""
     if not frame or frame[2] <= 0 or frame[3] <= 0:
         return ""
     fx, fy, fw, fh = frame
@@ -193,7 +224,7 @@ def coarse_position(cx: int, cy: int, frame: Optional[Tuple[int, int, int, int]]
     return "center" if (row, col) == ("middle", "center") else f"{row} {col}"
 
 
-def _inside(px: int, py: int, box: Tuple[int, int, int, int]) -> bool:
+def _inside(px: int, py: int, box: tuple[int, int, int, int]) -> bool:
     x, y, w, h = box
     return x <= px <= x + w and y <= py <= y + h
 
@@ -203,14 +234,13 @@ def build_state(
     ocr_lines: Iterable[Any] = (),
     window: Any = None,
     generation: int = 0,
-    captured_at: Optional[float] = None,
+    captured_at: float | None = None,
     max_ocr_elements: int = 40,
     min_ocr_confidence: float = 0.3,
-    detector_boxes: Iterable[Tuple[int, int, int, int]] = (),
+    detector_boxes: Iterable[tuple[int, int, int, int]] = (),
     max_detector_elements: int = 20,
 ) -> ScreenState:
-    """
-    Merges AX elements and OCR lines (both in screen coordinates) into a :class:`ScreenState`.
+    """Merges AX elements and OCR lines (both in screen coordinates) into a :class:`ScreenState`.
 
     - AX controls keep their role and states; an empty label is filled from OCR
       text inside its box (placeholders such as "Message" often carry the only name).
@@ -234,7 +264,12 @@ def build_state(
         if not text or (conf is not None and float(conf) < min_ocr_confidence):
             continue
         try:
-            box = (int(_get(ln, "x")), int(_get(ln, "y")), int(_get(ln, "width")), int(_get(ln, "height")))
+            box = (
+                int(_get(ln, "x")),
+                int(_get(ln, "y")),
+                int(_get(ln, "width")),
+                int(_get(ln, "height")),
+            )
         except (TypeError, ValueError):
             b = _bbox(ln)
             if b is None:
@@ -243,7 +278,7 @@ def build_state(
         lines.append((text, box))
     used = [False] * len(lines)
 
-    raw: List[Dict[str, Any]] = []
+    raw: list[dict[str, Any]] = []
     scrollable = False
     for el in ax_elements:
         box = _bbox(el)
@@ -258,7 +293,11 @@ def build_state(
         label = str(_get(el, "name", "") or _get(el, "label", "") or "").strip()
         source = "ax"
         if not label:
-            inside = [i for i, (_, b) in enumerate(lines) if _inside(b[0] + b[2] // 2, b[1] + b[3] // 2, box)]
+            inside = [
+                i
+                for i, (_, b) in enumerate(lines)
+                if _inside(b[0] + b[2] // 2, b[1] + b[3] // 2, box)
+            ]
             if inside:
                 inside.sort(key=lambda i: (lines[i][1][1], lines[i][1][0]))
                 label = " ".join(lines[i][0] for i in inside)[:120]
@@ -269,13 +308,15 @@ def build_state(
         states = tuple(str(s) for s in (_get(el, "states", ()) or ()))
         raw.append({"role": role, "label": label, "box": box, "source": source, "states": states})
 
-    loose: List[str] = []
+    loose: list[str] = []
     ocr_added = 0
     for i, (text, box) in enumerate(lines):
         if used[i]:
             continue
         if ocr_added < max_ocr_elements:
-            raw.append({"role": "text", "label": text[:120], "box": box, "source": "ocr", "states": ()})
+            raw.append(
+                {"role": "text", "label": text[:120], "box": box, "source": "ocr", "states": ()}
+            )
             ocr_added += 1
         else:
             loose.append(text)
@@ -294,8 +335,11 @@ def build_state(
         if frame is not None and not _inside(cx, cy, frame):
             continue
         # Already known: its center sits inside a named element, or a named element sits inside it.
-        if any(_inside(cx, cy, r["box"]) or _inside(r["box"][0] + r["box"][2] // 2, r["box"][1] + r["box"][3] // 2, box)
-               for r in raw):
+        if any(
+            _inside(cx, cy, r["box"])
+            or _inside(r["box"][0] + r["box"][2] // 2, r["box"][1] + r["box"][3] // 2, box)
+            for r in raw
+        ):
             continue
         raw.append({"role": "icon", "label": "", "box": box, "source": "detector", "states": ()})
         det_added += 1
@@ -306,8 +350,15 @@ def build_state(
         x, y, w, h = r["box"]
         elements.append(
             ScreenElement(
-                eid=f"e{n}", role=r["role"], label=r["label"], x=x, y=y, width=w, height=h,
-                source=r["source"], states=r["states"],
+                eid=f"e{n}",
+                role=r["role"],
+                label=r["label"],
+                x=x,
+                y=y,
+                width=w,
+                height=h,
+                source=r["source"],
+                states=r["states"],
                 position=coarse_position(x + w // 2, y + h // 2, frame),
             )
         )
@@ -338,9 +389,10 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip().lower())
 
 
-def rebind(element: ScreenElement, fresh: ScreenState, max_shift: int = 120) -> Optional[ScreenElement]:
-    """
-    Finds ``element`` (chosen on an older observation) in ``fresh``.
+def rebind(
+    element: ScreenElement, fresh: ScreenState, max_shift: int = 120
+) -> ScreenElement | None:
+    """Finds ``element`` (chosen on an older observation) in ``fresh``.
 
     Same role and label wins, nearest to the old center when several match.
     Without a label, the same role whose center moved at most ``max_shift``
@@ -360,9 +412,17 @@ def rebind(element: ScreenElement, fresh: ScreenState, max_shift: int = 120) -> 
             same = [e for e in fresh.elements if _norm(e.label) == label and dist(e) <= max_shift]
         if same:
             best = min(same, key=dist)
-            return best if dist(best) <= max(max_shift, 4 * max(element.width, element.height)) else None
+            return (
+                best
+                if dist(best) <= max(max_shift, 4 * max(element.width, element.height))
+                else None
+            )
         return None
-    near = [e for e in fresh.elements if e.role == element.role and not _norm(e.label) and dist(e) <= max_shift]
+    near = [
+        e
+        for e in fresh.elements
+        if e.role == element.role and not _norm(e.label) and dist(e) <= max_shift
+    ]
     return min(near, key=dist) if near else None
 
 
@@ -376,7 +436,7 @@ class StateTracker:
         self._lock = threading.Lock()
         self._generation = 0
         self._keep = keep
-        self._states: Dict[int, ScreenState] = {}
+        self._states: dict[int, ScreenState] = {}
         self.last_action_at: float = 0.0
 
     def next_generation(self) -> int:
@@ -387,16 +447,16 @@ class StateTracker:
     def remember(self, state: ScreenState) -> ScreenState:
         with self._lock:
             self._states[state.generation] = state
-            for g in sorted(self._states)[:-self._keep]:
+            for g in sorted(self._states)[: -self._keep]:
                 del self._states[g]
         return state
 
-    def get(self, generation: int) -> Optional[ScreenState]:
+    def get(self, generation: int) -> ScreenState | None:
         with self._lock:
             return self._states.get(generation)
 
     @property
-    def latest(self) -> Optional[ScreenState]:
+    def latest(self) -> ScreenState | None:
         with self._lock:
             return self._states[max(self._states)] if self._states else None
 

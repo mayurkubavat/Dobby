@@ -1,5 +1,4 @@
-"""
-Is something covering the target before we click it?
+"""Is something covering the target before we click it?
 
 Two cheap checks, both before the click and both from data we already have:
 
@@ -17,31 +16,31 @@ blocks a click by itself.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 COVERING_ROLES = {"dialog", "sheet", "popover", "menu", "alert", "AXSheet", "AXPopover", "AXMenu"}
 
 
 @dataclass(frozen=True)
 class Occlusion:
-    covered: Optional[bool]  # None when no check could run
+    covered: bool | None  # None when no check could run
     reason: str
-    by: Optional[Dict[str, Any]] = None
+    by: dict[str, Any] | None = None
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {"covered": self.covered, "reason": self.reason, "by": self.by}
 
 
-def _contains(box: Tuple[int, int, int, int], x: int, y: int) -> bool:
+def _contains(box: tuple[int, int, int, int], x: int, y: int) -> bool:
     bx, by, bw, bh = box
     return bx <= x < bx + bw and by <= y < by + bh
 
 
-def _overlap(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int]) -> bool:
+def _overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
     return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
 
 
-def _win_box(w: Any) -> Optional[Tuple[int, int, int, int]]:
+def _win_box(w: Any) -> tuple[int, int, int, int] | None:
     try:
         b = w.bbox
         return (int(b.x), int(b.y), int(b.width), int(b.height))
@@ -51,15 +50,14 @@ def _win_box(w: Any) -> Optional[Tuple[int, int, int, int]]:
 
 def check_occlusion(
     hal: Any,
-    target_box: Tuple[int, int, int, int],
-    point: Tuple[int, int],
-    target_window_id: Optional[str] = None,
+    target_box: tuple[int, int, int, int],
+    point: tuple[int, int],
+    target_window_id: str | None = None,
     target_role: str = "",
     hit_test: Any = None,
     in_menu_bar: bool = False,
 ) -> Occlusion:
-    """
-    Checks whether ``point`` (inside ``target_box``) is covered.
+    """Checks whether ``point`` (inside ``target_box``) is covered.
 
     ``target_window_id`` is the window the target belongs to (the active window
     for screen state). ``hit_test(x, y)`` returns ``{"role", "name", "bbox"}``
@@ -80,8 +78,11 @@ def check_occlusion(
                     break
                 box = _win_box(w)
                 if box and _contains(box, x, y):
-                    return Occlusion(True, f"covered by window '{w.title}'",
-                                     {"window_id": str(w.window_id), "title": w.title, "app": w.app_name})
+                    return Occlusion(
+                        True,
+                        f"covered by window '{w.title}'",
+                        {"window_id": str(w.window_id), "title": w.title, "app": w.app_name},
+                    )
 
     if hit_test is not None:
         try:
@@ -92,11 +93,17 @@ def check_occlusion(
             ran = True
             role = str(hit.get("role", "") or "")
             hb = hit.get("bbox")
-            hbox = (int(hb["x"]), int(hb["y"]), int(hb["width"]), int(hb["height"])) if isinstance(hb, dict) else None
+            hbox = (
+                (int(hb["x"]), int(hb["y"]), int(hb["width"]), int(hb["height"]))
+                if isinstance(hb, dict)
+                else None
+            )
             if role in COVERING_ROLES and role != target_role:
                 return Occlusion(True, f"covered by {role} '{hit.get('name', '')}'", dict(hit))
             if hbox is not None and not _overlap(hbox, target_box):
-                return Occlusion(True, f"point hits {role} '{hit.get('name', '')}' outside the target", dict(hit))
+                return Occlusion(
+                    True, f"point hits {role} '{hit.get('name', '')}' outside the target", dict(hit)
+                )
 
     if not ran:
         return Occlusion(None, "no occlusion check available")

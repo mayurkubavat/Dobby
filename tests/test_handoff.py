@@ -26,7 +26,7 @@ import json
 import sys
 import textwrap
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 
@@ -39,7 +39,8 @@ from dobby.overlay.menu import idle_cleanup, takes_over
 # A helper that answers like the real one. ``intent "EMIT:a,b"`` and
 # ``sleep.wait`` with reason ``EMIT:...`` make it send those events, the way a
 # person's clicks on the bar would. Allow/Deny is answered from argv[2].
-HELPER = textwrap.dedent("""
+HELPER = (
+    textwrap.dedent("""
     import json, sys
     log = open(sys.argv[1], "a")
     answer = sys.argv[2] == "allow"
@@ -58,14 +59,16 @@ HELPER = textwrap.dedent("""
             print(json.dumps({"ack": msg["id"], "ok": True}), flush=True)
         if msg.get("op") == "bye":
             break
-""") % p.PROTOCOL_VERSION
+""")
+    % p.PROTOCOL_VERSION
+)
 
 
 class DesktopSpy:
     """Stands in for the real HAL: records the input that reached the desktop."""
 
     def __init__(self) -> None:
-        self.input: List[tuple] = []
+        self.input: list[tuple] = []
 
     def mouse_click(self, x, y, button="left", click_count=1, *a, **k):
         self.input.append(("click", x, y))
@@ -89,8 +92,12 @@ class DesktopSpy:
 def _client(tmp_path, answer="deny", **kw) -> OverlayClient:
     script = tmp_path / "helper.py"
     script.write_text(HELPER)
-    return OverlayClient(cmd=[sys.executable, str(script), str(tmp_path / "ops.jsonl"), answer],
-                         ack_timeout=1.0, startup_timeout=5, **kw)
+    return OverlayClient(
+        cmd=[sys.executable, str(script), str(tmp_path / "ops.jsonl"), answer],
+        ack_timeout=1.0,
+        startup_timeout=5,
+        **kw,
+    )
 
 
 def person(client: OverlayClient, *events: str) -> None:
@@ -123,7 +130,7 @@ def rig(tmp_path, monkeypatch):
         c.close()
 
 
-def call(srv, name: str, **args: Any) -> Dict[str, Any]:
+def call(srv, name: str, **args: Any) -> dict[str, Any]:
     """Call a tool the way an MCP client does and return what it receives."""
     result = asyncio.run(srv.mcp_server.call_tool(name, args))
     if getattr(result, "is_error", getattr(result, "isError", False)):
@@ -137,7 +144,7 @@ def call(srv, name: str, **args: Any) -> Dict[str, Any]:
     return data.get("result", data) if isinstance(data, dict) and set(data) == {"result"} else data
 
 
-def clicks(desktop: DesktopSpy) -> List[tuple]:
+def clicks(desktop: DesktopSpy) -> list[tuple]:
     return [i for i in desktop.input if i[0] == "click"]
 
 
@@ -219,9 +226,20 @@ def test_trajectory_stops_at_a_handoff_even_with_continue_on_failure(rig):
     srv, make = rig
     client, desktop = make()
     person(client, "stop")
-    steps = [{"step_id": f"c{i}", "action": "click", "parameters": {"x": i, "y": i},
-              "verify_delta": False, "continue_on_failure": True, "retry_count": 3} for i in (1, 2)]
-    out = call(srv, "execute_trajectory", trajectory_spec={"trajectory_name": "two clicks", "steps": steps})
+    steps = [
+        {
+            "step_id": f"c{i}",
+            "action": "click",
+            "parameters": {"x": i, "y": i},
+            "verify_delta": False,
+            "continue_on_failure": True,
+            "retry_count": 3,
+        }
+        for i in (1, 2)
+    ]
+    out = call(
+        srv, "execute_trajectory", trajectory_spec={"trajectory_name": "two clicks", "steps": steps}
+    )
     assert out["handoff"] == "stopped"
     assert clicks(desktop) == []
 
@@ -282,8 +300,12 @@ def test_classification_covers_every_handoff():
     from dobby.control import ControlBusy, ControlChanged, ControlStopped
 
     cases = {
-        OverlayStopped("x"): "stopped", OverlayDenied("x"): "denied", OverlayInterrupted("x"): "interrupted",
-        OverlayPaused("x"): "paused", ControlStopped("x"): "stopped", ControlChanged("x"): "control_changed",
+        OverlayStopped("x"): "stopped",
+        OverlayDenied("x"): "denied",
+        OverlayInterrupted("x"): "interrupted",
+        OverlayPaused("x"): "paused",
+        ControlStopped("x"): "stopped",
+        ControlChanged("x"): "control_changed",
         ControlBusy("x"): "control_busy",
     }
     for exc, kind in cases.items():
@@ -308,7 +330,7 @@ def test_ordinary_errors_still_fail_normally(rig):
 def test_tools_that_do_not_return_a_dict_raise_with_the_advice():
     from dobby.server import ToolError, _handoff_guard
 
-    def lister() -> List[Dict[str, Any]]:
+    def lister() -> list[dict[str, Any]]:
         raise OverlayStopped("stopped")
 
     with pytest.raises(ToolError, match=r"\[stopped\].*Do not retry"):
@@ -349,8 +371,16 @@ def test_idle_dobby_and_turbo_ignore_the_person():
 
 
 def _cleanup(**kw):
-    base = dict(since_action=60.0, active_secs=8.0, linger_secs=20.0, cursor_state="thinking",
-                pointer_visible=True, awake=False, halted=False, confirming=False)
+    base = dict(
+        since_action=60.0,
+        active_secs=8.0,
+        linger_secs=20.0,
+        cursor_state="thinking",
+        pointer_visible=True,
+        awake=False,
+        halted=False,
+        confirming=False,
+    )
     base.update(kw)
     return idle_cleanup(**base)
 

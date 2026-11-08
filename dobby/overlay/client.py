@@ -22,8 +22,9 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from . import protocol
 
@@ -51,9 +52,10 @@ class OverlayDenied(OverlayStopped):
 
 class OverlayBlocked(OverlayDenied):
     """Dobby may not do this in this app (``~/.dobby/apps.json`` or a Deny
-    to "Let Dobby use …?"). No prompt is shown again this session."""
+    to "Let Dobby use …?"). No prompt is shown again this session.
+    """
 
-    def __init__(self, message: str, app: str = "", tier: Optional[str] = None) -> None:
+    def __init__(self, message: str, app: str = "", tier: str | None = None) -> None:
         super().__init__(message)
         self.app, self.tier = app, tier
 
@@ -74,7 +76,7 @@ class NullOverlay:
     """No-op overlay. Every method returns quickly and reports success."""
 
     active = False
-    pid: Optional[int] = None
+    pid: int | None = None
     awake = False  # the user woke Dobby from the control bar
     lock_on = False  # the input lock (DOBBY_INPUT_LOCK) is enabled
     background_on = False  # with the lock: press buttons without the real mouse
@@ -82,8 +84,16 @@ class NullOverlay:
     def on_wake(self, cb: Callable[[], None]) -> None:
         """Call ``cb`` (on the reader thread) when the user wakes Dobby."""
 
-    def move(self, x: float, y: float, ms: Optional[int] = None, wait: bool = True,
-             verb: Optional[str] = None, probe: bool = False, app: Optional[str] = None) -> bool:
+    def move(
+        self,
+        x: float,
+        y: float,
+        ms: int | None = None,
+        wait: bool = True,
+        verb: str | None = None,
+        probe: bool = False,
+        app: str | None = None,
+    ) -> bool:
         return True
 
     def click(self, button: str = "left", count: int = 1) -> bool:
@@ -92,7 +102,7 @@ class NullOverlay:
     def state(self, state: str) -> bool:
         return True
 
-    def intent(self, text: str, ms: Optional[int] = None) -> bool:
+    def intent(self, text: str, ms: int | None = None) -> bool:
         return True
 
     def box(self, x: float, y: float, w: float, h: float) -> bool:
@@ -104,7 +114,7 @@ class NullOverlay:
     def risk(self, level: str) -> bool:
         return True
 
-    def scan(self, rect: Optional[tuple] = None) -> bool:
+    def scan(self, rect: tuple | None = None) -> bool:
         return True
 
     def trail_clear(self) -> bool:
@@ -113,19 +123,33 @@ class NullOverlay:
     def set_visible(self, on: bool) -> bool:
         return True
 
-    def confirm(self, text: str, secs: float = 30.0, detail: str = "", allow: str = "Allow",
-                deny: str = "Deny", kind: str = "danger") -> bool:
+    def confirm(
+        self,
+        text: str,
+        secs: float = 30.0,
+        detail: str = "",
+        allow: str = "Allow",
+        deny: str = "Deny",
+        kind: str = "danger",
+    ) -> bool:
         return True  # no overlay, no one to ask: keep the old behaviour
 
     def checkpoint(self, max_wait: float = 120.0) -> None:
         return None
 
-    def wait_for_wake(self, timeout_s: float = 600.0, reason: str = "",
-                      cancel: Optional[threading.Event] = None) -> Dict[str, Any]:
+    def wait_for_wake(
+        self, timeout_s: float = 600.0, reason: str = "", cancel: threading.Event | None = None
+    ) -> dict[str, Any]:
         """No overlay, no bar to click: return at once."""
-        return {"woken": False, "stopped": False, "timed_out": False, "waited_s": 0.0, "unavailable": True}
+        return {
+            "woken": False,
+            "stopped": False,
+            "timed_out": False,
+            "waited_s": 0.0,
+            "unavailable": True,
+        }
 
-    def track(self, window_id: Any = None, pid: Optional[int] = None) -> bool:
+    def track(self, window_id: Any = None, pid: int | None = None) -> bool:
         return True
 
     def input_pass(self, on: bool) -> bool:
@@ -152,12 +176,12 @@ class NullOverlay:
 class OverlayClient(NullOverlay):
     def __init__(
         self,
-        cmd: Optional[List[str]] = None,
-        config: Optional[Dict[str, Any]] = None,
+        cmd: list[str] | None = None,
+        config: dict[str, Any] | None = None,
         ack_timeout: float = 1.5,
         startup_timeout: float = 8.0,
-        log_path: Optional[Path] = None,
-        track_dir: Optional[Path] = None,
+        log_path: Path | None = None,
+        track_dir: Path | None = None,
         stop_ttl: float = STOP_TTL_S,
     ) -> None:
         self.cmd = cmd or [sys.executable, "-m", "dobby.overlay"]
@@ -166,14 +190,14 @@ class OverlayClient(NullOverlay):
         self.startup_timeout = startup_timeout
         self.log_path = log_path
         self.track_dir = track_dir
-        self.track_path: Optional[Path] = None
+        self.track_path: Path | None = None
         self._track = None
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
         self._start_lock = threading.RLock()  # one helper even with an eager start
         self._next_id = 1
-        self._waiters: Dict[int, threading.Event] = {}
-        self._results: Dict[int, bool] = {}
+        self._waiters: dict[int, threading.Event] = {}
+        self._results: dict[int, bool] = {}
         self._ready = threading.Event()
         self._disabled = False
         # Control state driven by helper events.
@@ -188,7 +212,7 @@ class OverlayClient(NullOverlay):
         self._wakes = 0  # "wake" / "stop" events seen, for wait_for_wake
         self._stops = 0
         self._resumes = 0
-        self._wake_callbacks: List[Callable[[], None]] = []
+        self._wake_callbacks: list[Callable[[], None]] = []
         atexit.register(self.close)
 
     # ----------------------------------------------------------------- state
@@ -197,7 +221,7 @@ class OverlayClient(NullOverlay):
         return not self._disabled and self._proc is not None and self._proc.poll() is None
 
     @property
-    def pid(self) -> Optional[int]:  # type: ignore[override]
+    def pid(self) -> int | None:  # type: ignore[override]
         return self._proc.pid if self._proc else None
 
     def _release_waits(self) -> None:
@@ -214,7 +238,9 @@ class OverlayClient(NullOverlay):
     # --------------------------------------------------------------- process
     def start_async(self) -> None:
         """Start the helper in the background (instead of on the first action)."""
-        threading.Thread(target=self._start_quietly, name="dobby-overlay-start", daemon=True).start()
+        threading.Thread(
+            target=self._start_quietly, name="dobby-overlay-start", daemon=True
+        ).start()
 
     def _start_quietly(self) -> None:
         try:
@@ -282,7 +308,9 @@ class OverlayClient(NullOverlay):
             msg.pop("id", None)
             if msg.get("op") in ("hide", "show", "ping", "confirm.cancel", "bye"):
                 return
-            self._track.write(json.dumps({"ts": round(time.time(), 3), **msg}, separators=(",", ":")) + "\n")
+            self._track.write(
+                json.dumps({"ts": round(time.time(), 3), **msg}, separators=(",", ":")) + "\n"
+            )
         except (OSError, ValueError):
             pass
 
@@ -296,7 +324,9 @@ class OverlayClient(NullOverlay):
                 continue
             if msg.get("ready"):
                 if msg.get("version") != protocol.PROTOCOL_VERSION:
-                    self._disable(f"helper protocol {msg.get('version')} != {protocol.PROTOCOL_VERSION}")
+                    self._disable(
+                        f"helper protocol {msg.get('version')} != {protocol.PROTOCOL_VERSION}"
+                    )
                 self._ready.set()
             elif "ack" in msg:
                 ev = self._waiters.pop(msg["ack"], None)
@@ -345,7 +375,9 @@ class OverlayClient(NullOverlay):
         """Call ``cb`` (on the reader thread) when the user wakes Dobby."""
         self._wake_callbacks.append(cb)
 
-    def _send(self, op: str, wait: bool = False, timeout: Optional[float] = None, **fields: Any) -> bool:
+    def _send(
+        self, op: str, wait: bool = False, timeout: float | None = None, **fields: Any
+    ) -> bool:
         if not self._ensure_started():
             return False
         with self._lock:
@@ -399,7 +431,9 @@ class OverlayClient(NullOverlay):
         with self._cond:
             if self._stop_requested and time.monotonic() - self._stop_at > self.stop_ttl:
                 # Pressed long before this action: it ended an earlier task.
-                log.info("overlay: ignoring a Stop pressed %.0f s ago", time.monotonic() - self._stop_at)
+                log.info(
+                    "overlay: ignoring a Stop pressed %.0f s ago", time.monotonic() - self._stop_at
+                )
                 self._stop_requested = False
             while True:
                 if self._stop_requested:
@@ -430,8 +464,9 @@ class OverlayClient(NullOverlay):
                 "This step was skipped: take a new screenshot and decide again."
             )
 
-    def wait_for_wake(self, timeout_s: float = 600.0, reason: str = "",
-                      cancel: Optional[threading.Event] = None) -> Dict[str, Any]:
+    def wait_for_wake(
+        self, timeout_s: float = 600.0, reason: str = "", cancel: threading.Event | None = None
+    ) -> dict[str, Any]:
         """Block until the user wakes Dobby from the bar, presses Stop, or ``timeout_s``.
 
         The bar reads "Dobby is sleeping · click to wake" while this waits, on
@@ -449,7 +484,12 @@ class OverlayClient(NullOverlay):
           wake is not skipped as interrupted: it is told to look again anyway.
         """
         t0 = time.monotonic()
-        result: Dict[str, Any] = {"woken": False, "stopped": False, "timed_out": False, "waited_s": 0.0}
+        result: dict[str, Any] = {
+            "woken": False,
+            "stopped": False,
+            "timed_out": False,
+            "waited_s": 0.0,
+        }
         if not self._ensure_started():
             return {**result, "unavailable": True}
         with self._cond:
@@ -493,8 +533,15 @@ class OverlayClient(NullOverlay):
         result["waited_s"] = round(time.monotonic() - t0, 2)
         return result
 
-    def confirm(self, text: str, secs: float = 30.0, detail: str = "", allow: str = "Allow",
-                deny: str = "Deny", kind: str = "danger") -> bool:
+    def confirm(
+        self,
+        text: str,
+        secs: float = 30.0,
+        detail: str = "",
+        allow: str = "Allow",
+        deny: str = "Deny",
+        kind: str = "danger",
+    ) -> bool:
         """Ask the user Allow/Deny on the pill. False on deny or timeout.
 
         ``kind`` "access" asks whether Dobby may use an app (calm colours);
@@ -511,21 +558,42 @@ class OverlayClient(NullOverlay):
             pass
         if not self._ensure_started():
             return True  # helper unusable: behave like NullOverlay
-        extra = {"detail": detail or None, "allow": allow if allow != "Allow" else None,
-                 "deny": deny if deny != "Deny" else None, "kind": kind if kind != "danger" else None}
+        extra = {
+            "detail": detail or None,
+            "allow": allow if allow != "Allow" else None,
+            "deny": deny if deny != "Deny" else None,
+            "kind": kind if kind != "danger" else None,
+        }
         ok = self._send("confirm", wait=True, timeout=secs + 1.0, text=text, secs=secs, **extra)
         if not ok:
             self._send("confirm.cancel")
         return ok
 
     # ------------------------------------------------------------------- API
-    def move(self, x: float, y: float, ms: Optional[int] = None, wait: bool = True,
-             verb: Optional[str] = None, probe: bool = False, app: Optional[str] = None) -> bool:
+    def move(
+        self,
+        x: float,
+        y: float,
+        ms: int | None = None,
+        wait: bool = True,
+        verb: str | None = None,
+        probe: bool = False,
+        app: str | None = None,
+    ) -> bool:
         # With ms=None the helper picks the glide time (<= 450 ms) and may
         # do an AX hit test first, so allow for that in the ack timeout.
         timeout = self.ack_timeout + (ms if ms is not None else 450) / 1000.0
-        return self._send("cursor.move", wait=wait, timeout=timeout, x=x, y=y, ms=ms,
-                          verb=verb, probe=True if probe else None, app=app or None)
+        return self._send(
+            "cursor.move",
+            wait=wait,
+            timeout=timeout,
+            x=x,
+            y=y,
+            ms=ms,
+            verb=verb,
+            probe=True if probe else None,
+            app=app or None,
+        )
 
     def click(self, button: str = "left", count: int = 1) -> bool:
         return self._send("cursor.click", button=button, count=count)
@@ -533,7 +601,7 @@ class OverlayClient(NullOverlay):
     def state(self, state: str) -> bool:
         return self._send("cursor.state", state=state)
 
-    def intent(self, text: str, ms: Optional[int] = None) -> bool:
+    def intent(self, text: str, ms: int | None = None) -> bool:
         return self._send("intent", text=text, ms=ms)
 
     def box(self, x: float, y: float, w: float, h: float) -> bool:
@@ -545,7 +613,7 @@ class OverlayClient(NullOverlay):
     def risk(self, level: str) -> bool:
         return self._send("risk", level=level)
 
-    def scan(self, rect: Optional[tuple] = None) -> bool:
+    def scan(self, rect: tuple | None = None) -> bool:
         if rect is None:
             return self._send("scan")
         x, y, w, h = rect
@@ -557,7 +625,7 @@ class OverlayClient(NullOverlay):
     def set_visible(self, on: bool) -> bool:
         return self._send("overlay.visible", on=bool(on))
 
-    def track(self, window_id: Any = None, pid: Optional[int] = None) -> bool:
+    def track(self, window_id: Any = None, pid: int | None = None) -> bool:
         wid = protocol.window_id_int(window_id)
         if wid is None and pid is None:
             return False
@@ -585,7 +653,11 @@ class OverlayClient(NullOverlay):
         shield is open in time; closing it again does not wait. macOS tells
         Dobby's events apart by their tag and needs no round trip.
         """
-        if self.config.get("input_lock", "off") == "off" or sys.platform == "darwin" or not self.active:
+        if (
+            self.config.get("input_lock", "off") == "off"
+            or sys.platform == "darwin"
+            or not self.active
+        ):
             return True
         return self._send("input.pass", wait=bool(on), timeout=0.5, on=bool(on))
 

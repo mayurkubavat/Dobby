@@ -1,7 +1,6 @@
 """Configuration settings for Vision Control MCP Server."""
 
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class VisionConfig(BaseModel):
@@ -130,7 +129,9 @@ class VisionConfig(BaseModel):
         default=3.0,
         description='Screen state: settle="auto" waits only if the last action was this recent.',
     )
-    settle_interval_s: float = Field(default=0.12, description="Screen state: time between settle samples.")
+    settle_interval_s: float = Field(
+        default=0.12, description="Screen state: time between settle samples."
+    )
     settle_max_delta: float = Field(
         default=1.5,
         description="Screen state: mean grayscale difference (0-255) of 64 px thumbnails that still counts as still.",
@@ -169,10 +170,19 @@ class VisionConfig(BaseModel):
         default="gemma3:4b",
         description="Model identifier for text modal risk triage. gemma3:4b avoids loading a second model.",
     )
-    model_text: str = Field(default="", description="Model for the 'text' role (empty: gemma3_text_model). See dobby/local_models.py.")
-    model_vision: str = Field(default="", description="Model for the 'vision' role (empty: gemma3_vision_model).")
-    model_visual_pick: str = Field(default="", description="Model for the 'visual_pick' role (empty: gemma3_vision_model).")
-    model_triage: str = Field(default="", description="Model for the 'triage' role (empty: gemma3_text_model).")
+    model_text: str = Field(
+        default="",
+        description="Model for the 'text' role (empty: gemma3_text_model). See dobby/local_models.py.",
+    )
+    model_vision: str = Field(
+        default="", description="Model for the 'vision' role (empty: gemma3_vision_model)."
+    )
+    model_visual_pick: str = Field(
+        default="", description="Model for the 'visual_pick' role (empty: gemma3_vision_model)."
+    )
+    model_triage: str = Field(
+        default="", description="Model for the 'triage' role (empty: gemma3_text_model)."
+    )
     icon_detector: str = Field(
         default="auto",
         description="Icon boxes for screen state: 'auto' (neural, contours when it misbehaves), 'onnx', or 'contours'.",
@@ -222,7 +232,7 @@ class VisionConfig(BaseModel):
         default=True,
         description="Load the Gemma vision model in the background when the server starts, so the first check is warm.",
     )
-    gemma3_prompt_dir: Optional[str] = Field(
+    gemma3_prompt_dir: str | None = Field(
         default="~/.dobby/prompts",
         description="Folder of local prompt overrides: <prompt_id>.txt replaces that prompt's system text.",
     )
@@ -361,7 +371,7 @@ class VisionConfig(BaseModel):
         default="~/.dobby/cassettes",
         description="Where start_cassette_recording writes recorded cassettes (one folder per name).",
     )
-    state_dir: Optional[str] = Field(
+    state_dir: str | None = Field(
         default=None,
         description="Directory for RAM-backed state payload offloading (defaults to tmpfs /tmp/dc_state).",
     )

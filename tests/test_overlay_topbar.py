@@ -11,7 +11,14 @@ from dobby.overlay import topbar
 
 def _agents():
     return [
-        {"pid": 11, "name": "Mail Dobby", "paused": False, "holding": True, "waiting": False, "color": "#14B8A6"},
+        {
+            "pid": 11,
+            "name": "Mail Dobby",
+            "paused": False,
+            "holding": True,
+            "waiting": False,
+            "color": "#14B8A6",
+        },
         {"pid": 22, "name": "Xcode Dobby", "paused": True, "holding": False, "waiting": False},
         {"pid": 33, "name": "Notes Dobby", "paused": False, "holding": False, "waiting": True},
     ]
@@ -20,12 +27,25 @@ def _agents():
 def test_palette_is_elf_violet_tuned():
     p = topbar.PALETTE
     assert (p["accent"], p["accent_dark"], p["fill"]) == ("#7C5CFF", "#9B82FF", "#5B3FE0")
-    assert (p["caution"], p["danger"], p["ok"], p["idle"]) == ("#F5A524", "#F04438", "#22A365", "#9A98A6")
+    assert (p["caution"], p["danger"], p["ok"], p["idle"]) == (
+        "#F5A524",
+        "#F04438",
+        "#22A365",
+        "#9A98A6",
+    )
 
 
 def test_publish_and_read_round_trip(tmp_path):
     d = str(tmp_path)
-    topbar.publish(os.getpid(), mode="working", step="Click ‘Send’", steps=3, elapsed=42, app="Mail", directory=d)
+    topbar.publish(
+        os.getpid(),
+        mode="working",
+        step="Click ‘Send’",
+        steps=3,
+        elapsed=42,
+        app="Mail",
+        directory=d,
+    )
     states = topbar.read_states(d)
     rec = states[os.getpid()]
     assert rec["mode"] == "working" and rec["steps"] == 3 and rec["app"] == "Mail"
@@ -35,14 +55,17 @@ def test_publish_and_read_round_trip(tmp_path):
 
 def test_read_drops_files_of_exited_helpers(tmp_path):
     path = tmp_path / "77.json"
-    path.write_text(json.dumps({"pid": 77, "helper": 2 ** 22 + 12345, "mode": "working", "at": time.time()}))
+    path.write_text(
+        json.dumps({"pid": 77, "helper": 2**22 + 12345, "mode": "working", "at": time.time()})
+    )
     assert topbar.read_states(str(tmp_path)) == {}
     assert not path.exists()
 
 
 def test_stale_working_reads_as_sleeping(tmp_path):
-    (tmp_path / "77.json").write_text(json.dumps({"pid": 77, "helper": os.getpid(), "mode": "working",
-                                                  "at": time.time() - 600}))
+    (tmp_path / "77.json").write_text(
+        json.dumps({"pid": 77, "helper": os.getpid(), "mode": "working", "at": time.time() - 600})
+    )
     assert topbar.read_states(str(tmp_path))[77]["mode"] == "ready"
 
 
@@ -52,7 +75,9 @@ def test_publish_without_server_pid_is_a_no_op(tmp_path):
 
 
 def test_view_counts_and_orders_rows():
-    states = {11: {"mode": "working", "step": "Click ‘Send’", "steps": 7, "elapsed": 42, "app": "Mail"}}
+    states = {
+        11: {"mode": "working", "step": "Click ‘Send’", "steps": 7, "elapsed": 42, "app": "Mail"}
+    }
     v = topbar.topbar_view(_agents(), states, own_pid=11)
     assert v.header == "Dobby"
     assert v.subtitle == "3 running · 1 working · 1 paused"
@@ -97,10 +122,22 @@ def test_signature_changes_with_content():
 
 def test_dobby_mode_priority():
     m = topbar.dobby_mode
-    assert m(paused=True, takeover=False, confirming=True, stopped=False, working=True, awake=False) == "confirm"
-    assert m(paused=True, takeover=False, confirming=False, stopped=False, working=True, awake=False) == "paused"
-    assert m(paused=False, takeover=False, confirming=False, stopped=False, working=False, awake=True) == "awake"
-    assert m(paused=False, takeover=False, confirming=False, stopped=False, working=False, awake=False) == "ready"
+    assert (
+        m(paused=True, takeover=False, confirming=True, stopped=False, working=True, awake=False)
+        == "confirm"
+    )
+    assert (
+        m(paused=True, takeover=False, confirming=False, stopped=False, working=True, awake=False)
+        == "paused"
+    )
+    assert (
+        m(paused=False, takeover=False, confirming=False, stopped=False, working=False, awake=True)
+        == "awake"
+    )
+    assert (
+        m(paused=False, takeover=False, confirming=False, stopped=False, working=False, awake=False)
+        == "ready"
+    )
 
 
 def test_icons_render_and_cache(tmp_path):
@@ -109,7 +146,9 @@ def test_icons_render_and_cache(tmp_path):
     assert img.getpixel((10, 14))[3] > 0  # the pointer is drawn
     assert img.getpixel((28, 8))[3] > 0  # and the spark
     row = topbar.render_row_icon("#7C5CFF", "spark", 52)
-    assert row.size == (52, 52) and row.getpixel((1, 1))[3] == 0 and row.getpixel((26, 2))[3] > 200  # rounded square
+    assert (
+        row.size == (52, 52) and row.getpixel((1, 1))[3] == 0 and row.getpixel((26, 2))[3] > 200
+    )  # rounded square
     for shape in ("spark", "moon", "pause", "stop", "alert", "hand", "clock"):
         topbar.render_row_icon("#9A98A6", shape, 26)
     p1 = topbar.bar_icon_path("idle", 36, directory=str(tmp_path))

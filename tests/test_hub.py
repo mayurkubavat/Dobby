@@ -11,18 +11,22 @@ from pathlib import Path
 import pytest
 
 from dobby.hub import connector, paths, sessions
-from dobby.mode import session_mode, security_mode
+from dobby.mode import security_mode, session_mode
 
 
 def test_socket_paths():
     assert paths.socket_path({"DOBBY_SOCKET": "/tmp/x/d.sock"}) == Path("/tmp/x/d.sock")
     mac = paths.socket_path({}, platform="darwin")
     assert str(mac).endswith("Library/Application Support/Dobby/dobby.sock")
-    assert paths.socket_path({"XDG_RUNTIME_DIR": "/"}, platform="linux") == Path("/dobby/dobby.sock")
+    assert paths.socket_path({"XDG_RUNTIME_DIR": "/"}, platform="linux") == Path(
+        "/dobby/dobby.sock"
+    )
 
 
 def test_per_client_settings_stay_out_of_the_shared_dobby():
-    env = connector.daemon_env({"DOBBY_AGENT_NAME": "Cursor", "DOBBY_MODE": "secure", "DOBBY_OVERLAY_STYLE": "classic"})
+    env = connector.daemon_env(
+        {"DOBBY_AGENT_NAME": "Cursor", "DOBBY_MODE": "secure", "DOBBY_OVERLAY_STYLE": "classic"}
+    )
     assert env == {"DOBBY_OVERLAY_STYLE": "classic"}
 
 
@@ -98,14 +102,30 @@ def _client(path, name, mode, info_name=None):
             time.sleep(0.1)
     else:
         pytest.fail("shared Dobby did not listen")
-    sock.sendall((json.dumps({"dobby_hello": 1, "pid": os.getpid(), "mode": mode, "name": name}) + "\n").encode())
+    sock.sendall(
+        (
+            json.dumps({"dobby_hello": 1, "pid": os.getpid(), "mode": mode, "name": name}) + "\n"
+        ).encode()
+    )
     buf = [b""]
     while b"\n" not in buf[0]:
         buf[0] += sock.recv(4096)
     ready, buf[0] = buf[0].split(b"\n", 1)
     assert json.loads(ready)["dobby_ready"] == 1
-    init = _rpc(sock, buf, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": info_name or name, "version": "1"}}})
+    init = _rpc(
+        sock,
+        buf,
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": info_name or name, "version": "1"},
+            },
+        },
+    )
     assert "result" in init, init
     _rpc(sock, buf, {"jsonrpc": "2.0", "method": "notifications/initialized"})
     return sock, buf
@@ -114,25 +134,49 @@ def _client(path, name, mode, info_name=None):
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
 def test_two_clients_share_one_dobby(tmp_path, short_sock):
     sock_path = short_sock
-    env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
-           "HOME": str(tmp_path)}
+    env = {
+        **os.environ,
+        "DOBBY_SOCKET": str(sock_path),
+        "DOBBY_OVERLAY": "0",
+        "DOBBY_IDLE_EXIT": "0",
+        "HOME": str(tmp_path),
+    }
     root = Path(__file__).resolve().parents[1]
-    daemon = subprocess.Popen([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    daemon = subprocess.Popen(
+        [sys.executable, "-m", "dobby", "serve"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
     try:
         a, abuf = _client(sock_path, "Claude Code", "turbo")
         b, bbuf = _client(sock_path, "Antigravity", "secure")
         assert oct(sock_path.stat().st_mode & 0o777) == "0o600"
-        call = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "control_status", "arguments": {}}}
+        call = {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "control_status", "arguments": {}},
+        }
         ra = json.loads(_rpc(a, abuf, call)["result"]["content"][0]["text"])
         rb = json.loads(_rpc(b, bbuf, call)["result"]["content"][0]["text"])
         assert ra["mode"] == "turbo" and rb["mode"] == "secure"
         assert ra["session"] != rb["session"]
         assert sorted(c["client"] for c in ra["clients"]) == ["Antigravity", "Claude Code"]
-        assert sorted(c["name"] for c in ra["clients"]) == ["Pip · Antigravity", "Tibble · Claude Code"]
+        assert sorted(c["name"] for c in ra["clients"]) == [
+            "Pip · Antigravity",
+            "Tibble · Claude Code",
+        ]
         # a second shared Dobby refuses to start while this one runs
-        second = subprocess.run([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
-                                capture_output=True, text=True, timeout=60)
+        second = subprocess.run(
+            [sys.executable, "-m", "dobby", "serve"],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         assert "already running" in second.stderr
         a.close()
         b.close()
@@ -148,7 +192,10 @@ def test_control_actions_reach_the_command_files(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DOBBY_CONTROL_DIR", str(tmp_path))
     monkeypatch.setattr(control, "agents", lambda: [{"pid": 11}, {"pid": 12}])
-    assert control.handle({"id": 1, "op": "action", "key": "pause_toggle", "pid": 11})["paused"] is True
+    assert (
+        control.handle({"id": 1, "op": "action", "key": "pause_toggle", "pid": 11})["paused"]
+        is True
+    )
     assert commands.read(tmp_path, 11)["paused"] and not commands.read(tmp_path, 12)["paused"]
     control.handle({"id": 2, "op": "action", "key": "stop_all"})
     assert commands.read(tmp_path, 12)["stop"] == 1
@@ -163,8 +210,19 @@ def test_topbar_shows_shared_sessions(monkeypatch):
     info = sessions.open_session("Claude Code", 4242, "secure")
     info.last_call, info.last_tool = time.time(), "click"
     try:
-        monkeypatch.setattr(control, "agents", lambda: [
-            {"pid": 4242, "name": "Claude Code", "paused": False, "waiting": False, "holding": True}])
+        monkeypatch.setattr(
+            control,
+            "agents",
+            lambda: [
+                {
+                    "pid": 4242,
+                    "name": "Claude Code",
+                    "paused": False,
+                    "waiting": False,
+                    "holding": True,
+                }
+            ],
+        )
         view = control.handle({"id": 1, "op": "topbar"})["view"]
     finally:
         sessions.close_session(info)
@@ -182,8 +240,15 @@ def test_app_is_only_used_on_macos(tmp_path):
 
 
 def test_app_config_keeps_dobby_settings_not_secrets():
-    cfg = connector.app_config({"DOBBY_MODEL_VISION": "q", "DOBBY_AGENT_NAME": "Cursor", "OPENAI_API_KEY": "x",
-                                "PATH": "/bin", "DOBBY_APP": "/A.app"})
+    cfg = connector.app_config(
+        {
+            "DOBBY_MODEL_VISION": "q",
+            "DOBBY_AGENT_NAME": "Cursor",
+            "OPENAI_API_KEY": "x",
+            "PATH": "/bin",
+            "DOBBY_APP": "/A.app",
+        }
+    )
     assert cfg["env"] == {"DOBBY_MODEL_VISION": "q", "PATH": "/bin"}
     assert cfg["python"] == sys.executable
 
@@ -191,15 +256,34 @@ def test_app_config_keeps_dobby_settings_not_secrets():
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
 def test_control_connection_end_to_end(tmp_path, short_sock):
     sock_path = short_sock
-    env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
-           "HOME": str(tmp_path), "DOBBY_CONTROL_DIR": str(tmp_path / "control")}
+    env = {
+        **os.environ,
+        "DOBBY_SOCKET": str(sock_path),
+        "DOBBY_OVERLAY": "0",
+        "DOBBY_IDLE_EXIT": "0",
+        "HOME": str(tmp_path),
+        "DOBBY_CONTROL_DIR": str(tmp_path / "control"),
+    }
     root = Path(__file__).resolve().parents[1]
-    daemon = subprocess.Popen([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    daemon = subprocess.Popen(
+        [sys.executable, "-m", "dobby", "serve"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     try:
         client, cbuf = _client(sock_path, "Python", "turbo", info_name="Claude Code")
-        _rpc(client, cbuf, {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                            "params": {"name": "control_status", "arguments": {}}})  # adopts clientInfo.name
+        _rpc(
+            client,
+            cbuf,
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "control_status", "arguments": {}},
+            },
+        )  # adopts clientInfo.name
         app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         app.connect(str(sock_path))
         app.sendall(b'{"dobby_control": 1}\n')
@@ -245,11 +329,23 @@ def test_clients_connecting_at_once_get_different_names(tmp_path, short_sock):
     import threading
 
     sock_path = short_sock
-    env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
-           "HOME": str(tmp_path), "DOBBY_CONTROL": "1", "DOBBY_CONTROL_DIR": str(tmp_path / "control")}
+    env = {
+        **os.environ,
+        "DOBBY_SOCKET": str(sock_path),
+        "DOBBY_OVERLAY": "0",
+        "DOBBY_IDLE_EXIT": "0",
+        "HOME": str(tmp_path),
+        "DOBBY_CONTROL": "1",
+        "DOBBY_CONTROL_DIR": str(tmp_path / "control"),
+    }
     root = Path(__file__).resolve().parents[1]
-    daemon = subprocess.Popen([sys.executable, "-m", "dobby", "serve"], cwd=root, env=env,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    daemon = subprocess.Popen(
+        [sys.executable, "-m", "dobby", "serve"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     try:
         _client(sock_path, "warmup", "turbo")[0].close()  # wait until it listens
         time.sleep(0.3)
@@ -260,7 +356,14 @@ def test_clients_connecting_at_once_get_different_names(tmp_path, short_sock):
 
         def hello(s, i):
             go.wait()
-            s.sendall((json.dumps({"dobby_hello": 1, "pid": os.getpid(), "mode": "turbo", "name": f"c{i}"}) + "\n").encode())
+            s.sendall(
+                (
+                    json.dumps(
+                        {"dobby_hello": 1, "pid": os.getpid(), "mode": "turbo", "name": f"c{i}"}
+                    )
+                    + "\n"
+                ).encode()
+            )
 
         threads = [threading.Thread(target=hello, args=(s, i)) for i, s in enumerate(socks)]
         for t in threads:

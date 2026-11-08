@@ -24,26 +24,43 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import os
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Optional
 
 from . import names
-from .controller import ControlBusy, ControlChanged, ControlError, ControlStopped, Controller
+from .controller import ControlBusy, ControlChanged, ControlError, Controller, ControlStopped
 from .hal import ACTING, OBSERVING, ControlHAL, find_control_hal, unwrap_control
 from .lease import ControlSettings
 
 __all__ = [
-    "ControlBusy", "ControlChanged", "ControlStopped", "ControlError", "Controller", "ControlHAL", "ControlSettings",
-    "ACTING", "OBSERVING", "control_enabled", "control_root", "settings_from_env",
-    "get_controller", "set_controller", "adopt_client_name", "agent_name", "wrap_hal", "find_control_hal", "unwrap_control",
+    "ACTING",
+    "OBSERVING",
+    "ControlBusy",
+    "ControlChanged",
+    "ControlError",
+    "ControlHAL",
+    "ControlSettings",
+    "ControlStopped",
+    "Controller",
+    "adopt_client_name",
+    "agent_name",
+    "control_enabled",
+    "control_root",
+    "find_control_hal",
+    "get_controller",
+    "set_controller",
+    "settings_from_env",
+    "unwrap_control",
+    "wrap_hal",
 ]
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
-_CONTROLLER: Optional[Controller] = None
+_CONTROLLER: Controller | None = None
 
 
-def control_enabled(env: Optional[Dict[str, str]] = None) -> bool:
+def control_enabled(env: dict[str, str] | None = None) -> bool:
     env = os.environ if env is None else env
     flag = env.get("DOBBY_CONTROL", "").strip().lower()
     if flag in _FALSE:
@@ -55,19 +72,19 @@ def control_enabled(env: Optional[Dict[str, str]] = None) -> bool:
     return True
 
 
-def control_root(env: Optional[Dict[str, str]] = None) -> Path:
+def control_root(env: dict[str, str] | None = None) -> Path:
     env = os.environ if env is None else env
     return Path(os.path.expanduser(env.get("DOBBY_CONTROL_DIR") or "~/.dobby/control"))
 
 
-def _num(env: Dict[str, str], key: str, default: float, low: float = 0.0) -> float:
+def _num(env: dict[str, str], key: str, default: float, low: float = 0.0) -> float:
     try:
         return max(low, float(env[key]))
     except (KeyError, ValueError):
         return default
 
 
-def settings_from_env(env: Optional[Dict[str, str]] = None) -> ControlSettings:
+def settings_from_env(env: dict[str, str] | None = None) -> ControlSettings:
     env = os.environ if env is None else env
     s = ControlSettings()
     s.idle_grace = _num(env, "DOBBY_CONTROL_IDLE_GRACE", s.idle_grace, 0.5)
@@ -78,7 +95,7 @@ def settings_from_env(env: Optional[Dict[str, str]] = None) -> ControlSettings:
     return s
 
 
-def agent_name(env: Optional[Dict[str, str]] = None) -> Optional[str]:
+def agent_name(env: dict[str, str] | None = None) -> str | None:
     env = os.environ if env is None else env
     name = (env.get("DOBBY_AGENT_NAME") or "").strip()
     return name or None
@@ -86,12 +103,13 @@ def agent_name(env: Optional[Dict[str, str]] = None) -> Optional[str]:
 
 # The shared Dobby (``dobby serve``) runs one Controller per connected client,
 # so the lease sees each AI as its own agent even inside one process.
-_SESSION_CONTROLLER: contextvars.ContextVar[Optional[Controller]] = contextvars.ContextVar(
-    "dobby_session_controller", default=None)
+_SESSION_CONTROLLER: contextvars.ContextVar[Controller | None] = contextvars.ContextVar(
+    "dobby_session_controller", default=None
+)
 
 
 @contextlib.contextmanager
-def session_controller(ctl: Optional[Controller]) -> Iterator[None]:
+def session_controller(ctl: Controller | None) -> Iterator[None]:
     """Make ``ctl`` this session's controller for the block (and its tool calls)."""
     token = _SESSION_CONTROLLER.set(ctl)
     try:
@@ -100,8 +118,9 @@ def session_controller(ctl: Optional[Controller]) -> Iterator[None]:
         _SESSION_CONTROLLER.reset(token)
 
 
-def new_session_controller(name: str, pid: Optional[int] = None,
-                           first_name: Optional[str] = None) -> Optional[Controller]:
+def new_session_controller(
+    name: str, pid: int | None = None, first_name: str | None = None
+) -> Controller | None:
     """A controller for one client of the shared Dobby, or None when control is off."""
     if not control_enabled():
         return None
@@ -110,8 +129,13 @@ def new_session_controller(name: str, pid: Optional[int] = None,
     except ValueError:
         priority = 0
     first = first_name or pick_first_name(pid if pid is not None else os.getpid())
-    ctl = Controller(control_root(), name=names.display(first, name), priority=priority,
-                     settings=settings_from_env(), pid=pid)
+    ctl = Controller(
+        control_root(),
+        name=names.display(first, name),
+        priority=priority,
+        settings=settings_from_env(),
+        pid=pid,
+    )
     ctl.first_name = first  # type: ignore[attr-defined]
     ctl.name_locked = False  # type: ignore[attr-defined]
     if _HAL_FOR_SESSIONS is not None:
@@ -127,7 +151,10 @@ def pick_first_name(pid: int) -> str:
     try:
         from . import registry
 
-        taken = [str(r.get("name") or "").split(names.SEPARATOR)[0] for r in registry.list_agents(control_root())]
+        taken = [
+            str(r.get("name") or "").split(names.SEPARATOR)[0]
+            for r in registry.list_agents(control_root())
+        ]
     except OSError:
         taken = []
     try:
@@ -139,9 +166,10 @@ def pick_first_name(pid: int) -> str:
     return names.pick(taken, pid)
 
 
-def get_controller(create: bool = True) -> Optional[Controller]:
+def get_controller(create: bool = True) -> Controller | None:
     """This session's controller in a shared Dobby, else the process controller
-    (created on first use when control is enabled)."""
+    (created on first use when control is enabled).
+    """
     session = _SESSION_CONTROLLER.get()
     if session is not None:
         return session
@@ -164,13 +192,13 @@ def get_controller(create: bool = True) -> Optional[Controller]:
     return _CONTROLLER
 
 
-def set_controller(ctl: Optional[Controller]) -> None:
+def set_controller(ctl: Controller | None) -> None:
     """Install (or clear) the process controller; for tests and embedding."""
     global _CONTROLLER
     _CONTROLLER = ctl
 
 
-def wrap_hal(hal: Any, controller: Optional[Controller] = None) -> Any:
+def wrap_hal(hal: Any, controller: Controller | None = None) -> Any:
     """Wrap ``hal`` in :class:`ControlHAL` when shared control is enabled."""
     if isinstance(hal, ControlHAL):
         return hal
@@ -194,7 +222,7 @@ def _wire_overlay(hal: Any, ctl: Controller) -> None:
         return
     overlay = ov_hal.overlay
 
-    def on_wait(holder: Optional[Dict[str, Any]]) -> None:
+    def on_wait(holder: dict[str, Any] | None) -> None:
         try:
             if holder is None:
                 overlay.intent("", ms=0)
@@ -205,7 +233,9 @@ def _wire_overlay(hal: Any, ctl: Controller) -> None:
 
     def on_paused(paused: bool) -> None:
         try:
-            overlay.intent("Paused from the Dobby menu" if paused else "", ms=600000 if paused else 0)
+            overlay.intent(
+                "Paused from the Dobby menu" if paused else "", ms=600000 if paused else 0
+            )
         except Exception:  # noqa: BLE001 - cosmetic
             pass
 
@@ -213,7 +243,7 @@ def _wire_overlay(hal: Any, ctl: Controller) -> None:
     ctl.on_paused = on_paused
 
 
-def adopt_client_name(name: Optional[str]) -> None:
+def adopt_client_name(name: str | None) -> None:
     """Use the MCP client's name (``clientInfo.name``) unless DOBBY_AGENT_NAME is set."""
     ctl = get_controller(create=False)
     if ctl is None or not name or getattr(ctl, "name_locked", False):

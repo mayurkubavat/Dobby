@@ -19,8 +19,10 @@ class _Backend:
 
 
 def _topology():
-    return DisplayTopology(displays=[DisplayMetrics(display_id="p", origin=(0, 0), size=(100, 100), scale=1.0)],
-                           primary_id="p")
+    return DisplayTopology(
+        displays=[DisplayMetrics(display_id="p", origin=(0, 0), size=(100, 100), scale=1.0)],
+        primary_id="p",
+    )
 
 
 def test_session_passes_backend_attributes_through():
@@ -42,14 +44,22 @@ def test_tier0_uses_text_reader_on_live_hal():
 
 
 def test_unavailable_ocr_never_proves_text_absent():
-    ctl = BicameralStepController(_Backend(), text_reader=lambda contains=None: {"available": False, "lines": []})
+    ctl = BicameralStepController(
+        _Backend(), text_reader=lambda contains=None: {"available": False, "lines": []}
+    )
     assert ctl._read_text("Error") is None
 
 
 def test_cheap_perception_tools_are_core():
     from dobby.server import _TOOL_DOMAINS
 
-    for name in ("get_accessibility_tree", "find_element", "find_and_click", "read_screen_text", "ask_screen"):
+    for name in (
+        "get_accessibility_tree",
+        "find_element",
+        "find_and_click",
+        "read_screen_text",
+        "ask_screen",
+    ):
         assert _TOOL_DOMAINS[name][0] == "core", name
     assert _TOOL_DOMAINS["run_terminal_command"][0] != "core"
 

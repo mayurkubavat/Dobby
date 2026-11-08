@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import inspect
 import json
+from collections.abc import Callable
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -44,26 +46,36 @@ class StepExecutionVerdict(BaseModel):
     success: bool
     tier_used: VerificationTier
     escalated_to_cloud: bool = False
-    escalation_reason: Optional[EscalationPredicate] = None
+    escalation_reason: EscalationPredicate | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str
     tokens_consumed: int = 0
-    action_result: Optional[Dict[str, Any]] = None
+    action_result: dict[str, Any] | None = None
 
 
 class StateCheckpoint(BaseModel):
     """Pydantic-validated 8-part invariant trajectory checkpoint."""
 
     user_instructions: str = Field(default="", description="Verbatim goal and success criteria")
-    task_template: List[str] = Field(default_factory=list, description="Checklist with [x], [/], [ ]")
-    constraints: List[str] = Field(default_factory=list, description="Hard guardrails")
-    actions_taken: List[str] = Field(default_factory=list, description="Chronological summary of turns")
-    errors_and_fixes: List[str] = Field(default_factory=list, description="Errors and verified workarounds")
+    task_template: list[str] = Field(
+        default_factory=list, description="Checklist with [x], [/], [ ]"
+    )
+    constraints: list[str] = Field(default_factory=list, description="Hard guardrails")
+    actions_taken: list[str] = Field(
+        default_factory=list, description="Chronological summary of turns"
+    )
+    errors_and_fixes: list[str] = Field(
+        default_factory=list, description="Errors and verified workarounds"
+    )
     progress_metrics: str = Field(default="", description="Quantitative completion state")
     current_screen_state: str = Field(default="", description="Active window, pane, modal, cursor")
-    next_immediate_step: str = Field(default="", description="Preconditions and recommended next primitive")
+    next_immediate_step: str = Field(
+        default="", description="Preconditions and recommended next primitive"
+    )
     compressor: str = Field(default="gemma3", description="Model or heuristic used")
-    covers_turns: Tuple[int, int] = Field(default=(0, 0), description="Range of turn indices compacted")
+    covers_turns: tuple[int, int] = Field(
+        default=(0, 0), description="Range of turn indices compacted"
+    )
 
 
 COMPACT_PROMPT_TEMPLATE = """You are a deterministic Desktop Trajectory State Compressor.
@@ -81,18 +93,17 @@ Compress the provided conversation history turns into the following 8-part invar
 
 
 class BicameralStepController:
-    """
-    Coordinates local System 1 verification against routine actions,
+    """Coordinates local System 1 verification against routine actions,
     escalating to Cloud System 2 planner only when ambiguity or failure occurs.
     """
 
     def __init__(
         self,
         hal: Any,
-        local_gemma_client: Optional[Any] = None,
-        cloud_vlm_client: Optional[Any] = None,
+        local_gemma_client: Any | None = None,
+        cloud_vlm_client: Any | None = None,
         min_local_confidence: float = 0.82,
-        text_reader: Optional[Any] = None,
+        text_reader: Any | None = None,
         settle_timeout_s: float = 1.5,
         settle_poll_s: float = 0.15,
         min_change_ratio: float = 0.002,
@@ -144,9 +155,9 @@ class BicameralStepController:
 
     def _hard_escalation(
         self,
-        expected: Dict[str, Any],
-        ax_diff: Dict[str, Any],
-    ) -> Optional[str]:
+        expected: dict[str, Any],
+        ax_diff: dict[str, Any],
+    ) -> str | None:
         """Predicates that skip the local model and go to the cloud planner.
 
         Benign modals and async promotion of a known long job do not escalate.
@@ -157,7 +168,11 @@ class BicameralStepController:
         if modal and modal not in allow and risk != "BENIGN_DISMISSIBLE":
             return f"unexpected modal: {modal} ({risk or 'unclassified'})"
         phase = expected.get("quiescence_phase")
-        if expected.get("requires_visual_change") and phase in ("SETTLING", "NO_REACTION") and not expected.get("dirty_area"):
+        if (
+            expected.get("requires_visual_change")
+            and phase in ("SETTLING", "NO_REACTION")
+            and not expected.get("dirty_area")
+        ):
             return "visual stall: no damage before the reaction deadline"
         if (
             expected.get("expect_ax_change")
@@ -173,7 +188,7 @@ class BicameralStepController:
             return "post-condition contract failed after local retry"
         return None
 
-    def _read_text(self, target: str) -> Optional[Dict[str, Any]]:
+    def _read_text(self, target: str) -> dict[str, Any] | None:
         """OCR result for ``target``, or None when OCR is missing or failed.
 
         None never counts as "text absent": an unavailable engine must not pass an
@@ -189,7 +204,7 @@ class BicameralStepController:
             return None
         return res
 
-    def dispatch_hal_action(self, action_name: str, args: Dict[str, Any]) -> Any:
+    def dispatch_hal_action(self, action_name: str, args: dict[str, Any]) -> Any:
         """Dispatches an action to the underlying HAL."""
         if hasattr(self.hal, "dispatch_action"):
             return self.hal.dispatch_action(action_name, args)
@@ -226,11 +241,10 @@ class BicameralStepController:
     def execute_step(
         self,
         action_name: str,
-        action_args: Dict[str, Any],
-        expected_outcome: Optional[Dict[str, Any]] = None,
+        action_args: dict[str, Any],
+        expected_outcome: dict[str, Any] | None = None,
     ) -> StepExecutionVerdict:
-        """
-        Executes an action with three-tier bicameral verification.
+        """Executes an action with three-tier bicameral verification.
 
         Args:
             action_name: e.g. 'click', 'type_text', 'hotkey'
@@ -273,11 +287,13 @@ class BicameralStepController:
                     )
 
         # Check AX diff if supported
-        ax_diff: Dict[str, Any] = {}
+        ax_diff: dict[str, Any] = {}
         if hasattr(self.hal, "get_accessibility_tree"):
             try:
                 ax_diff = self.hal.get_accessibility_tree(diff_only=True)
-                if expected_outcome.get("expect_ax_change", False) and ax_diff.get("changed", False):
+                if expected_outcome.get("expect_ax_change", False) and ax_diff.get(
+                    "changed", False
+                ):
                     return StepExecutionVerdict(
                         success=True,
                         tier_used=VerificationTier.TIER0_DETERMINISTIC,
@@ -289,7 +305,11 @@ class BicameralStepController:
             except Exception:
                 pass
 
-        if expected_outcome.get("expect_ax_change") and ax_diff.get("available") is False and before is not None:
+        if (
+            expected_outcome.get("expect_ax_change")
+            and ax_diff.get("available") is False
+            and before is not None
+        ):
             # No accessibility diff here, so "the UI changed" is checked on pixels instead of
             # asking the local model a vague "did it succeed?" about a single frame.
             ratio = self._screen_change(before)
@@ -318,7 +338,7 @@ class BicameralStepController:
                 )
 
         hard = self._hard_escalation(expected_outcome, ax_diff)
-        local_eval: Optional[Dict[str, Any]] = None
+        local_eval: dict[str, Any] | None = None
         if hard:
             local_eval = {"verified": False, "confidence": 0.0, "reason": hard}
         elif self.local_gemma is not None:
@@ -331,7 +351,7 @@ class BicameralStepController:
                         except Exception:
                             image = None
                     fn = self.local_gemma.evaluate_step
-                    kwargs: Dict[str, Any] = {
+                    kwargs: dict[str, Any] = {
                         "action": action_name,
                         "args": action_args,
                         "expected": expected_outcome,
@@ -358,7 +378,11 @@ class BicameralStepController:
                             action_result=dispatch_res,
                         )
             except Exception as e:
-                local_eval = {"verified": False, "confidence": 0.0, "reason": f"Local evaluation exception: {e}"}
+                local_eval = {
+                    "verified": False,
+                    "confidence": 0.0,
+                    "reason": f"Local evaluation exception: {e}",
+                }
 
         # 4. Tier 2: Cloud System 2 Planner Escalation (Cloud VLM)
         low_conf = local_eval.get("confidence", 0.0) if local_eval else 0.0
@@ -398,14 +422,13 @@ class BicameralStepController:
 
     @staticmethod
     def compact_trajectory_history(
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         max_tokens: int = 12000,
         keep_last_n: int = 2,
-        local_compressor_fn: Optional[Callable[[str], str]] = None,
+        local_compressor_fn: Callable[[str], str] | None = None,
         force: bool = False,
-    ) -> List[Dict[str, Any]]:
-        """
-        Compresses turns 1..N-keep_last_n into an 8-part invariant structured state checkpoint.
+    ) -> list[dict[str, Any]]:
+        """Compresses turns 1..N-keep_last_n into an 8-part invariant structured state checkpoint.
 
         Args:
             messages: List of message objects [{"role": "...", "content": "..."}]
@@ -430,7 +453,7 @@ class BicameralStepController:
         recent_turns = messages[end_idx:]
 
         serialized_turns = json.dumps(turns_to_compact, indent=2)
-        checkpoint: Optional[StateCheckpoint] = None
+        checkpoint: StateCheckpoint | None = None
 
         if local_compressor_fn:
             prompt = f"{COMPACT_PROMPT_TEMPLATE}\n\nHistory to compress:\n{serialized_turns}"
@@ -460,10 +483,10 @@ class BicameralStepController:
         return result
 
 
-def _heuristic_checkpoint(turns: List[Dict[str, Any]]) -> tuple[str, StateCheckpoint]:
+def _heuristic_checkpoint(turns: list[dict[str, Any]]) -> tuple[str, StateCheckpoint]:
     """Builds the 8-part text the compactor tests lock, plus a structured checkpoint."""
-    actions: List[str] = []
-    errors: List[str] = []
+    actions: list[str] = []
+    errors: list[str] = []
     for turn in turns:
         content = str(turn.get("content", ""))
         if "error" in content.lower() or "fail" in content.lower():
@@ -498,7 +521,7 @@ def _heuristic_checkpoint(turns: List[Dict[str, Any]]) -> tuple[str, StateCheckp
     return body, checkpoint
 
 
-def _checkpoint_from_text(text: str) -> Optional[StateCheckpoint]:
+def _checkpoint_from_text(text: str) -> StateCheckpoint | None:
     try:
         data = json.loads(text)
     except Exception:
@@ -512,10 +535,22 @@ def _checkpoint_from_text(text: str) -> Optional[StateCheckpoint]:
 
 
 def _render_checkpoint(checkpoint: StateCheckpoint) -> str:
-    actions = "; ".join(checkpoint.actions_taken) if checkpoint.actions_taken else "Routine navigation steps"
+    actions = (
+        "; ".join(checkpoint.actions_taken)
+        if checkpoint.actions_taken
+        else "Routine navigation steps"
+    )
     errors = "; ".join(checkpoint.errors_and_fixes) if checkpoint.errors_and_fixes else "None"
-    tasks = "; ".join(checkpoint.task_template) if checkpoint.task_template else "Progressing sub-goals."
-    constraints = "; ".join(checkpoint.constraints) if checkpoint.constraints else "Read-only / failsafe bounds maintained."
+    tasks = (
+        "; ".join(checkpoint.task_template)
+        if checkpoint.task_template
+        else "Progressing sub-goals."
+    )
+    constraints = (
+        "; ".join(checkpoint.constraints)
+        if checkpoint.constraints
+        else "Read-only / failsafe bounds maintained."
+    )
     return (
         f"1. [USER_INSTRUCTIONS]: {checkpoint.user_instructions}\n"
         f"2. [TASK_TEMPLATE]: {tasks}\n"
@@ -526,4 +561,3 @@ def _render_checkpoint(checkpoint: StateCheckpoint) -> str:
         f"7. [CURRENT_SCREEN_STATE]: {checkpoint.current_screen_state}\n"
         f"8. [NEXT_IMMEDIATE_STEP]: {checkpoint.next_immediate_step}\n"
     )
-

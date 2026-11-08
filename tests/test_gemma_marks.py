@@ -7,14 +7,20 @@ import io
 from unittest.mock import MagicMock
 
 from PIL import Image, ImageDraw
+from test_gemma3_sidecar import FakeOllama
 
 from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.gemma.client import GemmaClient
-from dobby.types import BoundingBox, GroundingSource, UIRole, VDOMNode, VirtualDOMSnapshot, WindowInfo
+from dobby.types import (
+    BoundingBox,
+    GroundingSource,
+    UIRole,
+    VDOMNode,
+    VirtualDOMSnapshot,
+    WindowInfo,
+)
 from dobby.vdom.gemma3_sidecar import Gemma3Grounder
 from dobby.vdom.gemma_marks import GemmaMarkLabeler, draw_marks
-
-from test_gemma3_sidecar import FakeOllama
 
 
 def _toolbar(w=1200, h=400) -> Image.Image:
@@ -46,16 +52,25 @@ def test_draw_marks_downscales_and_keeps_size_cap():
 
 
 def test_label_marks_validates_and_caches():
-    fake = FakeOllama(replies=[{"labels": [
-        {"mark": 1, "label": "Run", "role": "icon_button"},
-        {"mark": 2, "label": "Stop", "role": "icon_button"},
-        {"mark": 9, "label": "Ghost", "role": "icon_button"},      # out of range
-        {"mark": 3, "label": "Search", "role": "not_a_role"},     # bad role
-    ]}])
+    fake = FakeOllama(
+        replies=[
+            {
+                "labels": [
+                    {"mark": 1, "label": "Run", "role": "icon_button"},
+                    {"mark": 2, "label": "Stop", "role": "icon_button"},
+                    {"mark": 9, "label": "Ghost", "role": "icon_button"},  # out of range
+                    {"mark": 3, "label": "Search", "role": "not_a_role"},  # bad role
+                ]
+            }
+        ]
+    )
     lab = _labeler(fake)
     img = _toolbar()
     res = lab.label_marks(img, BOXES, app_key="vivado")
-    assert res == {0: {"label": "Run", "role": "icon_button"}, 1: {"label": "Stop", "role": "icon_button"}}
+    assert res == {
+        0: {"label": "Run", "role": "icon_button"},
+        1: {"label": "Stop", "role": "icon_button"},
+    }
     assert max(_sent_image(fake).size) == 896
     assert fake.chat_calls[0]["format"]["required"] == ["labels"]
 
@@ -65,7 +80,7 @@ def test_label_marks_validates_and_caches():
     assert res2[2] == {"label": "Search", "role": "text_input"}
     assert res2[0]["label"] == "Run"
     assert lab.cache_hits == 2
-    assert "Name boxes 1 to 1." == fake.chat_calls[1]["messages"][1]["content"]
+    assert fake.chat_calls[1]["messages"][1]["content"] == "Name boxes 1 to 1."
 
     # Cache is per app
     fake.replies = [{"labels": []}]
@@ -74,7 +89,9 @@ def test_label_marks_validates_and_caches():
 
 
 def test_label_marks_batches_and_survives_failure():
-    fake = FakeOllama(replies=[{"labels": [{"mark": 1, "label": "A", "role": "icon_button"}]}, {"labels": []}])
+    fake = FakeOllama(
+        replies=[{"labels": [{"mark": 1, "label": "A", "role": "icon_button"}]}, {"labels": []}]
+    )
     lab = _labeler(fake, max_marks=2)
     lab.label_marks(_toolbar(), BOXES)
     assert len(fake.chat_calls) == 2
@@ -111,7 +128,12 @@ def _controller(fake, proposals):
 
 
 def _prop(x, y, w, h):
-    return {"bbox": {"x": x, "y": y, "width": w, "height": h}, "confidence": 0.8, "class_name": "push_button", "text": ""}
+    return {
+        "bbox": {"x": x, "y": y, "width": w, "height": h},
+        "confidence": 0.8,
+        "class_name": "push_button",
+        "text": "",
+    }
 
 
 def test_find_with_gemma_clicks_detector_box_in_screen_coords():
@@ -126,24 +148,43 @@ def test_find_with_gemma_clicks_detector_box_in_screen_coords():
 
 
 def test_label_vdom_names_only_unnamed_visual_nodes():
-    fake = FakeOllama(replies=[{"labels": [{"mark": 1, "label": "Zoom Fit", "role": "icon_button"}]}])
+    fake = FakeOllama(
+        replies=[{"labels": [{"mark": 1, "label": "Zoom Fit", "role": "icon_button"}]}]
+    )
     ctrl = _controller(fake, [])
     win = BoundingBox(x=500, y=300, width=1200, height=400)
     nodes = {
-        "a": VDOMNode(node_id="a", source=GroundingSource.VISION_ONLY, role=UIRole.PUSH_BUTTON, name="",
-                      bbox=BoundingBox(x=520, y=320, width=40, height=40)),
-        "b": VDOMNode(node_id="b", source=GroundingSource.VISION_ONLY, role=UIRole.STATIC_TEXT, name="clk",
-                      bbox=BoundingBox(x=600, y=320, width=40, height=40)),
-        "c": VDOMNode(node_id="c", source=GroundingSource.AT_SPI2, role=UIRole.PUSH_BUTTON, name="",
-                      bbox=BoundingBox(x=700, y=320, width=40, height=40)),
+        "a": VDOMNode(
+            node_id="a",
+            source=GroundingSource.VISION_ONLY,
+            role=UIRole.PUSH_BUTTON,
+            name="",
+            bbox=BoundingBox(x=520, y=320, width=40, height=40),
+        ),
+        "b": VDOMNode(
+            node_id="b",
+            source=GroundingSource.VISION_ONLY,
+            role=UIRole.STATIC_TEXT,
+            name="clk",
+            bbox=BoundingBox(x=600, y=320, width=40, height=40),
+        ),
+        "c": VDOMNode(
+            node_id="c",
+            source=GroundingSource.AT_SPI2,
+            role=UIRole.PUSH_BUTTON,
+            name="",
+            bbox=BoundingBox(x=700, y=320, width=40, height=40),
+        ),
     }
-    snap = VirtualDOMSnapshot(snapshot_id="s", timestamp=0.0, window_bbox=win, root_id="a", nodes=nodes)
+    snap = VirtualDOMSnapshot(
+        snapshot_id="s", timestamp=0.0, window_bbox=win, root_id="a", nodes=nodes
+    )
     named = ctrl._label_vdom_with_gemma(snap, _toolbar(), win, app_key="vivado")
     assert named == 1
     assert snap.nodes["a"].name == "Zoom Fit" and snap.nodes["a"].role == UIRole.ICON_BUTTON
     assert snap.nodes["a"].attributes["named_by"] == "gemma"
     assert snap.nodes["b"].name == "clk" and snap.nodes["c"].name == ""
-    assert "Name boxes 1 to 1." == fake.chat_calls[0]["messages"][1]["content"]
+    assert fake.chat_calls[0]["messages"][1]["content"] == "Name boxes 1 to 1."
 
 
 def test_capture_vdom_captures_window_region():
@@ -156,6 +197,7 @@ def test_capture_vdom_captures_window_region():
     ctrl.atspi_inspector = MagicMock()
     ctrl.atspi_inspector.inspect_desktop.return_value = []
     from dobby.vdom.fusion import VDOMFusionEngine
+
     ctrl.vdom_fusion = VDOMFusionEngine()
     ctrl.capture_vdom(label_with_gemma=False)
     assert ctrl.pipeline.capture.call_args.kwargs["region"] == (500, 300, 1200, 400)

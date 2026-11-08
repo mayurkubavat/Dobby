@@ -5,21 +5,19 @@ Executes a multi-step autonomous trajectory locally at native OS speeds,
 verifying deltas, sub-pane captures, vDOM queries, and journal synchronization.
 """
 
+import base64
 import os
 import sys
-import json
-import base64
 import time
-from PIL import Image
-import io
 
 # Ensure Vision MCP is on path
 sys.path.insert(0, "/home/mk/DV/git/Vision")
 
-from dobby.hal.factory import get_desktop_hal
 from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.agent_loop.trajectory import TrajectoryEngine
+from dobby.hal.factory import get_desktop_hal
 from dobby.types import TrajectorySpec, TrajectoryStep
+
 
 def main():
     os.environ["DISPLAY"] = ":20"
@@ -78,7 +76,7 @@ def main():
                 action="execute_crystallized_skill",
                 parameters={
                     "skill_name": "cdc_fifo_regression_step",
-                    "parameters": {"step_time": "{{sim_time}}"}
+                    "parameters": {"step_time": "{{sim_time}}"},
                 },
                 verify_delta=False,
             ),
@@ -97,9 +95,7 @@ def main():
             TrajectoryStep(
                 step_id="9_sync_tcl_journal",
                 action="run_terminal_command",
-                parameters={
-                    "command": "tail -n 15 /home/mk/DV/vivado_fifo/vivado.jou"
-                },
+                parameters={"command": "tail -n 15 /home/mk/DV/vivado_fifo/vivado.jou"},
                 assertions=[{"assert_exit_code": 0}],
             ),
         ],
@@ -117,14 +113,16 @@ def main():
     print(f"Executed Steps: {result.executed_steps}")
     print(f"Successful Steps: {result.successful_steps}")
     print(f"Failed Steps: {result.failed_steps}")
-    print(f"Elapsed Time: {result.elapsed_ms:.2f} ms ({result.elapsed_ms/1000.0:.2f} s)")
+    print(f"Elapsed Time: {result.elapsed_ms:.2f} ms ({result.elapsed_ms / 1000.0:.2f} s)")
     print(f"Tokens Saved: {result.estimated_tokens_saved:,} tokens (0 LLM round-trips)")
     print(f"Message: {result.message}\n")
 
     print("Step Details:")
     print("-" * 65)
     for r in result.step_results:
-        print(f"[{r.step_id}] {r.action:<24} | Success: {r.success!s:<5} | {r.elapsed_ms:>7.2f} ms | {r.message}")
+        print(
+            f"[{r.step_id}] {r.action:<24} | Success: {r.success!s:<5} | {r.elapsed_ms:>7.2f} ms | {r.message}"
+        )
 
     # Save artifacts
     brain_dir = "/home/mk/.gemini/antigravity-cli/brain/d1c5946d-6fd6-48b0-8b1d-d7068560536d"
@@ -136,11 +134,15 @@ def main():
         print(f"\nFinal screen saved: {out_path}")
 
     # Save post-simulation waveform pane
-    post_wave_step = next((r for r in result.step_results if r.step_id == "8_capture_final_waves"), None)
+    post_wave_step = next(
+        (r for r in result.step_results if r.step_id == "8_capture_final_waves"), None
+    )
     if post_wave_step and post_wave_step.success:
         pane_crop = hal.capture_screen()
         # Sub-pane bounding box
-        roi = controller.get_active_plugin().get_sub_pane("waveform_canvas", hal.get_active_window().bbox)
+        roi = controller.get_active_plugin().get_sub_pane(
+            "waveform_canvas", hal.get_active_window().bbox
+        )
         if roi:
             crop = hal.capture_screen(region=(roi.x, roi.y, roi.width, roi.height))
             wave_path = os.path.join(brain_dir, "live_trajectory_waveform.png")
@@ -148,6 +150,7 @@ def main():
             print(f"Waveform sub-pane saved: {wave_path}")
 
     return 0 if result.success else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

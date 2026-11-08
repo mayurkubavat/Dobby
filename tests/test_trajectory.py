@@ -2,24 +2,16 @@
 Unit and Integration Tests for Local Macro & Trajectory Dispatcher (Option 4).
 """
 
-import pytest
-from unittest.mock import MagicMock
 from PIL import Image
 
-from dobby.types import (
-    TrajectoryStep,
-    TrajectorySpec,
-    StepExecutionResult,
-    TrajectoryExecutionResult,
-    BoundingBox,
-    WindowInfo,
-    VirtualDOMSnapshot,
-    VDOMNode,
-    GroundingSource,
-    UIRole,
-)
-from dobby.agent_loop.trajectory import TrajectoryEngine
 from dobby.agent_loop.controller import FeedbackLoopController
+from dobby.agent_loop.trajectory import TrajectoryEngine
+from dobby.types import (
+    BoundingBox,
+    TrajectorySpec,
+    TrajectoryStep,
+    WindowInfo,
+)
 
 
 class MockHAL:
@@ -66,7 +58,7 @@ class MockHAL:
     def focus_window(self, window_id: str):
         self.focused_window_id = window_id
         for w in self.windows:
-            w.is_active = (w.window_id == window_id)
+            w.is_active = w.window_id == window_id
         return True
 
     def mouse_click(self, x, y, button="left", click_count=1):

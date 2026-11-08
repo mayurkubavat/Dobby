@@ -14,8 +14,16 @@ ARROW_W, ARROW_H, CHIP_H = 13 * 1.25, 21.5 * 1.25, 20.0
 
 
 def view(**kw):
-    base = dict(paused=False, takeover=False, takeover_resume="auto", working=False, turbo=False,
-                current_mode="hidden", bar_mode="always", owner=True)
+    base = dict(
+        paused=False,
+        takeover=False,
+        takeover_resume="auto",
+        working=False,
+        turbo=False,
+        current_mode="hidden",
+        bar_mode="always",
+        owner=True,
+    )
     base.update(kw)
     return bar_view(**base)
 
@@ -49,7 +57,11 @@ class TestAgentColors:
         assert not {"#F5A524", "#F04438"} & {c.upper() for c in style.AGENT_PALETTE}
 
     def test_stored_colour_wins_and_start_order_fills_the_rest(self):
-        agents = [{"pid": 3, "started": 30}, {"pid": 1, "started": 10, "color": "#14B8A6"}, {"pid": 2, "started": 20}]
+        agents = [
+            {"pid": 3, "started": 30},
+            {"pid": 1, "started": 10, "color": "#14B8A6"},
+            {"pid": 2, "started": 20},
+        ]
         got = style.agent_colors(agents)
         assert got[1] == "#14B8A6"
         assert got[2] == "#7C5CFF" and got[3] == style.AGENT_PALETTE[2]
@@ -84,11 +96,18 @@ class TestAgentColors:
     def test_narration_shows_dots_only_for_busy_dobbys(self):
         colors = {1: "#7C5CFF", 2: "#14B8A6", 3: "#EC4899"}
         # Three AI apps loaded Dobby, one holds control: no dots, no mystery.
-        idle = [{"pid": 1, "started": 1, "holding": True}, {"pid": 2, "started": 2}, {"pid": 3, "started": 3}]
+        idle = [
+            {"pid": 1, "started": 1, "holding": True},
+            {"pid": 2, "started": 2},
+            {"pid": 3, "started": 3},
+        ]
         assert style.agent_dots(idle, colors, 1, busy_only=True) == []
         assert len(style.agent_dots(idle, colors, 1)) == 3  # quiet look: every running Dobby
-        busy = [{"pid": 1, "started": 1, "holding": True}, {"pid": 2, "started": 2, "waiting": True},
-                {"pid": 3, "started": 3}]
+        busy = [
+            {"pid": 1, "started": 1, "holding": True},
+            {"pid": 2, "started": 2, "waiting": True},
+            {"pid": 3, "started": 3},
+        ]
         dots = style.agent_dots(busy, colors, 1, busy_only=True)
         assert [d[0] for d in dots] == [1, 2]
         assert style.dots_caption(dots) == "2 Dobbys" and style.dots_caption([]) == ""
@@ -111,7 +130,11 @@ class TestBar:
     def test_ai_waiting_says_click_to_wake_even_compact(self):
         v = view(ai_waiting=True, owner=False)
         spec = style.bar_spec(v)
-        assert spec.compact and spec.text == "Dobby is sleeping · click to wake" and spec.dot_alpha == 1.0
+        assert (
+            spec.compact
+            and spec.text == "Dobby is sleeping · click to wake"
+            and spec.dot_alpha == 1.0
+        )
         assert style.bar_spec(v, narrate=False).text == "Dobby · click to wake"
         assert style.bar_spec(v, hovered=True).text.count("click to wake") == 1
 
@@ -122,7 +145,9 @@ class TestBar:
     def test_working_shows_live_step_count_and_timer(self):
         spec = style.bar_spec(view(working=True), step="Click ‘Send’", steps=7, elapsed=42)
         assert spec.text == "Dobby is working · Click ‘Send’ · step 7 · 0:42"
-        quiet = style.bar_spec(view(working=True), step="Click ‘Send’", steps=7, elapsed=42, narrate=False)
+        quiet = style.bar_spec(
+            view(working=True), step="Click ‘Send’", steps=7, elapsed=42, narrate=False
+        )
         assert quiet.text == "Click ‘Send’ · step 7 · 0:42"
         assert keys(spec) == ["primary", "secondary", "hide", "menu"]
         icons = {b.key: b.icon for b in spec.buttons}
@@ -131,14 +156,25 @@ class TestBar:
         assert stop.role == "danger" and "⌃⌥⎋" in stop.tip
 
     def test_working_turbo_and_thinking(self):
-        spec = style.bar_spec(view(working=True, turbo=True), step="", steps=0, elapsed=5, turbo=True, thinking=True)
+        spec = style.bar_spec(
+            view(working=True, turbo=True), step="", steps=0, elapsed=5, turbo=True, thinking=True
+        )
         assert spec.text == "⚡ Turbo · Dobby is thinking… · 0:05" and spec.shimmer
-        quiet = style.bar_spec(view(working=True, turbo=True), step="", steps=0, elapsed=5, turbo=True,
-                               thinking=True, narrate=False)
+        quiet = style.bar_spec(
+            view(working=True, turbo=True),
+            step="",
+            steps=0,
+            elapsed=5,
+            turbo=True,
+            thinking=True,
+            narrate=False,
+        )
         assert quiet.text == "⚡ Turbo · Working · 0:05"
 
     def test_narration_uses_the_configured_label(self):
-        spec = style.bar_spec(view(working=True), label="Builder", step="Press ⌘S", steps=2, elapsed=3)
+        spec = style.bar_spec(
+            view(working=True), label="Builder", step="Press ⌘S", steps=2, elapsed=3
+        )
         assert spec.text == "Builder is working · Press ⌘S · step 2 · 0:03"
 
     def test_paused_uses_play_icon(self):
@@ -147,7 +183,9 @@ class TestBar:
 
     def test_stopped_keeps_words(self):
         spec = style.bar_spec(("stopped", "Dobby stopped", "OK", "Hide", "danger", 1.0))
-        assert [b.title for b in spec.buttons[:2]] == ["OK", "Hide"] and spec.buttons[0].icon is None
+        assert [b.title for b in spec.buttons[:2]] == ["OK", "Hide"] and spec.buttons[
+            0
+        ].icon is None
 
     def test_confirm_is_words_and_cannot_hide(self):
         spec = style.confirm_spec("Allow Dobby to quit?")
@@ -158,12 +196,16 @@ class TestBar:
         assert spec.text == "Dobby is sleeping" and not spec.compact
         assert [b.title for b in spec.buttons[:3]] == ["Pause", "Stop", "–"]
         assert all(b.icon is None for b in spec.buttons[:3])
-        assert style.bar_spec(view(working=True), style="classic").text.startswith("Dobby is working")
+        assert style.bar_spec(view(working=True), style="classic").text.startswith(
+            "Dobby is working"
+        )
 
     def test_bar_hidden_stays_hidden(self):
         assert style.bar_spec(None) is None
 
-    @pytest.mark.parametrize("secs,text", [(0, "0:00"), (7, "0:07"), (102, "1:42"), (3723, "1:02:03")])
+    @pytest.mark.parametrize(
+        "secs,text", [(0, "0:00"), (7, "0:07"), (102, "1:42"), (3723, "1:02:03")]
+    )
     def test_timer_format(self, secs, text):
         assert style.fmt_elapsed(secs) == text
 
@@ -175,8 +217,9 @@ class TestBar:
 # --------------------------------------------------------------- glow
 class TestGlow:
     def test_states(self):
-        g = lambda **kw: style.glow_state(**{**dict(paused=False, takeover=False, working=False,
-                                                     thinking=False, risk="ok"), **kw})
+        g = lambda **kw: style.glow_state(
+            **{**dict(paused=False, takeover=False, working=False, thinking=False, risk="ok"), **kw}
+        )
         assert g() == "idle" and g(working=True) == "acting" and g(thinking=True) == "thinking"
         assert g(paused=True, working=True) == "halted" and g(takeover=True) == "halted"
         assert g(risk="danger", paused=True) == "risk"
@@ -187,14 +230,18 @@ class TestGlow:
         assert style.glow_color_key("acting", "caution") == "caution"
         assert style.glow_color_key("thinking", "ok") == "ok"
         assert style.glow_opacity("idle", False) == 0.0
-        assert style.glow_opacity("acting", True) == 0.3 and style.glow_opacity("acting", False) == 1.0
+        assert (
+            style.glow_opacity("acting", True) == 0.3 and style.glow_opacity("acting", False) == 1.0
+        )
 
     def test_corner_radius(self):
         screens = [(0, 0, 1512, 982)]
         assert style.corner_radius((100, 100, 800, 600), screens, 26) == 16.0
         assert style.corner_radius((100, 100, 800, 600), screens, 15) == 10.0
         assert style.corner_radius((0, 0, 1512, 982), screens, 26) == 0.0  # full screen
-        assert style.corner_radius((0, 33, 1512, 949), screens, 26) == 0.0  # zoomed under the menu bar
+        assert (
+            style.corner_radius((0, 33, 1512, 949), screens, 26) == 0.0
+        )  # zoomed under the menu bar
         assert style.corner_radius((100, 100, 800, 600), screens, 26, 11) == 11.0  # configured
 
 
@@ -216,13 +263,14 @@ class TestTrail:
         marks = style.trail_view(pts, now=1000.0, style="classic", keep=5)
         assert [m[0] for m in marks] == [3, 4, 5, 6, 7] and marks[-1][2] == pytest.approx(0.85)
 
-
     def test_narrated_trail_is_numbered_and_still_fades(self):
         pts = [(i, (i * 10.0, 0.0), 100.0 + i) for i in range(1, 6)]
         marks = style.trail_view(pts, now=106.0, fade_secs=10.0, numbered=True)
         assert [m[0] for m in marks] == [3, 4, 5] and all(m[3] == 16.0 for m in marks)
         assert marks[-1][2] > marks[0][2] and marks[-1][4] == pytest.approx(9.0)
-        assert style.trail_view([(1, (0.0, 0.0), 0.0)], now=10.5, fade_secs=10.0, numbered=True) == []
+        assert (
+            style.trail_view([(1, (0.0, 0.0), 0.0)], now=10.5, fade_secs=10.0, numbered=True) == []
+        )
 
 
 # -------------------------------------------------------- tag narration
@@ -230,7 +278,9 @@ class TestNarration:
     def test_action_stays_until_next_or_idle(self):
         assert style.intent_secs(None, 1600, narrate=True) is None
         assert style.intent_secs(None, 1600, narrate=False) == pytest.approx(1.6)
-        assert style.intent_secs(60000, 1600, narrate=True) == pytest.approx(60.0)  # a tool's step() wins
+        assert style.intent_secs(60000, 1600, narrate=True) == pytest.approx(
+            60.0
+        )  # a tool's step() wins
         assert style.intent_secs(0, 1600, narrate=True) == 0.0
 
     def test_tag_says_thinking_between_actions(self):

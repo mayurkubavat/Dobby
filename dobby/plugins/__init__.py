@@ -8,8 +8,8 @@ from dobby.plugins.registry import PluginRegistry
 PLUGIN_REGISTRY = PluginRegistry()
 
 __all__ = [
+    "PLUGIN_REGISTRY",
     "BaseUIAppPlugin",
     "ChromeBrowserPlugin",
     "PluginRegistry",
-    "PLUGIN_REGISTRY",
 ]

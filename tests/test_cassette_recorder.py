@@ -10,12 +10,15 @@ from dobby.hal.cassette_recorder import LiveCassetteRecorder, pixel_delta, sanit
 from dobby.hal.cassette_replay import replay_cassette
 from dobby.hal.mock_replay import MockReplayHAL, ScreenFrameState
 from dobby.hal.session import DesktopSession
-from dobby.types import DisplayTopology, DisplayMetrics
+from dobby.types import DisplayMetrics, DisplayTopology
 
 
 def _session():
     backend = MockReplayHAL(states=[ScreenFrameState(frame_id="live")])
-    topo = DisplayTopology(displays=[DisplayMetrics(display_id="m", origin=(0, 0), size=(64, 48), scale=1.0)], primary_id="m")
+    topo = DisplayTopology(
+        displays=[DisplayMetrics(display_id="m", origin=(0, 0), size=(64, 48), scale=1.0)],
+        primary_id="m",
+    )
     return DesktopSession(backend, topo, quiescence=backend), backend
 
 
@@ -51,7 +54,11 @@ def test_recorded_session_replays(tmp_path: Path):
     assert summary["frames"] == 6 and summary["transitions"] == 5 and summary["images"] == 6
     index = json.loads((tmp_path / "my_demo" / "index.json").read_text())
     assert [t["action"] for t in index["transitions"]] == [
-        "mouse_click", "keyboard_type", "keyboard_hotkey", "mouse_drag", "focus_window",
+        "mouse_click",
+        "keyboard_type",
+        "keyboard_hotkey",
+        "mouse_drag",
+        "focus_window",
     ]
     assert index["transitions"][1]["pre_frame_id"] == index["transitions"][0]["post_frame_id"]
     assert index["frames"][2]["pixel_delta_from_prev"] > 0.5
@@ -136,7 +143,10 @@ def test_mcp_tools_record_and_write(tmp_path: Path, monkeypatch):
 
     class _Ctl:
         def cassette_snapshot(self, capture_ocr=True):
-            return {"screen_size": [64, 48], "ocr_boxes": [{"text": "hi"}] if capture_ocr else []}, None
+            return {
+                "screen_size": [64, 48],
+                "ocr_boxes": [{"text": "hi"}] if capture_ocr else [],
+            }, None
 
     monkeypatch.setattr(server, "hal", session)
     monkeypatch.setattr(server, "controller", _Ctl())

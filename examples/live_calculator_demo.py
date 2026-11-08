@@ -10,13 +10,9 @@ This script executes a full perception-action-verification closed loop:
 7. Gracefully terminates the application.
 """
 
-import sys
-import time
-import subprocess
 import base64
-from typing import Dict, List, Optional
-from PIL import Image
-import io
+import subprocess
+import time
 
 import dobby.server as server
 from dobby.types import UIElement
@@ -53,7 +49,9 @@ def run_demo():
             raise RuntimeError("Calculator window was not found in desktop window list!")
 
         print(f"  ✓ Found Window: '{calc_win['title']}' (ID: {calc_win['window_id']})")
-        print(f"  ✓ Bounds: {calc_win['bbox']['width']}x{calc_win['bbox']['height']} at ({calc_win['bbox']['x']}, {calc_win['bbox']['y']})")
+        print(
+            f"  ✓ Bounds: {calc_win['bbox']['width']}x{calc_win['bbox']['height']} at ({calc_win['bbox']['x']}, {calc_win['bbox']['y']})"
+        )
 
         print(f"  ✓ Focusing window {calc_win['window_id']}...")
         server.focus_window(calc_win["window_id"])
@@ -63,8 +61,12 @@ def run_demo():
         print("\n[Step 3] Capturing screen with Set-of-Marks (SoM) visual grounding...")
         initial_snap = server.take_screenshot(mode="annotated_som", app_filter="calculator")
 
-        print(f"  ✓ Screen Resolution: {initial_snap['original_width']}x{initial_snap['original_height']}")
-        print(f"  ✓ Downscaled Frame: {initial_snap['width']}x{initial_snap['height']} (Scale: {initial_snap['scale_factor']:.3f})")
+        print(
+            f"  ✓ Screen Resolution: {initial_snap['original_width']}x{initial_snap['original_height']}"
+        )
+        print(
+            f"  ✓ Downscaled Frame: {initial_snap['width']}x{initial_snap['height']} (Scale: {initial_snap['scale_factor']:.3f})"
+        )
         print(f"  ✓ Payload Size: {len(initial_snap['image_base64']) // 1024} KB")
         print(f"  ✓ Total Interactive Marks Tagged: {len(initial_snap['marks'])}")
 
@@ -77,7 +79,7 @@ def run_demo():
 
         # 4. Semantic Element Resolution
         # Map element labels to mark IDs
-        marks_by_label: Dict[str, UIElement] = {}
+        marks_by_label: dict[str, UIElement] = {}
         for mark in initial_snap["marks"]:
             name = mark["name"].strip()
             if name:
@@ -95,7 +97,9 @@ def run_demo():
 
         # 5. Closed-Loop Execution: 4, 5, ×, 2, =
         sequence = ["4", "5", "×", "2", "="]
-        print(f"\n[Step 5] Executing action sequence with visual delta verification: {' -> '.join(sequence)}")
+        print(
+            f"\n[Step 5] Executing action sequence with visual delta verification: {' -> '.join(sequence)}"
+        )
 
         for key in sequence:
             if key not in marks_by_label:
@@ -104,13 +108,15 @@ def run_demo():
 
             target_mark = marks_by_label[key]
             mark_id = target_mark["id"]
-            
+
             # Click by Mark ID with verification
             res = server.click(mark_id=mark_id, verify_delta=True)
 
             status = "✓ DETECTED" if res["delta_detected"] else "– No Delta"
             change_pct = f"{res['change_ratio'] * 100:.2f}%"
-            print(f"  👉 Clicked '{key}' (Mark #{mark_id}) | Success: {res['success']} | Screen Delta: {status} ({change_pct})")
+            print(
+                f"  👉 Clicked '{key}' (Mark #{mark_id}) | Success: {res['success']} | Screen Delta: {status} ({change_pct})"
+            )
             time.sleep(0.3)
 
         # 6. Capture Final Verification Screenshot
@@ -122,7 +128,9 @@ def run_demo():
         print(f"  ✓ Saved result frame: {artifact_dir}/demo_calculator_result.jpg")
 
         print("\n" + "=" * 70)
-        print("🎉 DEMONSTRATION COMPLETE: Full perception, grounding, and closed-loop execution succeeded!")
+        print(
+            "🎉 DEMONSTRATION COMPLETE: Full perception, grounding, and closed-loop execution succeeded!"
+        )
         print("=" * 70)
 
     finally:

@@ -1,14 +1,13 @@
 """Ensemble Grounding Provider fusing Semantic, Computer Vision, and Template detections with NMS."""
 
-from typing import List, Optional, Tuple, Dict
 from PIL import Image
 
-from dobby.perception.grounding.base import BaseGroundingProvider
-from dobby.perception.grounding.semantic import SemanticGroundingProvider
-from dobby.perception.grounding.cv import CVGroundingProvider
-from dobby.perception.grounding.template import TemplateGroundingProvider
-from dobby.types import UIElement, BoundingBox
 from dobby.config import CONFIG
+from dobby.perception.grounding.base import BaseGroundingProvider
+from dobby.perception.grounding.cv import CVGroundingProvider
+from dobby.perception.grounding.semantic import SemanticGroundingProvider
+from dobby.perception.grounding.template import TemplateGroundingProvider
+from dobby.types import BoundingBox, UIElement
 
 
 def compute_iou(boxA: BoundingBox, boxB: BoundingBox) -> float:
@@ -33,16 +32,15 @@ def compute_iou(boxA: BoundingBox, boxB: BoundingBox) -> float:
 
 
 class EnsembleGroundingProvider(BaseGroundingProvider):
-    """
-    Combines semantic hierarchy, visual edge contours, and template matching into a unified,
+    """Combines semantic hierarchy, visual edge contours, and template matching into a unified,
     deduplicated Set-of-Marks map using Non-Maximum Suppression.
     """
 
     def __init__(
         self,
-        semantic_provider: Optional[SemanticGroundingProvider] = None,
-        cv_provider: Optional[CVGroundingProvider] = None,
-        template_provider: Optional[TemplateGroundingProvider] = None,
+        semantic_provider: SemanticGroundingProvider | None = None,
+        cv_provider: CVGroundingProvider | None = None,
+        template_provider: TemplateGroundingProvider | None = None,
         iou_threshold: float = CONFIG.nms_iou_threshold,
     ) -> None:
         self.semantic = semantic_provider or SemanticGroundingProvider()
@@ -62,14 +60,13 @@ class EnsembleGroundingProvider(BaseGroundingProvider):
         self,
         image: Image.Image,
         scale_factor: float = 1.0,
-        app_filter: Optional[str] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-    ) -> List[UIElement]:
-        """
-        Executes multi-source detection and applies Non-Maximum Suppression (NMS)
+        app_filter: str | None = None,
+        region: tuple[int, int, int, int] | None = None,
+    ) -> list[UIElement]:
+        """Executes multi-source detection and applies Non-Maximum Suppression (NMS)
         with semantic attribute retention.
         """
-        raw_candidates: List[UIElement] = []
+        raw_candidates: list[UIElement] = []
 
         # 1. Query semantic tree (highest priority for names and roles)
         if self.semantic.is_available:
@@ -103,11 +100,11 @@ class EnsembleGroundingProvider(BaseGroundingProvider):
             # Re-index mark IDs sequentially and return
             for idx, elem in enumerate(raw_candidates):
                 elem.id = idx + 1
-            return raw_candidates[:CONFIG.som_max_elements]
+            return raw_candidates[: CONFIG.som_max_elements]
 
         # 4. Non-Maximum Suppression (NMS) with Semantic Prioritization
         # Semantic elements are preserved and enrich overlapping CV contours
-        fused_elements: List[UIElement] = []
+        fused_elements: list[UIElement] = []
 
         for candidate in raw_candidates:
             # Check overlap against already selected elements
@@ -130,18 +127,16 @@ class EnsembleGroundingProvider(BaseGroundingProvider):
         for idx, elem in enumerate(fused_elements):
             elem.id = idx + 1
 
-        return fused_elements[:CONFIG.som_max_elements]
+        return fused_elements[: CONFIG.som_max_elements]
 
     def find_by_text(
         self,
         query: str,
-        image: Optional[Image.Image] = None,
+        image: Image.Image | None = None,
         scale_factor: float = 1.0,
         fuzzy: bool = True,
-    ) -> List[UIElement]:
-        """
-        Searches across semantic tree first; falls back to full ensemble detection if needed.
-        """
+    ) -> list[UIElement]:
+        """Searches across semantic tree first; falls back to full ensemble detection if needed."""
         # Fast path: search semantic tree without image overhead
         if self.semantic.is_available:
             sem_matches = self.semantic.find_by_text(query, fuzzy=fuzzy)

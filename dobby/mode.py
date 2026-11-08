@@ -22,7 +22,7 @@ import contextlib
 import contextvars
 import os
 import sys
-from typing import Iterator, Mapping, Optional, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 
 TURBO, SECURE = "turbo", "secure"
 _TRUE = {"1", "true", "yes", "on"}
@@ -30,11 +30,13 @@ _TRUE = {"1", "true", "yes", "on"}
 
 # In the shared Dobby (``dobby serve``) each connected client has its own
 # mode, set for the duration of its session (see dobby.hub).
-_SESSION_MODE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("dobby_mode", default=None)
+_SESSION_MODE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "dobby_mode", default=None
+)
 
 
 @contextlib.contextmanager
-def session_mode(mode: Optional[str]) -> Iterator[None]:
+def session_mode(mode: str | None) -> Iterator[None]:
     """Run the block (and the tool calls it starts) in ``mode``."""
     token = _SESSION_MODE.set(mode if mode in (TURBO, SECURE) else None)
     try:
@@ -43,7 +45,7 @@ def session_mode(mode: Optional[str]) -> Iterator[None]:
         _SESSION_MODE.reset(token)
 
 
-def security_mode(env: Optional[Mapping[str, str]] = None, argv: Optional[Sequence[str]] = None) -> str:
+def security_mode(env: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> str:
     from dobby.policy import current as _admin_policy
 
     if _admin_policy().forces_secure:
@@ -66,5 +68,5 @@ def security_mode(env: Optional[Mapping[str, str]] = None, argv: Optional[Sequen
     return TURBO
 
 
-def is_secure(env: Optional[Mapping[str, str]] = None, argv: Optional[Sequence[str]] = None) -> bool:
+def is_secure(env: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> bool:
     return security_mode(env, argv) == SECURE

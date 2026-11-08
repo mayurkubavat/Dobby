@@ -53,17 +53,24 @@ class FakeQuartz:
         return 1
 
     def CGDisplayBounds(self, did):
-        return SimpleNamespace(size=SimpleNamespace(width=self.screen[0], height=self.screen[1]),
-                               origin=SimpleNamespace(x=0, y=0))
+        return SimpleNamespace(
+            size=SimpleNamespace(width=self.screen[0], height=self.screen[1]),
+            origin=SimpleNamespace(x=0, y=0),
+        )
 
     def CGWindowListCopyWindowInfo(self, opts, wid):
         return self.windows
 
 
 def _win(num, owner, title, pid, x, y, w, h, layer=0):
-    return {"kCGWindowNumber": num, "kCGWindowOwnerName": owner, "kCGWindowName": title,
-            "kCGWindowOwnerPID": pid, "kCGWindowLayer": layer,
-            "kCGWindowBounds": {"X": x, "Y": y, "Width": w, "Height": h}}
+    return {
+        "kCGWindowNumber": num,
+        "kCGWindowOwnerName": owner,
+        "kCGWindowName": title,
+        "kCGWindowOwnerPID": pid,
+        "kCGWindowLayer": layer,
+        "kCGWindowBounds": {"X": x, "Y": y, "Width": w, "Height": h},
+    }
 
 
 class FakeAppKit:
@@ -92,20 +99,28 @@ class FakeAppKit:
                 return App(outer.front_pid)
 
         self.NSWorkspace = SimpleNamespace(sharedWorkspace=lambda: WS())
-        self.NSRunningApplication = SimpleNamespace(runningApplicationWithProcessIdentifier_=lambda pid: App(pid))
+        self.NSRunningApplication = SimpleNamespace(
+            runningApplicationWithProcessIdentifier_=lambda pid: App(pid)
+        )
 
 
 @pytest.fixture(autouse=True)
 def _no_cooldown(monkeypatch):
     from dobby.config import CONFIG
+
     monkeypatch.setattr(CONFIG, "action_cooldown_ms", 0)
     monkeypatch.setattr("dobby.hal.macos.time.sleep", lambda s: None)
 
 
 def _hal(**kw):
     q = FakeQuartz(**kw)
-    return MacHAL(quartz=q, appkit=FakeAppKit(), capture_fn=lambda region: Image.new("RGB", (
-        (region[2] * 2, region[3] * 2) if region else (3024, 1964)), "white")), q
+    return MacHAL(
+        quartz=q,
+        appkit=FakeAppKit(),
+        capture_fn=lambda region: Image.new(
+            "RGB", ((region[2] * 2, region[3] * 2) if region else (3024, 1964)), "white"
+        ),
+    ), q
 
 
 def test_capture_is_resized_from_retina_to_points():
@@ -137,9 +152,12 @@ def test_hotkey_presses_and_releases_modifiers():
     keys = [(e["code"], e["down"], e["flags"]) for e in q.posted if e["kind"] == "key"]
     cmd, shift, s = 0x100000, 0x20000, KEYCODES["s"]
     assert keys == [
-        (55, True, cmd), (56, True, cmd | shift),
-        (s, True, cmd | shift), (s, False, cmd | shift),
-        (56, False, cmd), (55, False, 0),
+        (55, True, cmd),
+        (56, True, cmd | shift),
+        (s, True, cmd | shift),
+        (s, False, cmd | shift),
+        (56, False, cmd),
+        (55, False, 0),
     ]
 
 
@@ -163,6 +181,7 @@ def test_hotkey_releases_modifiers_on_error():
 
 def test_every_event_is_tagged_as_dobby():
     from dobby.hal.macos import DOBBY_EVENT_TAG
+
     hal, q = _hal()
     hal.keyboard_type("a")
     hal.keyboard_hotkey(["cmd", "c"])
@@ -199,17 +218,21 @@ def test_release_modifiers_and_private_source():
 
 def test_list_windows_and_focus():
     wins = [
-        _win(1, "Dock", "", 10, 0, 0, 1512, 80, layer=20),     # not a normal window
+        _win(1, "Dock", "", 10, 0, 0, 1512, 80, layer=20),  # not a normal window
         _win(7, "Vivado", "project_1", 42, 50, 40, 1200, 800),
         _win(8, "Vivado", "Settings", 42, 100, 100, 600, 400),
         _win(9, "Terminal", "zsh", 77, 0, 0, 800, 600),
-        _win(10, "Tiny", "x", 78, 0, 0, 10, 10),               # too small
+        _win(10, "Tiny", "x", 78, 0, 0, 10, 10),  # too small
     ]
     hal, _ = _hal(windows=wins)
     out = hal.list_windows()
     assert [w.window_id for w in out] == ["7", "8", "9"]
     active = hal.get_active_window()
-    assert active.window_id == "7" and active.title == "project_1 - Vivado" and active.app_name == "Vivado"
+    assert (
+        active.window_id == "7"
+        and active.title == "project_1 - Vivado"
+        and active.app_name == "Vivado"
+    )
     assert sum(w.is_active for w in out) == 1
     assert hal.focus_window("9") is True
     assert hal._appkit.activated == [77]
@@ -217,8 +240,10 @@ def test_list_windows_and_focus():
 
 
 def _focus_wins():
-    return [_win(7, "Vivado", "project_1", 42, 50, 40, 1200, 800),
-            _win(9, "Terminal", "zsh", 77, 0, 0, 800, 600)]
+    return [
+        _win(7, "Vivado", "project_1", 42, 50, 40, 1200, 800),
+        _win(9, "Terminal", "zsh", 77, 0, 0, 800, 600),
+    ]
 
 
 class RaiseAX:
@@ -240,7 +265,12 @@ class RaiseAX:
 
     def AXUIElementCopyAttributeValue(self, el, name, _):
         if name == "AXWindows":
-            return 0, [{"AXPosition": SimpleNamespace(x=0, y=0), "AXSize": SimpleNamespace(width=800, height=600)}]
+            return 0, [
+                {
+                    "AXPosition": SimpleNamespace(x=0, y=0),
+                    "AXSize": SimpleNamespace(width=800, height=600),
+                }
+            ]
         return 0, el.get(name)
 
     def AXValueGetValue(self, value, kind, _):
@@ -253,8 +283,12 @@ class RaiseAX:
 
 def test_focus_refused_by_macos_reports_failure_with_reason():
     appkit = FakeAppKit(front_pid=42, refuse=True)
-    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=appkit, ax=RaiseAX(appkit, works=False),
-                 capture_fn=lambda r: None)
+    hal = MacHAL(
+        quartz=FakeQuartz(windows=_focus_wins()),
+        appkit=appkit,
+        ax=RaiseAX(appkit, works=False),
+        capture_fn=lambda r: None,
+    )
     assert hal.focus_window("9") is False
     assert "did not bring window 9 to the front" in hal.last_focus_error
     assert "project_1 - Vivado (7)" in hal.last_focus_error
@@ -264,7 +298,9 @@ def test_focus_refused_by_macos_reports_failure_with_reason():
 def test_focus_falls_back_to_ax_raise_when_activation_is_refused():
     appkit = FakeAppKit(front_pid=42, refuse=True)
     ax = RaiseAX(appkit)
-    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=appkit, ax=ax, capture_fn=lambda r: None)
+    hal = MacHAL(
+        quartz=FakeQuartz(windows=_focus_wins()), appkit=appkit, ax=ax, capture_fn=lambda r: None
+    )
     assert hal.focus_window("9") is True
     assert hal.last_focus_error is None
     assert ("AXFrontmost", 77) in ax.calls and ("AXRaise", None) in ax.calls
@@ -278,21 +314,31 @@ def test_focus_missing_window_says_so():
 
 def test_frontmost_is_read_fresh_not_from_nsworkspace_cache():
     # NSWorkspace (the fake) still says pid 42; the fresh probe knows Terminal is in front.
-    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=FakeAppKit(front_pid=42),
-                 front_pid_fn=lambda: 77, capture_fn=lambda r: None)
+    hal = MacHAL(
+        quartz=FakeQuartz(windows=_focus_wins()),
+        appkit=FakeAppKit(front_pid=42),
+        front_pid_fn=lambda: 77,
+        capture_fn=lambda r: None,
+    )
     assert hal.get_active_window().window_id == "9"
-    broken = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=FakeAppKit(front_pid=42),
-                    front_pid_fn=lambda: (_ for _ in ()).throw(OSError("no lsappinfo")), capture_fn=lambda r: None)
+    broken = MacHAL(
+        quartz=FakeQuartz(windows=_focus_wins()),
+        appkit=FakeAppKit(front_pid=42),
+        front_pid_fn=lambda: (_ for _ in ()).throw(OSError("no lsappinfo")),
+        capture_fn=lambda r: None,
+    )
     assert broken.get_active_window().window_id == "7"  # falls back to NSWorkspace
 
 
 def test_lsappinfo_front_pid_parses_both_output_styles(monkeypatch):
     import dobby.hal.macos as macos
 
-    for info in ('    pid = 85435 !cgsConnection', '"pid"=85435'):
+    for info in ("    pid = 85435 !cgsConnection", '"pid"=85435'):
+
         def run(args, **kw):
             out = "ASN:0x0-0xad9ad9:\n" if args[1] == "front" else info
             return SimpleNamespace(stdout=out)
+
         monkeypatch.setattr(macos.subprocess, "run", run)
         assert macos._lsappinfo_front_pid() == 85435
 
@@ -354,20 +400,34 @@ def _ax_tree():
     label = _el("AXStaticText", (100, 60, 200, 20), AXValue="Discard changes?")
     tab = _el("AXRadioButton", (10, 10, 60, 20), AXTitle="Sources")
     tabs = _el("AXTabGroup", (0, 0, 300, 40), children=[tab])
-    dialog = _el("AXWindow", (50, 50, 400, 200), children=[label, save, field, tiny, offscreen, tabs],
-                 AXSubrole="AXDialog", AXTitle="Confirm")
+    dialog = _el(
+        "AXWindow",
+        (50, 50, 400, 200),
+        children=[label, save, field, tiny, offscreen, tabs],
+        AXSubrole="AXDialog",
+        AXTitle="Confirm",
+    )
     return {42: {"AXWindows": [dialog]}}
 
 
 def _inspector(**kw):
-    return AXInspector(ax=FakeAX(_ax_tree(), **kw), appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982))
+    return AXInspector(
+        ax=FakeAX(_ax_tree(), **kw),
+        appkit=FakeAppKit(front_pid=42),
+        screen_bounds=(0, 0, 1512, 982),
+    )
 
 
 def test_ax_inspector_maps_roles_and_prunes(monkeypatch):
     insp = _inspector()
     els = insp.inspect_desktop()
     names = {e.name: e for e in els}
-    assert set(names) == {"Confirm", "Save", "Search", "Sources"}  # dialog kept, label filtered, tiny/offscreen pruned
+    assert set(names) == {
+        "Confirm",
+        "Save",
+        "Search",
+        "Sources",
+    }  # dialog kept, label filtered, tiny/offscreen pruned
     assert names["Confirm"].role == "dialog"
     assert names["Save"].role == "push button" and "focused" in names["Save"].states
     assert names["Search"].role == "entry"
@@ -423,7 +483,10 @@ def test_ax_inspector_rereads_while_chromium_builds_its_tree(monkeypatch):
 
     monkeypatch.setattr(CONFIG, "ax_web_content_settle_seconds", 0)
     monkeypatch.setattr(CONFIG, "ax_web_content_retry_seconds", 5)
-    buttons = [_el("AXButton", (100 + 70 * i, 300, 60, 24), AXTitle=f"b{i}", AXEnabled=True) for i in range(6)]
+    buttons = [
+        _el("AXButton", (100 + 70 * i, 300, 60, 24), AXTitle=f"b{i}", AXEnabled=True)
+        for i in range(6)
+    ]
     web = _el("AXWebArea", (0, 30, 1512, 900), children=[])
     win = _el("AXWindow", (0, 0, 1512, 982), children=[web], AXTitle="Antigravity")
     reads = {"n": 0}
@@ -442,10 +505,16 @@ def test_ax_inspector_rereads_while_chromium_builds_its_tree(monkeypatch):
 
 
 def test_ax_inspector_front_app_is_read_fresh():
-    other = _el("AXWindow", (0, 0, 400, 300), children=[_el("AXButton", (10, 10, 60, 24), AXTitle="Go")])
+    other = _el(
+        "AXWindow", (0, 0, 400, 300), children=[_el("AXButton", (10, 10, 60, 24), AXTitle="Go")]
+    )
     tree = {**_ax_tree(), 77: {"AXWindows": [other]}}
-    insp = AXInspector(ax=FakeAX(tree), appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982),
-                       front_pid_fn=lambda: 77)
+    insp = AXInspector(
+        ax=FakeAX(tree),
+        appkit=FakeAppKit(front_pid=42),
+        screen_bounds=(0, 0, 1512, 982),
+        front_pid_fn=lambda: 77,
+    )
     assert [e.name for e in insp.inspect_desktop()] == ["Go"]
 
 
@@ -472,8 +541,11 @@ def test_ax_inspector_wrapper_groups_do_not_use_depth():
     for _ in range(30):
         node = _el("AXGroup", (0, 0, 500, 500), children=[node])
     win = _el("AXWindow", (0, 0, 800, 600), children=[node], AXTitle="W")
-    insp = AXInspector(ax=FakeAX({42: {"AXWindows": [win]}}), appkit=FakeAppKit(front_pid=42),
-                       screen_bounds=(0, 0, 1512, 982))
+    insp = AXInspector(
+        ax=FakeAX({42: {"AXWindows": [win]}}),
+        appkit=FakeAppKit(front_pid=42),
+        screen_bounds=(0, 0, 1512, 982),
+    )
     assert [e.name for e in insp.inspect_desktop(max_depth=4)] == ["Deep"]
 
 
@@ -482,13 +554,25 @@ def test_ax_inspector_includes_top_level_menu_bar(monkeypatch):
 
     item_in_menu = _el("AXMenuItem", (60, 30, 120, 20), AXTitle="New Note")
     menu = _el("AXMenu", (60, 25, 200, 300), children=[item_in_menu])
-    file_item = _el("AXMenuBarItem", (60, 0, 40, 24), children=[menu], AXTitle="File", AXEnabled=True)
+    file_item = _el(
+        "AXMenuBarItem", (60, 0, 40, 24), children=[menu], AXTitle="File", AXEnabled=True
+    )
     bar = _el("AXMenuBar", (0, 0, 1512, 24), children=[file_item])
-    win = _el("AXWindow", (0, 30, 800, 600), children=[_el("AXButton", (10, 60, 40, 20), AXTitle="OK")], AXTitle="W")
+    win = _el(
+        "AXWindow",
+        (0, 30, 800, 600),
+        children=[_el("AXButton", (10, 60, 40, 20), AXTitle="OK")],
+        AXTitle="W",
+    )
     tree = {42: {"AXWindows": [win], "AXMenuBar": bar}}
-    insp = AXInspector(ax=FakeAX(tree), appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982))
+    insp = AXInspector(
+        ax=FakeAX(tree), appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982)
+    )
     els = insp.inspect_desktop()
-    assert [(e.name, e.role) for e in els] == [("File", "menu item"), ("OK", "push button")]  # closed menu not walked
+    assert [(e.name, e.role) for e in els] == [
+        ("File", "menu item"),
+        ("OK", "push button"),
+    ]  # closed menu not walked
     monkeypatch.setattr(CONFIG, "ax_include_menu_bar", False)
     assert [e.name for e in insp.inspect_desktop()] == ["OK"]
 
@@ -500,8 +584,12 @@ def test_ax_inspector_hit_test_maps_role_and_frame():
     ax.AXUIElementCopyElementAtPosition = lambda el, x, y, _: (0, sheet)
     insp = AXInspector(ax=ax, appkit=FakeAppKit(front_pid=42), screen_bounds=(0, 0, 1512, 982))
     hit = insp.hit_test(10, 10)
-    assert hit == {"role": "dialog", "name": "Save changes?", "bbox": {"x": 0, "y": 0, "width": 400, "height": 200},
-                   "secure": False}
+    assert hit == {
+        "role": "dialog",
+        "name": "Save changes?",
+        "bbox": {"x": 0, "y": 0, "width": 400, "height": 200},
+        "secure": False,
+    }
     ax.AXUIElementCopyElementAtPosition = lambda el, x, y, _: (-25204, None)
     assert insp.hit_test(10, 10) is None
 
@@ -510,7 +598,12 @@ def test_background_click_presses_in_the_windows_app_without_posting_events():
     from tests.test_input_lock import FakeAX as TreeAX
 
     ax = TreeAX({"b": {"AXRole": "AXButton", "actions": ["AXPress"]}}, "b")
-    hal = MacHAL(quartz=FakeQuartz(windows=_focus_wins()), appkit=FakeAppKit(), ax=ax, capture_fn=lambda r: None)
+    hal = MacHAL(
+        quartz=FakeQuartz(windows=_focus_wins()),
+        appkit=FakeAppKit(),
+        ax=ax,
+        capture_fn=lambda r: None,
+    )
     assert hal.background_click(100, 100, "7") is True
     assert ax.app_pid == 42 and ax.pressed == [("b", "AXPress")]
     assert hal.Q.posted == []  # the real mouse never moved

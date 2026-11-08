@@ -1,21 +1,19 @@
 """Grounding Engine Coordinator providing hotswappable perception strategies."""
 
-from typing import Dict, List, Optional, Tuple
 from PIL import Image
 
+from dobby.config import CONFIG
 from dobby.perception.grounding.base import BaseGroundingProvider
-from dobby.perception.grounding.semantic import SemanticGroundingProvider
 from dobby.perception.grounding.cv import CVGroundingProvider
-from dobby.perception.grounding.template import TemplateGroundingProvider
 from dobby.perception.grounding.ensemble import EnsembleGroundingProvider
 from dobby.perception.grounding.magnitude import ground_magnitude_icon
-from dobby.types import UIElement, RelationalAnchor
-from dobby.config import CONFIG
+from dobby.perception.grounding.semantic import SemanticGroundingProvider
+from dobby.perception.grounding.template import TemplateGroundingProvider
+from dobby.types import RelationalAnchor, UIElement
 
 
 class GroundingEngine:
-    """
-    Coordinates and hotswaps perception grounding providers at runtime.
+    """Coordinates and hotswaps perception grounding providers at runtime.
     Supports 'ensemble', 'semantic', 'cv', and 'template' modes.
     """
 
@@ -29,14 +27,16 @@ class GroundingEngine:
             template_provider=self._template,
         )
 
-        self._providers: Dict[str, BaseGroundingProvider] = {
+        self._providers: dict[str, BaseGroundingProvider] = {
             "semantic": self._semantic,
             "cv": self._cv,
             "template": self._template,
             "ensemble": self._ensemble,
         }
 
-        self.active_strategy = default_strategy if default_strategy in self._providers else "ensemble"
+        self.active_strategy = (
+            default_strategy if default_strategy in self._providers else "ensemble"
+        )
 
     @property
     def current_provider(self) -> BaseGroundingProvider:
@@ -44,8 +44,7 @@ class GroundingEngine:
         return self._providers.get(self.active_strategy, self._ensemble)
 
     def set_strategy(self, strategy: str) -> bool:
-        """
-        Hotswaps the active grounding strategy.
+        """Hotswaps the active grounding strategy.
 
         Args:
             strategy: 'ensemble', 'semantic', 'cv', or 'template'.
@@ -60,11 +59,11 @@ class GroundingEngine:
             return True
         return False
 
-    def list_strategies(self) -> List[str]:
+    def list_strategies(self) -> list[str]:
         """Returns list of registered grounding strategy names."""
         return list(self._providers.keys())
 
-    def get_provider(self, name: str) -> Optional[BaseGroundingProvider]:
+    def get_provider(self, name: str) -> BaseGroundingProvider | None:
         """Gets a specific provider by name."""
         return self._providers.get(name.lower().strip())
 
@@ -72,12 +71,14 @@ class GroundingEngine:
         self,
         image: Image.Image,
         scale_factor: float = 1.0,
-        strategy_override: Optional[str] = None,
-        app_filter: Optional[str] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-    ) -> List[UIElement]:
+        strategy_override: str | None = None,
+        app_filter: str | None = None,
+        region: tuple[int, int, int, int] | None = None,
+    ) -> list[UIElement]:
         """Runs detection using the active or overridden grounding provider."""
-        provider = self.get_provider(strategy_override) if strategy_override else self.current_provider
+        provider = (
+            self.get_provider(strategy_override) if strategy_override else self.current_provider
+        )
         if not provider:
             provider = self._ensemble
         return provider.detect(
@@ -90,13 +91,15 @@ class GroundingEngine:
     def find_element(
         self,
         query: str,
-        image: Optional[Image.Image] = None,
+        image: Image.Image | None = None,
         scale_factor: float = 1.0,
         fuzzy: bool = True,
-        strategy_override: Optional[str] = None,
-    ) -> List[UIElement]:
+        strategy_override: str | None = None,
+    ) -> list[UIElement]:
         """Searches for elements matching query text across the chosen grounding backend."""
-        provider = self.get_provider(strategy_override) if strategy_override else self.current_provider
+        provider = (
+            self.get_provider(strategy_override) if strategy_override else self.current_provider
+        )
         if not provider:
             provider = self._ensemble
         return provider.find_by_text(
@@ -110,12 +113,12 @@ class GroundingEngine:
         self,
         image: Image.Image,
         template: Image.Image,
-        anchor: Optional[RelationalAnchor] = None,
-        ocr_lines: Optional[list] = None,
+        anchor: RelationalAnchor | None = None,
+        ocr_lines: list | None = None,
         scale_factor: float = 1.0,
-        cache: Optional[object] = None,
+        cache: object | None = None,
         app_key: str = "desktop",
-    ) -> Optional[UIElement]:
+    ) -> UIElement | None:
         """Magnitude match, optionally inside an OCR offset window, with cache write-back."""
         element = ground_magnitude_icon(
             image=image,
@@ -124,6 +127,11 @@ class GroundingEngine:
             ocr_lines=ocr_lines,
             scale_factor=scale_factor,
         )
-        if element is not None and anchor is not None and cache is not None and hasattr(cache, "remember_anchor"):
+        if (
+            element is not None
+            and anchor is not None
+            and cache is not None
+            and hasattr(cache, "remember_anchor")
+        ):
             cache.remember_anchor(app_key, anchor.label, anchor)
         return element

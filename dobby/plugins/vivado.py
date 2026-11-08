@@ -6,15 +6,15 @@ waveform canvas focus management, and deterministic Tcl automation.
 """
 
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any
+
 from dobby.plugins.base import BaseUIAppPlugin
 from dobby.types import (
-    SubPaneROI,
-    FeatureDescriptor,
-    BoundingBox,
-    SubPaneLayoutSpec,
-    BoundaryConstraint,
     AnchorEdge,
+    BoundaryConstraint,
+    FeatureDescriptor,
+    SubPaneLayoutSpec,
+    SubPaneROI,
 )
 
 
@@ -168,7 +168,11 @@ class VivadoPlugin(BaseUIAppPlugin):
                 hotkey="shift+f2",
                 target_pane="tcl_console",
                 parameters={
-                    "time": {"type": "string", "default": "500ns", "description": "Simulation time increment"},
+                    "time": {
+                        "type": "string",
+                        "default": "500ns",
+                        "description": "Simulation time increment",
+                    },
                 },
             ),
             "vivado.restart": FeatureDescriptor(
@@ -186,7 +190,11 @@ class VivadoPlugin(BaseUIAppPlugin):
                 category="waveform",
                 target_pane="tcl_console",
                 parameters={
-                    "signal": {"type": "string", "required": True, "description": "Signal path (e.g. '/tb_sync_fifo/u_fifo/*')"},
+                    "signal": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Signal path (e.g. '/tb_sync_fifo/u_fifo/*')",
+                    },
                 },
             ),
             "vivado.set_radix": FeatureDescriptor(
@@ -196,8 +204,16 @@ class VivadoPlugin(BaseUIAppPlugin):
                 category="waveform",
                 target_pane="tcl_console",
                 parameters={
-                    "radix": {"type": "string", "default": "hex", "description": "Radix format: 'hex', 'bin', 'unsigned', 'dec'"},
-                    "signals": {"type": "string", "default": "[get_waves *]", "description": "Tcl signal query expression"},
+                    "radix": {
+                        "type": "string",
+                        "default": "hex",
+                        "description": "Radix format: 'hex', 'bin', 'unsigned', 'dec'",
+                    },
+                    "signals": {
+                        "type": "string",
+                        "default": "[get_waves *]",
+                        "description": "Tcl signal query expression",
+                    },
                 },
             ),
             "vivado.tcl_exec": FeatureDescriptor(
@@ -207,7 +223,11 @@ class VivadoPlugin(BaseUIAppPlugin):
                 category="tcl",
                 target_pane="tcl_console",
                 parameters={
-                    "command": {"type": "string", "required": True, "description": "Tcl command to execute"},
+                    "command": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Tcl command to execute",
+                    },
                 },
             ),
             "vivado.toggle_flow_navigator": FeatureDescriptor(
@@ -220,7 +240,7 @@ class VivadoPlugin(BaseUIAppPlugin):
             ),
         }
 
-    def detect(self, window_title: str, app_name: Optional[str] = None) -> bool:
+    def detect(self, window_title: str, app_name: str | None = None) -> bool:
         """Matches AMD/Xilinx Vivado desktop windows."""
         lower_title = window_title.lower() if window_title else ""
         lower_app = app_name.lower() if app_name else ""
@@ -236,8 +256,8 @@ class VivadoPlugin(BaseUIAppPlugin):
         self,
         feature_id: str,
         controller: Any,
-        args: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Executes a Vivado feature with closed-loop verification."""
         args = args or {}
         feature = self.get_feature(feature_id)
@@ -340,7 +360,11 @@ class VivadoPlugin(BaseUIAppPlugin):
         if feature_id == "vivado.tcl_exec":
             cmd = args.get("command", "")
             if not cmd:
-                return {"success": False, "feature_id": feature_id, "message": "Missing 'command' argument."}
+                return {
+                    "success": False,
+                    "feature_id": feature_id,
+                    "message": "Missing 'command' argument.",
+                }
 
             # Focus Tcl Console pane input line
             active_win = hal.get_active_window()
@@ -374,24 +398,36 @@ class VivadoPlugin(BaseUIAppPlugin):
         # 7. Run For
         if feature_id == "vivado.run_for":
             time_val = args.get("time", "500ns")
-            return self.execute_feature("vivado.tcl_exec", controller, {"command": f"run {time_val}"})
+            return self.execute_feature(
+                "vivado.tcl_exec", controller, {"command": f"run {time_val}"}
+            )
 
         # 8. Add Wave
         if feature_id == "vivado.add_wave":
             sig = args.get("signal", "")
             if not sig:
-                return {"success": False, "feature_id": feature_id, "message": "Missing 'signal' argument."}
-            return self.execute_feature("vivado.tcl_exec", controller, {"command": f"add_wave {sig}"})
+                return {
+                    "success": False,
+                    "feature_id": feature_id,
+                    "message": "Missing 'signal' argument.",
+                }
+            return self.execute_feature(
+                "vivado.tcl_exec", controller, {"command": f"add_wave {sig}"}
+            )
 
         # 9. Set Radix
         if feature_id == "vivado.set_radix":
             radix = args.get("radix", "hex")
             signals = args.get("signals", "[get_waves *]")
-            return self.execute_feature("vivado.tcl_exec", controller, {"command": f"set_property radix {radix} {signals}"})
+            return self.execute_feature(
+                "vivado.tcl_exec", controller, {"command": f"set_property radix {radix} {signals}"}
+            )
 
         # 10. Launch Simulation
         if feature_id == "vivado.launch_simulation":
-            return self.execute_feature("vivado.tcl_exec", controller, {"command": "launch_simulation"})
+            return self.execute_feature(
+                "vivado.tcl_exec", controller, {"command": "launch_simulation"}
+            )
 
         # 11. Toggle Flow Navigator
         if feature_id == "vivado.toggle_flow_navigator":

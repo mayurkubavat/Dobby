@@ -1,5 +1,4 @@
-"""
-Screen state: one numbered, text-only view of the active window.
+"""Screen state: one numbered, text-only view of the active window.
 
 Merges the accessibility tree and OCR into a short list of elements with
 stable ids (``e1``, ``e2``...), coarse positions and the operations that are
@@ -18,4 +17,11 @@ from dobby.screen_state.state import (
     rebind,
 )
 
-__all__ = ["EDITABLE_ROLES", "ScreenElement", "ScreenState", "StateTracker", "build_state", "rebind"]
+__all__ = [
+    "EDITABLE_ROLES",
+    "ScreenElement",
+    "ScreenState",
+    "StateTracker",
+    "build_state",
+    "rebind",
+]

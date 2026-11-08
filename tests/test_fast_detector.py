@@ -4,24 +4,21 @@ Unit and Latency Benchmark Tests for Phase 4 Neural Fast-Path (FastONNXUIDetecto
 
 import importlib.util
 import os
-import time
-import pytest
+
 import numpy as np
+import pytest
 from PIL import Image, ImageDraw
 
-from dobby.types import BoundingBox, VDOMNode, GroundingSource, UIRole
+from dobby.types import BoundingBox, GroundingSource, UIRole, VDOMNode
 from dobby.vdom.fast_detector import (
     FastONNXUIDetector,
-    UIClass,
-    UI_CLASS_NAMES,
-    letterbox,
-    unletterbox_boxes,
-    nms_vectorized,
-    postprocess_yolo_detections,
     build_default_ui_detector_model,
+    letterbox,
+    nms_vectorized,
+    unletterbox_boxes,
 )
-from dobby.vdom.sidecar import LocalNeuralGrounder
 from dobby.vdom.fusion import VDOMFusionEngine
+from dobby.vdom.sidecar import LocalNeuralGrounder
 
 # Building and running the bundled detector needs both onnx and onnxruntime.
 needs_onnx = pytest.mark.skipif(
@@ -40,7 +37,7 @@ def test_letterbox_and_unletterbox():
     # Tensor format validation
     assert tensor.shape == (1, 3, 640, 640)
     assert tensor.dtype == np.float32
-    assert 0.0 <= tensor.min() and tensor.max() <= 1.0
+    assert tensor.min() >= 0.0 and tensor.max() <= 1.0
 
     # 1920x1080 fits in 640x640: scale = 640/1920 = 1/3 ~ 0.3333
     expected_scale = 640.0 / 1920.0
@@ -68,11 +65,14 @@ def test_letterbox_and_unletterbox():
 def test_nms_vectorized():
     """Validates vectorized Non-Maximum Suppression deduplication."""
     # 3 boxes: box0 and box1 overlap heavily (IoU > 0.8), box2 is distant
-    boxes = np.array([
-        [10.0, 10.0, 100.0, 100.0],   # box 0: score 0.90
-        [12.0, 11.0, 102.0, 101.0],   # box 1: score 0.70 (duplicate)
-        [300.0, 300.0, 400.0, 400.0], # box 2: score 0.85 (distinct)
-    ], dtype=np.float32)
+    boxes = np.array(
+        [
+            [10.0, 10.0, 100.0, 100.0],  # box 0: score 0.90
+            [12.0, 11.0, 102.0, 101.0],  # box 1: score 0.70 (duplicate)
+            [300.0, 300.0, 400.0, 400.0],  # box 2: score 0.85 (distinct)
+        ],
+        dtype=np.float32,
+    )
     scores = np.array([0.90, 0.70, 0.85], dtype=np.float32)
 
     kept = nms_vectorized(boxes, scores, iou_threshold=0.45)
@@ -158,7 +158,9 @@ def test_fast_onnx_latency_benchmark():
     # while still catching a large regression.
     scale = max(1.0, float(os.environ.get("DOBBY_PERF_SCALE", "1") or 1))
     budget = 20.0 * scale
-    assert metrics["total_latency_ms"] < budget, f"Latency {metrics['total_latency_ms']}ms exceeded {budget:g}ms threshold"
+    assert metrics["total_latency_ms"] < budget, (
+        f"Latency {metrics['total_latency_ms']}ms exceeded {budget:g}ms threshold"
+    )
     assert metrics["fps"] >= 50.0 / scale
 
 

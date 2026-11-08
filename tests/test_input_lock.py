@@ -31,7 +31,9 @@ def test_overlay_config_carries_the_lock():
 
 
 def _armed(**kw):
-    base = dict(mode="window", working=True, paused=False, takeover=False, confirming=False, has_target=True)
+    base = dict(
+        mode="window", working=True, paused=False, takeover=False, confirming=False, has_target=True
+    )
     base.update(kw)
     return il.armed(**base)
 
@@ -101,8 +103,8 @@ def test_insist_long_press():
 
 def test_frontmost_owner_skips_overlay_and_other_layers():
     windows = [
-        {"kCGWindowLayer": 25, "kCGWindowOwnerPID": 1},   # menu bar
-        {"kCGWindowLayer": 0, "kCGWindowOwnerPID": 99},   # our own overlay
+        {"kCGWindowLayer": 25, "kCGWindowOwnerPID": 1},  # menu bar
+        {"kCGWindowLayer": 0, "kCGWindowOwnerPID": 99},  # our own overlay
         {"kCGWindowLayer": 0, "kCGWindowOwnerPID": 7, "kCGWindowAlpha": 0},
         {"kCGWindowLayer": 0, "kCGWindowOwnerPID": 42},
     ]
@@ -112,8 +114,17 @@ def test_frontmost_owner_skips_overlay_and_other_layers():
 
 # ------------------------------------------------------------------- bar
 def _working(locked):
-    return bar_view(paused=False, takeover=False, takeover_resume="auto", working=True, turbo=False,
-                    current_mode="ready", bar_mode="always", owner=True, locked=locked)
+    return bar_view(
+        paused=False,
+        takeover=False,
+        takeover_resume="auto",
+        working=True,
+        turbo=False,
+        current_mode="ready",
+        bar_mode="always",
+        owner=True,
+        locked=locked,
+    )
 
 
 def test_bar_offers_take_over_when_locked():
@@ -146,8 +157,10 @@ def test_client_sends_input_pass_only_when_the_x11_lock_is_on(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     client.input_pass(True)
     client.input_pass(False)
-    assert [(op, kw["on"], kw["wait"]) for op, kw in sent] == [("input.pass", True, True),
-                                                               ("input.pass", False, False)]
+    assert [(op, kw["on"], kw["wait"]) for op, kw in sent] == [
+        ("input.pass", True, True),
+        ("input.pass", False, False),
+    ]
     sent.clear()
     monkeypatch.setattr(sys, "platform", "darwin")  # the tap knows Dobby's events
     client.input_pass(True)
@@ -255,7 +268,7 @@ def _xvfb():
 
 def test_x11_shield_blocks_person_passes_dobby_and_dies_with_the_helper():
     pytest.importorskip("Xlib")  # Linux extra; skip cleanly on macOS
-    from Xlib import X, XK, Xatom, display
+    from Xlib import XK, X, Xatom, display
     from Xlib.ext import xtest
 
     from dobby.overlay.x11_lock import X11InputLock
@@ -264,15 +277,27 @@ def test_x11_shield_blocks_person_passes_dobby_and_dies_with_the_helper():
     try:
         app = display.Display(disp)
         root = app.screen().root
-        tgt = root.create_window(100, 100, 300, 200, 0, app.screen().root_depth, X.InputOutput,
-                                 event_mask=X.ButtonPressMask | X.KeyPressMask)
+        tgt = root.create_window(
+            100,
+            100,
+            300,
+            200,
+            0,
+            app.screen().root_depth,
+            X.InputOutput,
+            event_mask=X.ButtonPressMask | X.KeyPressMask,
+        )
         tgt.map()
         tgt.set_input_focus(X.RevertToParent, X.CurrentTime)
         root.change_property(app.intern_atom("_NET_ACTIVE_WINDOW"), Xatom.WINDOW, 32, [tgt.id])
         app.sync()
         seen = []
-        lock = X11InputLock(lambda k: seen.append(k), lambda: seen.append("insist"),
-                            lambda w: seen.append("hotkey:" + w), display_name=disp)
+        lock = X11InputLock(
+            lambda k: seen.append(k),
+            lambda: seen.append("insist"),
+            lambda w: seen.append("hotkey:" + w),
+            display_name=disp,
+        )
         drv = display.Display(disp)
 
         def click(x=200, y=200):
@@ -373,20 +398,28 @@ class FakeAX:
 def test_ax_press_presses_a_button_under_its_label():
     from dobby.hal.background import ax_press_at
 
-    tree = {"label": {"AXRole": "AXStaticText", "AXParent": "btn"},
-            "btn": {"AXRole": "AXButton", "actions": ["AXPress"], "AXParent": "win"}}
+    tree = {
+        "label": {"AXRole": "AXStaticText", "AXParent": "btn"},
+        "btn": {"AXRole": "AXButton", "actions": ["AXPress"], "AXParent": "win"},
+    }
     ax = FakeAX(tree, "label")
     assert ax_press_at(ax, 42, 10, 20) == "AXButton"
     assert ax.pressed == [("btn", "AXPress")] and ax.app_pid == 42
 
 
-@pytest.mark.parametrize("tree,at", [
-    ({"f": {"AXRole": "AXTextField", "actions": ["AXPress"]}}, "f"),         # typing needs a real click
-    ({"b": {"AXRole": "AXButton", "actions": ["AXPress"], "AXEnabled": False}}, "b"),
-    ({"b": {"AXRole": "AXButton", "actions": []}}, "b"),
-    ({"c": {"AXRole": "AXGroup", "AXParent": "w"}, "w": {"AXRole": "AXWindow"}}, "c"),
-    ({}, None),
-])
+@pytest.mark.parametrize(
+    "tree,at",
+    [
+        (
+            {"f": {"AXRole": "AXTextField", "actions": ["AXPress"]}},
+            "f",
+        ),  # typing needs a real click
+        ({"b": {"AXRole": "AXButton", "actions": ["AXPress"], "AXEnabled": False}}, "b"),
+        ({"b": {"AXRole": "AXButton", "actions": []}}, "b"),
+        ({"c": {"AXRole": "AXGroup", "AXParent": "w"}, "w": {"AXRole": "AXWindow"}}, "c"),
+        ({}, None),
+    ],
+)
 def test_ax_press_refuses_what_is_not_a_plain_button(tree, at):
     from dobby.hal.background import ax_press_at
 
@@ -458,4 +491,9 @@ def test_background_clicks_can_be_turned_off():
     hal, calls = _bg(background=False)
     hal.mouse_click(5, 6)
     assert not any(c[0] == "hal.press" for c in calls)
-    assert overlay_config({"DOBBY_INPUT_LOCK": "window", "DOBBY_BACKGROUND_CLICKS": "0"})["background_clicks"] is False
+    assert (
+        overlay_config({"DOBBY_INPUT_LOCK": "window", "DOBBY_BACKGROUND_CLICKS": "0"})[
+            "background_clicks"
+        ]
+        is False
+    )

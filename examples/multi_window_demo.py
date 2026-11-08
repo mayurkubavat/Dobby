@@ -11,11 +11,9 @@ Demonstrates cross-application navigation and closed-loop control:
 8. Captures the unified multi-app state and cleans up processes.
 """
 
-import sys
-import time
-import subprocess
 import base64
-from typing import Dict, Optional
+import subprocess
+import time
 
 import dobby.server as server
 
@@ -28,6 +26,7 @@ def run_multi_window_demo():
     artifact_dir = "/home/mk/.gemini/antigravity-ide/brain/9ea50fa0-3064-4f78-960e-940658aea791"
 
     import os
+
     dashboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "dashboard.html"))
 
     # Step 1: Launch Google Chrome (Dashboard on left)
@@ -112,7 +111,9 @@ def run_multi_window_demo():
             print(f"  👉 Found Target Button: '{deploy_mark['name']}' (Mark #{deploy_mark['id']})")
             click_res = server.click(mark_id=deploy_mark["id"], verify_delta=True)
             status = "✓ DETECTED" if click_res["delta_detected"] else "– Settled"
-            print(f"  ✓ Click dispatched. Visual Delta: {status} ({click_res['change_ratio'] * 100:.2f}%)")
+            print(
+                f"  ✓ Click dispatched. Visual Delta: {status} ({click_res['change_ratio'] * 100:.2f}%)"
+            )
         else:
             print("  ! Could not locate Deploy Service mark, clicking at center of window...")
             server.click(x=600, y=550)
@@ -126,9 +127,11 @@ def run_multi_window_demo():
 
         # Inject command into Terminal
         cmd = "echo '>>> CLUSTER VERIFIED: staging-cluster-alpha is ONLINE' && date"
-        print(f"  👉 Typing into terminal: \"{cmd}\"")
+        print(f'  👉 Typing into terminal: "{cmd}"')
         type_res = server.type_text(cmd, press_enter=True, delay_ms=8.0, verify_delta=True)
-        print(f"  ✓ Keystrokes sent. Screen Delta: {'✓ DETECTED' if type_res['delta_detected'] else '– Settled'}")
+        print(
+            f"  ✓ Keystrokes sent. Screen Delta: {'✓ DETECTED' if type_res['delta_detected'] else '– Settled'}"
+        )
         time.sleep(1.0)
 
         # Step 6: Unified Multi-Window Screenshot

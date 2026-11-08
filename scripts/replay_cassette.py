@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Replay one or more cassettes and print a pass/fail line for each.
 
-    python scripts/replay_cassette.py tests/cassettes/example_click
-    python scripts/replay_cassette.py --all ~/.dobby/cassettes
+python scripts/replay_cassette.py tests/cassettes/example_click
+python scripts/replay_cassette.py --all ~/.dobby/cassettes
 """
 
 from __future__ import annotations
@@ -18,8 +18,14 @@ from dobby.hal.cassette_replay import discover_cassettes, replay_cassette  # noq
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("paths", nargs="+", help="cassette folders, .halpack/.json files, or (with --all) parent folders")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "paths",
+        nargs="+",
+        help="cassette folders, .halpack/.json files, or (with --all) parent folders",
+    )
     ap.add_argument("--all", action="store_true", help="treat each path as a folder of cassettes")
     ap.add_argument("--json", action="store_true", help="print full JSON reports")
     args = ap.parse_args()
@@ -37,7 +43,9 @@ def main() -> int:
             print(json.dumps(report, indent=1))
         else:
             status = "PASS" if report["ok"] else "FAIL"
-            print(f"{status} {target} ({report['steps']}/{report['total_steps']} steps, final {report['final_frame']})")
+            print(
+                f"{status} {target} ({report['steps']}/{report['total_steps']} steps, final {report['final_frame']})"
+            )
             for msg in report["failures"]:
                 print(f"     {msg}")
         failed += not report["ok"]

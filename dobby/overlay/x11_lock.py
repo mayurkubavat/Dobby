@@ -23,20 +23,26 @@ from __future__ import annotations
 
 import sys
 import time
-from typing import Callable, Optional, Tuple
+from collections.abc import Callable
 
 from . import inputlock
 
-Rect = Tuple[int, int, int, int]
+Rect = tuple[int, int, int, int]
 
 _SCROLL_BUTTONS = (4, 5, 6, 7)
 
 
 class X11InputLock:
-    def __init__(self, on_swallowed: Callable[[str], None], on_insist: Callable[[], None],
-                 on_hotkey: Callable[[str], None], cursor_xid: Optional[int] = None,
-                 display_name: Optional[str] = None) -> None:
-        from Xlib import X, XK, display as xdisplay
+    def __init__(
+        self,
+        on_swallowed: Callable[[str], None],
+        on_insist: Callable[[], None],
+        on_hotkey: Callable[[str], None],
+        cursor_xid: int | None = None,
+        display_name: str | None = None,
+    ) -> None:
+        from Xlib import XK, X
+        from Xlib import display as xdisplay
 
         self.X = X
         self.on_swallowed = on_swallowed
@@ -51,8 +57,16 @@ class X11InputLock:
             font = self.d.open_font("cursor")
             cursor = font.create_glyph_cursor(font, 0, 1, (65535, 0, 0), (65535, 65535, 65535))
         self.shield = self.root.create_window(
-            0, 0, 1, 1, 0, 0, X.InputOnly, X.CopyFromParent,
-            override_redirect=True, cursor=cursor,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            X.InputOnly,
+            X.CopyFromParent,
+            override_redirect=True,
+            cursor=cursor,
             event_mask=X.ButtonPressMask | X.ButtonReleaseMask,
         )
         self.shield.set_wm_name("Dobby Overlay lock")
@@ -64,9 +78,9 @@ class X11InputLock:
             for name, which in (("Escape", "stop"), ("End", "stop"), ("p", "pause"))
         }
         self._active_atom = self.d.intern_atom("_NET_ACTIVE_WINDOW")
-        self.rect: Optional[Rect] = None
-        self.frame: Optional[int] = None
-        self.client: Optional[int] = None
+        self.rect: Rect | None = None
+        self.frame: int | None = None
+        self.client: int | None = None
         self.armed = False
         self.passing = False
         self.mapped = False
@@ -78,7 +92,7 @@ class X11InputLock:
     def fileno(self) -> int:
         return self.d.fileno()
 
-    def _frame_of(self, wid: int) -> Optional[int]:
+    def _frame_of(self, wid: int) -> int | None:
         """The top-level ancestor (WM frame) of client window ``wid``."""
         try:
             win = self.d.create_resource_object("window", wid)
@@ -91,7 +105,7 @@ class X11InputLock:
             return None
         return None
 
-    def _active(self) -> Optional[int]:
+    def _active(self) -> int | None:
         try:
             prop = self.root.get_full_property(self._active_atom, self.X.AnyPropertyType)
             return int(prop.value[0]) if prop is not None and len(prop.value) else None
@@ -102,9 +116,11 @@ class X11InputLock:
         active = self._active()
         if active is None or self.client is None:
             return False
-        return active == self.client or (self.frame is not None and self._frame_of(active) == self.frame)
+        return active == self.client or (
+            self.frame is not None and self._frame_of(active) == self.frame
+        )
 
-    def update(self, rect: Optional[Rect], client: Optional[int], armed: bool) -> None:
+    def update(self, rect: Rect | None, client: int | None, armed: bool) -> None:
         """Place (or remove) the shield over ``rect`` (global pixels) of window ``client``."""
         if client != self.client:
             self.client = client
@@ -134,7 +150,9 @@ class X11InputLock:
                 try:
                     self.shield.configure(**kw)
                 except Exception:  # noqa: BLE001 - frame gone: just raise
-                    self.shield.configure(x=x, y=y, width=max(1, w), height=max(1, h), stack_mode=X.Above)
+                    self.shield.configure(
+                        x=x, y=y, width=max(1, w), height=max(1, h), stack_mode=X.Above
+                    )
                 if not self.mapped:
                     self.shield.map()
                     self.mapped = True
@@ -144,7 +162,9 @@ class X11InputLock:
                 self.pressed.clear()
             want_keys = show and self.target_front()
             if want_keys and not self.keys_grabbed:
-                status = self.root.grab_keyboard(False, X.GrabModeAsync, X.GrabModeAsync, X.CurrentTime)
+                status = self.root.grab_keyboard(
+                    False, X.GrabModeAsync, X.GrabModeAsync, X.CurrentTime
+                )
                 self.keys_grabbed = status == X.GrabSuccess
             elif not want_keys and self.keys_grabbed:
                 self.d.ungrab_keyboard(X.CurrentTime)
@@ -196,7 +216,7 @@ class X11InputLock:
             return
         self.on_swallowed("click")
 
-    def _insist(self, replay: Optional[Tuple[int, int, int]]) -> None:
+    def _insist(self, replay: tuple[int, int, int] | None) -> None:
         """They mean it: hand over, and give the window the click it was denied."""
         self.on_insist()  # the owner pauses Dobby, which disarms the lock
         self.armed = False

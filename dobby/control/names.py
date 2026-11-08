@@ -11,21 +11,57 @@ Your own names: ``~/.dobby/names.txt`` (one per line, ``#`` comments) or
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Iterable, List, Mapping, Optional
 
 # Original house-elf-style names (made up, not from any book or film).
-BUILTIN: List[str] = [
-    "Tibble", "Pip", "Mopsy", "Bramble", "Nib", "Fennel", "Thimble", "Pockets", "Wisp", "Juniper",
-    "Button", "Clover", "Sprocket", "Tansy", "Quill", "Pebble", "Hazel", "Nutmeg", "Flick", "Bodkin",
-    "Tuck", "Sorrel", "Biscuit", "Linden", "Mote", "Rumble", "Fig", "Teasel", "Wren", "Dapple",
-    "Toffee", "Kettle", "Ember", "Moss", "Barley", "Sprig", "Cobble", "Rue", "Bobbin", "Nettle",
+BUILTIN: list[str] = [
+    "Tibble",
+    "Pip",
+    "Mopsy",
+    "Bramble",
+    "Nib",
+    "Fennel",
+    "Thimble",
+    "Pockets",
+    "Wisp",
+    "Juniper",
+    "Button",
+    "Clover",
+    "Sprocket",
+    "Tansy",
+    "Quill",
+    "Pebble",
+    "Hazel",
+    "Nutmeg",
+    "Flick",
+    "Bodkin",
+    "Tuck",
+    "Sorrel",
+    "Biscuit",
+    "Linden",
+    "Mote",
+    "Rumble",
+    "Fig",
+    "Teasel",
+    "Wren",
+    "Dapple",
+    "Toffee",
+    "Kettle",
+    "Ember",
+    "Moss",
+    "Barley",
+    "Sprig",
+    "Cobble",
+    "Rue",
+    "Bobbin",
+    "Nettle",
 ]
 SEPARATOR = " · "
 _OFF = {"0", "off", "false", "no", "none"}
 
 
-def pool(env: Optional[Mapping[str, str]] = None, names_file: Optional[Path] = None) -> List[str]:
+def pool(env: Mapping[str, str] | None = None, names_file: Path | None = None) -> list[str]:
     """The names to hand out, in order (empty = names are off)."""
     env = os.environ if env is None else env
     raw = (env.get("DOBBY_NAMES") or "").strip()
@@ -42,8 +78,8 @@ def pool(env: Optional[Mapping[str, str]] = None, names_file: Optional[Path] = N
     return picked or list(BUILTIN)
 
 
-def _clean(items: Iterable[str]) -> List[str]:
-    out: List[str] = []
+def _clean(items: Iterable[str]) -> list[str]:
+    out: list[str] = []
     for item in items:
         name = " ".join(item.split())[:24]
         if name and name not in out:
@@ -51,9 +87,10 @@ def _clean(items: Iterable[str]) -> List[str]:
     return out
 
 
-def pick(taken: Iterable[str], pid: int, names: Optional[List[str]] = None) -> str:
+def pick(taken: Iterable[str], pid: int, names: list[str] | None = None) -> str:
     """The first name nobody running uses; past the end of the list, a
-    numbered one ("Tibble 2"). With names off: ``Dobby-<pid>``."""
+    numbered one ("Tibble 2"). With names off: ``Dobby-<pid>``.
+    """
     names = pool() if names is None else names
     if not names:
         return f"Dobby-{pid}"
@@ -70,8 +107,8 @@ def pick(taken: Iterable[str], pid: int, names: Optional[List[str]] = None) -> s
         n += 1
 
 
-def display(first: str, client: Optional[str]) -> str:
-    """"Tibble · Claude Code", or just "Tibble" before the client says who it is."""
+def display(first: str, client: str | None) -> str:
+    """ "Tibble · Claude Code", or just "Tibble" before the client says who it is."""
     client = (client or "").strip()
     if not client or client == first:
         return first

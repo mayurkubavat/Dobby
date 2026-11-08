@@ -28,7 +28,7 @@ import json
 import os
 import random
 import time
-from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Callable, Mapping, Sequence
 
 LEVELS = ("off", "subtle", "elf")
 DEFAULT_LEVEL = "subtle"
@@ -38,7 +38,7 @@ NO_REPEAT = 5  # none of the last five lines comes back
 DONE_SECS = 3.0  # how long "Dobby did it!" stays on the bar
 
 # Kept short: the working lead shares the bar with the step, its count and the timer.
-SUBTLE: Dict[str, str] = {
+SUBTLE: dict[str, str] = {
     "startup": "{name} is ready.",
     "sleeping": "{name} is resting",
     "working": "{name} is on it",
@@ -46,7 +46,7 @@ SUBTLE: Dict[str, str] = {
     "done": "{name} is done!",
 }
 
-ELF: Dict[str, Tuple[str, ...]] = {
+ELF: dict[str, tuple[str, ...]] = {
     "startup": (
         "{name} is here, and {name} is ready!",
         "{name} is honoured to help{you}!",
@@ -102,7 +102,7 @@ ELF: Dict[str, Tuple[str, ...]] = {
 MOMENTS = tuple(ELF)
 
 
-def normalize_level(value: Optional[str]) -> str:
+def normalize_level(value: str | None) -> str:
     v = (value or "").strip().lower()
     if v in ("0", "false", "no", "none"):
         return "off"
@@ -111,7 +111,7 @@ def normalize_level(value: Optional[str]) -> str:
     return v if v in LEVELS else DEFAULT_LEVEL
 
 
-def load_lines(path: Optional[str]) -> Dict[str, Tuple[str, ...]]:
+def load_lines(path: str | None) -> dict[str, tuple[str, ...]]:
     """Read a ``{"moment": ["line", ...]}`` JSON file; bad files and keys are ignored."""
     if not path:
         return {}
@@ -120,7 +120,7 @@ def load_lines(path: Optional[str]) -> Dict[str, Tuple[str, ...]]:
             data = json.load(f)
     except (OSError, ValueError):
         return {}
-    out: Dict[str, Tuple[str, ...]] = {}
+    out: dict[str, tuple[str, ...]] = {}
     if isinstance(data, dict):
         for key, lines in data.items():
             if key in ELF and isinstance(lines, list):
@@ -133,13 +133,20 @@ def load_lines(path: Optional[str]) -> Dict[str, Tuple[str, ...]]:
 class Voice:
     """Picks Dobby's words. Pure logic: the clock, the dice and the date are injectable."""
 
-    def __init__(self, level: str = DEFAULT_LEVEL, user: str = "", lines: Optional[Mapping[str, Sequence[str]]] = None,
-                 seed: Optional[int] = None, clock: Callable[[], float] = time.monotonic,
-                 today: Callable[[], _dt.datetime] = _dt.datetime.now,
-                 cooldown: float = COOLDOWN_SECS, done_secs: float = DONE_SECS) -> None:
+    def __init__(
+        self,
+        level: str = DEFAULT_LEVEL,
+        user: str = "",
+        lines: Mapping[str, Sequence[str]] | None = None,
+        seed: int | None = None,
+        clock: Callable[[], float] = time.monotonic,
+        today: Callable[[], _dt.datetime] = _dt.datetime.now,
+        cooldown: float = COOLDOWN_SECS,
+        done_secs: float = DONE_SECS,
+    ) -> None:
         self.level = normalize_level(level)
         self.user = " ".join(str(user or "").split())
-        self.pools: Dict[str, Tuple[str, ...]] = dict(ELF)
+        self.pools: dict[str, tuple[str, ...]] = dict(ELF)
         for key, pool in (lines or {}).items():
             if key in self.pools and pool:
                 self.pools[key] = tuple(pool)
@@ -152,20 +159,25 @@ class Voice:
         self.today = today
         self.cooldown = float(cooldown)
         self.done_secs = float(done_secs)
-        self._current: Dict[str, Tuple[str, float]] = {}  # moment -> (line, picked at)
+        self._current: dict[str, tuple[str, float]] = {}  # moment -> (line, picked at)
         self._recent: collections.deque = collections.deque(maxlen=NO_REPEAT)
-        self._eggs_shown: Dict[str, str] = {}  # egg -> date shown
+        self._eggs_shown: dict[str, str] = {}  # egg -> date shown
         self._last_mode = ""
         self._task_steps = 0
         self._done_until = 0.0
         self._done_refresh = False
 
     @classmethod
-    def from_config(cls, cfg: Mapping[str, object]) -> "Voice":
+    def from_config(cls, cfg: Mapping[str, object]) -> Voice:
         seed = cfg.get("personality_seed")
-        return cls(level=str(cfg.get("personality") or DEFAULT_LEVEL), user=str(cfg.get("user_name") or ""),
-                   lines=load_lines(str(cfg.get("personality_lines") or "")),
-                   seed=int(seed) if isinstance(seed, (int, float, str)) and str(seed).lstrip("-").isdigit() else None)
+        return cls(
+            level=str(cfg.get("personality") or DEFAULT_LEVEL),
+            user=str(cfg.get("user_name") or ""),
+            lines=load_lines(str(cfg.get("personality_lines") or "")),
+            seed=int(seed)
+            if isinstance(seed, (int, float, str)) and str(seed).lstrip("-").isdigit()
+            else None,
+        )
 
     @property
     def on(self) -> bool:
@@ -177,7 +189,9 @@ class Voice:
         return line.replace("{name}", name or "Dobby").replace("{you}", you)
 
     def _pick(self, moment: str) -> str:
-        pool = [p for p in self.pools.get(moment, ()) if p not in self._recent] or list(self.pools.get(moment, ()))
+        pool = [p for p in self.pools.get(moment, ()) if p not in self._recent] or list(
+            self.pools.get(moment, ())
+        )
         if not pool:
             return ""
         line = self.rng.choice(pool)
@@ -210,7 +224,7 @@ class Voice:
         """The next ``line(moment)`` picks anew (Dobby fell asleep again, a new task)."""
         self._current.pop(moment, None)
 
-    def egg(self, *, steps: int, elapsed: float, name: str = "Dobby") -> Optional[str]:
+    def egg(self, *, steps: int, elapsed: float, name: str = "Dobby") -> str | None:
         """A rare surprise for the working bar (``elf`` only), each at most once a day."""
         if self.level != "elf":
             return None
@@ -220,8 +234,11 @@ class Voice:
                 return self._fill(held[0], name)  # keep showing the one that fired
         day = self.today().date().isoformat()
         hour = self.today().hour
-        for key, fires in (("egg_steps", steps >= 100), ("egg_hour", elapsed >= 3600.0),
-                           ("egg_late", 0 <= hour < 5 and steps >= 1)):
+        for key, fires in (
+            ("egg_steps", steps >= 100),
+            ("egg_hour", elapsed >= 3600.0),
+            ("egg_late", 0 <= hour < 5 and steps >= 1),
+        ):
             if fires and self._eggs_shown.get(key) != day:
                 self._eggs_shown[key] = day
                 raw = self._pick(key)
@@ -256,7 +273,7 @@ class Voice:
             self._done_until = 0.0
         self._last_mode = mode
 
-    def done(self, name: str = "Dobby") -> Optional[str]:
+    def done(self, name: str = "Dobby") -> str | None:
         """The cheer while it lasts (a few seconds after a task), else None."""
         if self._done_until and self.clock() < self._done_until:
             return self.line("done", "", name, rotate=False) or None
@@ -270,7 +287,7 @@ class Voice:
         return False
 
     # ----------------------------------------------------------- bar views
-    def dress(self, view: Optional[tuple], name: str = "Dobby", steps: int = 0) -> Optional[tuple]:
+    def dress(self, view: tuple | None, name: str = "Dobby", steps: int = 0) -> tuple | None:
         """Reword ``menu.bar_view``'s answer. Safety texts (takeover, Allow/Deny) never change."""
         if view is None:
             self.observe("hidden")
@@ -285,32 +302,42 @@ class Voice:
                 tail = " · click to wake" if "click to wake" in text else ""
                 return (mode, cheer + tail, primary, secondary, color, dot_alpha)
         if mode == "ready" and text.startswith("Dobby is sleeping"):
-            text = self.line("sleeping", "Dobby is sleeping", name, rotate=False) + text[len("Dobby is sleeping"):]
+            text = (
+                self.line("sleeping", "Dobby is sleeping", name, rotate=False)
+                + text[len("Dobby is sleeping") :]
+            )
         elif mode == "awake" and text.startswith("Dobby is awake · no AI"):
-            text = self.line("awake", "Dobby is awake", name, rotate=False) + text[len("Dobby is awake"):]
+            text = (
+                self.line("awake", "Dobby is awake", name, rotate=False)
+                + text[len("Dobby is awake") :]
+            )
         elif mode == "paused" and text == "Dobby is paused":
             text = self.line("paused", text, name, rotate=False)
         elif mode == "stopped" and text == "Dobby stopped":
             text = self.line("stopped", text, name, rotate=False)
         elif mode == "working" and text.startswith("Dobby is working"):
-            text = self.line("working", "Dobby is working", name) + text[len("Dobby is working"):]
+            text = self.line("working", "Dobby is working", name) + text[len("Dobby is working") :]
         return (mode, text, primary, secondary, color, dot_alpha)
 
 
-def voice_from_env(env: Optional[Mapping[str, str]] = None, seed: Optional[int] = None) -> Voice:
+def voice_from_env(env: Mapping[str, str] | None = None, seed: int | None = None) -> Voice:
     env = os.environ if env is None else env
-    return Voice(level=env.get("DOBBY_PERSONALITY", DEFAULT_LEVEL), user=env.get("DOBBY_USER_NAME", ""),
-                 lines=load_lines(env.get("DOBBY_PERSONALITY_LINES", "")), seed=seed)
+    return Voice(
+        level=env.get("DOBBY_PERSONALITY", DEFAULT_LEVEL),
+        user=env.get("DOBBY_USER_NAME", ""),
+        lines=load_lines(env.get("DOBBY_PERSONALITY_LINES", "")),
+        seed=seed,
+    )
 
 
-def startup_line(env: Optional[Mapping[str, str]] = None) -> str:
+def startup_line(env: Mapping[str, str] | None = None) -> str:
     """The greeting for logs and scripts ("" when ``DOBBY_PERSONALITY=off``)."""
     env = os.environ if env is None else env
     name = (env.get("DOBBY_AGENT_NAME") or "Dobby").strip() or "Dobby"
     return voice_from_env(env).startup(name)
 
 
-def all_lines() -> List[str]:
+def all_lines() -> list[str]:
     """Every built-in line, for tests (length, no film quotes)."""
     out = list(SUBTLE.values())
     for pool in ELF.values():

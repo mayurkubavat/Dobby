@@ -3,27 +3,23 @@ Unit and Integration Tests for Dynamic Self-Healing Action Cache (Option 1).
 """
 
 import os
-from typing import Optional
 import tempfile
-import pytest
-import numpy as np
+
 from PIL import Image, ImageDraw
 
-from dobby.types import BoundingBox, WindowInfo, UIElement
 from dobby.agent_loop.cache import (
     ActionCache,
-    CachedLocator,
+    base64_to_image,
     compute_dhash,
     hamming_distance,
     image_to_base64_thumbnail,
-    base64_to_image,
-    template_match_neighborhood,
 )
 from dobby.agent_loop.controller import FeedbackLoopController
+from dobby.types import BoundingBox, WindowInfo
 
 
 class MockHAL:
-    def __init__(self, screen_image: Image.Image, active_window: Optional[WindowInfo] = None):
+    def __init__(self, screen_image: Image.Image, active_window: WindowInfo | None = None):
         self.screen_image = screen_image
         self.active_window = active_window
         self.clicks = []
@@ -287,14 +283,26 @@ def test_proactive_verify_all():
         # Entry 1: Button at (100, 100)
         screen = create_synthetic_ui(button_box=(100, 100, 80, 30), text="OK")
         crop1 = screen.crop((100, 100, 180, 130))
-        cache.record("my_app", "OK", BoundingBox(x=100, y=100, width=80, height=30), (140, 115), visual_crop=crop1)
+        cache.record(
+            "my_app",
+            "OK",
+            BoundingBox(x=100, y=100, width=80, height=30),
+            (140, 115),
+            visual_crop=crop1,
+        )
 
         # Entry 2: Button at (300, 100)
         draw = ImageDraw.Draw(screen)
         draw.rectangle([300, 100, 380, 130], fill=(180, 40, 40))
         draw.text((310, 110), "Cancel", fill=(255, 255, 255))
         crop2 = screen.crop((300, 100, 380, 130))
-        cache.record("my_app", "Cancel", BoundingBox(x=300, y=100, width=80, height=30), (340, 115), visual_crop=crop2)
+        cache.record(
+            "my_app",
+            "Cancel",
+            BoundingBox(x=300, y=100, width=80, height=30),
+            (340, 115),
+            visual_crop=crop2,
+        )
 
         # Now test proactive_verify_all on live screen
         report = cache.proactive_verify_all(app_key="my_app", live_screen=screen)
@@ -341,7 +349,7 @@ def test_controller_find_and_click_healed():
 
 def test_manage_cache_verify_and_heal(live_screen):
     """Validates manage_cache tool with verify, heal, and stats actions."""
-    from dobby.server import manage_cache, controller
+    from dobby.server import manage_cache
 
     # 1. Stats action
     stats = manage_cache(action="stats")

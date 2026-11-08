@@ -1,5 +1,4 @@
-"""
-Live wiring for screen state: observe the active window, decide on an element
+"""Live wiring for screen state: observe the active window, decide on an element
 with the local decision core, and act on it after re-binding to a fresh frame.
 
 Everything goes through the controller (HAL, AX inspector, OCR, verification),
@@ -10,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from dobby.config import CONFIG
 from dobby.screen_state.occlusion import check_occlusion
@@ -20,7 +19,7 @@ from dobby.screen_state.state import MENU_BAR_HEIGHT, ScreenState, StateTracker,
 logger = logging.getLogger(__name__)
 
 
-def _window_region(win: Any) -> Optional[Tuple[int, int, int, int]]:
+def _window_region(win: Any) -> tuple[int, int, int, int] | None:
     try:
         b = win.bbox
         if b.width > 0 and b.height > 0:
@@ -30,7 +29,7 @@ def _window_region(win: Any) -> Optional[Tuple[int, int, int, int]]:
     return None
 
 
-def _overlaps(box: Dict[str, Any], region: Tuple[int, int, int, int]) -> bool:
+def _overlaps(box: dict[str, Any], region: tuple[int, int, int, int]) -> bool:
     try:
         x, y, w, h = int(box["x"]), int(box["y"]), int(box["width"]), int(box["height"])
     except (KeyError, TypeError, ValueError):
@@ -39,11 +38,14 @@ def _overlaps(box: Dict[str, Any], region: Tuple[int, int, int, int]) -> bool:
     return x + w > rx and y + h > ry and x < rx + rw and y < ry + rh
 
 
-def _in_menu_bar(node: Dict[str, Any]) -> bool:
+def _in_menu_bar(node: dict[str, Any]) -> bool:
     """A menu bar item of the frontmost app (outside the window, at the top of the screen)."""
     box = node.get("bbox") or {}
     try:
-        return node.get("role") == "menu item" and int(box["y"]) + int(box["height"]) <= MENU_BAR_HEIGHT
+        return (
+            node.get("role") == "menu item"
+            and int(box["y"]) + int(box["height"]) <= MENU_BAR_HEIGHT
+        )
     except (KeyError, TypeError, ValueError):
         return False
 
@@ -51,14 +53,13 @@ def _in_menu_bar(node: Dict[str, Any]) -> bool:
 def observe(
     controller: Any,
     tracker: StateTracker,
-    app_name_filter: Optional[str] = None,
+    app_name_filter: str | None = None,
     use_ocr: bool = True,
     clip_to_window: bool = True,
     settle: Any = False,
     use_detector: bool = False,
 ) -> ScreenState:
-    """
-    One fresh observation of the active window as a numbered :class:`ScreenState`.
+    """One fresh observation of the active window as a numbered :class:`ScreenState`.
 
     ``settle`` first waits until the window stops changing (loading pages,
     sliding sheets), so a half-drawn screen is not read as the result.
@@ -80,12 +81,20 @@ def observe(
         settle = (time.time() - tracker.last_action_at) < CONFIG.settle_after_action_s
     if settle:
         settled = settle_window(
-            controller, region,
-            timeout_s=CONFIG.settle_timeout_s, interval_s=CONFIG.settle_interval_s, max_delta=CONFIG.settle_max_delta,
+            controller,
+            region,
+            timeout_s=CONFIG.settle_timeout_s,
+            interval_s=CONFIG.settle_interval_s,
+            max_delta=CONFIG.settle_max_delta,
         ).as_dict()
 
     try:
-        nodes = controller.get_accessibility_tree(app_name_filter=app_name_filter, filter_interactable=True) or []
+        nodes = (
+            controller.get_accessibility_tree(
+                app_name_filter=app_name_filter, filter_interactable=True
+            )
+            or []
+        )
     except Exception as e:
         logger.debug("AX tree unavailable: %s", e)
         nodes = []
@@ -93,7 +102,8 @@ def observe(
     if clip_to_window and region is not None:
         # The app's menu bar lives outside its window; keep it so "open the File menu" has a target.
         nodes = [
-            n for n in nodes
+            n
+            for n in nodes
             if isinstance(n, dict) and (_overlaps(n.get("bbox") or {}, region) or _in_menu_bar(n))
         ]
 
@@ -107,14 +117,24 @@ def observe(
 
     boxes = detect_icon_boxes(controller, region) if use_detector else []
 
-    state = build_state(nodes, lines, window=win, generation=generation,
-                        detector_boxes=boxes, max_detector_elements=CONFIG.screen_state_max_icons)
-    state.window_id = str(win.window_id) if win is not None and getattr(win, "window_id", None) is not None else None
+    state = build_state(
+        nodes,
+        lines,
+        window=win,
+        generation=generation,
+        detector_boxes=boxes,
+        max_detector_elements=CONFIG.screen_state_max_icons,
+    )
+    state.window_id = (
+        str(win.window_id)
+        if win is not None and getattr(win, "window_id", None) is not None
+        else None
+    )
     state.settle = settled
     return tracker.remember(state)
 
 
-def _px_boxes(proposals: Any) -> List[Tuple[int, int, int, int]]:
+def _px_boxes(proposals: Any) -> list[tuple[int, int, int, int]]:
     out = []
     for p in proposals or []:
         b = p.get("bbox") if isinstance(p, dict) else None
@@ -127,11 +147,13 @@ def _px_boxes(proposals: Any) -> List[Tuple[int, int, int, int]]:
     return out
 
 
-def looks_degenerate(boxes: List[Tuple[int, int, int, int]], min_boxes: int = 6, share: float = 0.4) -> bool:
+def looks_degenerate(
+    boxes: list[tuple[int, int, int, int]], min_boxes: int = 6, share: float = 0.4
+) -> bool:
     """True when most boxes have the exact same size: a detector decoding anchors, not seeing icons."""
     if len(boxes) < min_boxes:
         return False
-    sizes: Dict[Tuple[int, int], int] = {}
+    sizes: dict[tuple[int, int], int] = {}
     for _, _, w, h in boxes:
         sizes[(w, h)] = sizes.get((w, h), 0) + 1
     return max(sizes.values()) >= share * len(boxes)
@@ -139,13 +161,12 @@ def looks_degenerate(boxes: List[Tuple[int, int, int, int]], min_boxes: int = 6,
 
 def detect_icon_boxes(
     controller: Any,
-    region: Optional[Tuple[int, int, int, int]],
+    region: tuple[int, int, int, int] | None,
     min_side: int = 10,
     max_side: int = 96,
     max_aspect: float = 4.0,
-) -> List[Tuple[int, int, int, int]]:
-    """
-    Icon-sized detector boxes in screen points inside ``region``, largest first; [] when unavailable.
+) -> list[tuple[int, int, int, int]]:
+    """Icon-sized detector boxes in screen points inside ``region``, largest first; [] when unavailable.
 
     The capture is in pixels (2x on Retina), so boxes are scaled back to points.
     When the neural detector returns fixed-size anchor boxes (a decode fault seen
@@ -162,7 +183,7 @@ def detect_icon_boxes(
         sx = img.width / float(rw) if rw else 1.0
         sy = img.height / float(rh) if rh else 1.0
 
-        def icons(px: List[Tuple[int, int, int, int]]) -> List[Tuple[int, int, int, int]]:
+        def icons(px: list[tuple[int, int, int, int]]) -> list[tuple[int, int, int, int]]:
             kept = []
             for x, y, w, h in px:
                 pw, ph = w / sx, h / sy
@@ -172,7 +193,12 @@ def detect_icon_boxes(
                     continue
                 bx, by = rx + x / sx, ry + y / sy
                 # Boxes hugging the window frame are corners/edges of the window, not controls.
-                if bx - rx < 4 or by - ry < 4 or (rx + rw) - (bx + pw) < 4 or (ry + rh) - (by + ph) < 4:
+                if (
+                    bx - rx < 4
+                    or by - ry < 4
+                    or (rx + rw) - (bx + pw) < 4
+                    or (ry + rh) - (by + ph) < 4
+                ):
                     continue
                 kept.append((int(bx), int(by), int(round(pw)), int(round(ph))))
             return kept
@@ -180,14 +206,19 @@ def detect_icon_boxes(
         mode = (CONFIG.icon_detector or "auto").strip().lower()
         can_contour = hasattr(grounder, "_generate_cv_proposals")
         if mode == "contours" and can_contour:
-            return sorted(icons(_px_boxes(grounder._generate_cv_proposals(img, (0, 0)))),
-                          key=lambda bx: bx[2] * bx[3], reverse=True)
+            return sorted(
+                icons(_px_boxes(grounder._generate_cv_proposals(img, (0, 0)))),
+                key=lambda bx: bx[2] * bx[3],
+                reverse=True,
+            )
         raw = _px_boxes(grounder.generate_proposals(img, offset=(0, 0)))
         out = icons(raw)
         # The neural detector is unstable on macOS (fixed anchor boxes, or panels only):
         # when it gives few icon-sized boxes, use OpenCV contours instead.
         if mode == "auto" and (looks_degenerate(raw) or len(out) < 3) and can_contour:
-            logger.debug("icon detector gave %d icon boxes of %d; using contours", len(out), len(raw))
+            logger.debug(
+                "icon detector gave %d icon boxes of %d; using contours", len(out), len(raw)
+            )
             out = icons(_px_boxes(grounder._generate_cv_proposals(img, (0, 0))))
     except Exception as e:
         logger.debug("icon detector unavailable: %s", e)
@@ -196,7 +227,7 @@ def detect_icon_boxes(
     return out
 
 
-def summarize_change(before: ScreenState, after: ScreenState) -> Dict[str, Any]:
+def summarize_change(before: ScreenState, after: ScreenState) -> dict[str, Any]:
     """What changed between two observations, by (role, label)."""
     b = {(e.role, e.label) for e in before.elements}
     a = {(e.role, e.label) for e in after.elements}
@@ -205,8 +236,8 @@ def summarize_change(before: ScreenState, after: ScreenState) -> Dict[str, Any]:
     return {
         "changed": bool(added or removed) or before.window_title != after.window_title,
         "window_changed": before.window_title != after.window_title or before.app != after.app,
-        "added": [f"{r} \"{l}\"" for r, l in added],
-        "removed": [f"{r} \"{l}\"" for r, l in removed],
+        "added": [f'{r} "{l}"' for r, l in added],
+        "removed": [f'{r} "{l}"' for r, l in removed],
     }
 
 
@@ -216,13 +247,12 @@ def act_on_element(
     eid: str,
     generation: int,
     action: str = "click",
-    text: Optional[str] = None,
+    text: str | None = None,
     press_enter: bool = False,
-    app_name_filter: Optional[str] = None,
+    app_name_filter: str | None = None,
     verify_delta: bool = True,
-) -> Dict[str, Any]:
-    """
-    Re-binds ``eid`` from observation ``generation`` on a fresh frame, then acts once.
+) -> dict[str, Any]:
+    """Re-binds ``eid`` from observation ``generation`` on a fresh frame, then acts once.
 
     ``action`` is ``click``, ``double_click`` or ``type`` (click to focus, then type
     ``text``; Return only when ``press_enter``). Refuses stale, vanished,
@@ -230,7 +260,10 @@ def act_on_element(
     """
     old = tracker.get(int(generation))
     if old is None:
-        return {"ok": False, "reason": f"unknown generation {generation}: call get_screen_state again"}
+        return {
+            "ok": False,
+            "reason": f"unknown generation {generation}: call get_screen_state again",
+        }
     chosen = old.get(eid)
     if chosen is None:
         return {"ok": False, "reason": f"{eid} is not in generation {generation}"}
@@ -239,7 +272,12 @@ def act_on_element(
     if action == "type" and not text:
         return {"ok": False, "reason": "type needs text"}
 
-    fresh = observe(controller, tracker, app_name_filter=app_name_filter, use_detector=chosen.source == "detector")
+    fresh = observe(
+        controller,
+        tracker,
+        app_name_filter=app_name_filter,
+        use_detector=chosen.source == "detector",
+    )
     target = rebind(chosen, fresh)
     if target is None:
         return {
@@ -248,23 +286,39 @@ def act_on_element(
             "generation": fresh.generation,
         }
     if not target.enabled:
-        return {"ok": False, "reason": f"{target.describe()} is disabled", "generation": fresh.generation}
+        return {
+            "ok": False,
+            "reason": f"{target.describe()} is disabled",
+            "generation": fresh.generation,
+        }
     if action == "type" and (target.secure or not target.editable):
         why = "a secure field" if target.secure else "not editable"
-        return {"ok": False, "reason": f"{target.describe()} is {why}", "generation": fresh.generation}
+        return {
+            "ok": False,
+            "reason": f"{target.describe()} is {why}",
+            "generation": fresh.generation,
+        }
 
     cx, cy = target.center
     hal = controller.hal
 
     inspector = getattr(controller, "atspi_inspector", None)
     occlusion = check_occlusion(
-        hal, (target.x, target.y, target.width, target.height), (cx, cy),
-        target_window_id=fresh.window_id, target_role=target.role,
-        hit_test=getattr(inspector, "hit_test", None), in_menu_bar=target.position == "menu bar",
+        hal,
+        (target.x, target.y, target.width, target.height),
+        (cx, cy),
+        target_window_id=fresh.window_id,
+        target_role=target.role,
+        hit_test=getattr(inspector, "hit_test", None),
+        in_menu_bar=target.position == "menu bar",
     )
     if occlusion.covered:
-        return {"ok": False, "reason": f"{target.describe()} is {occlusion.reason}", "occlusion": occlusion.as_dict(),
-                "generation": fresh.generation}
+        return {
+            "ok": False,
+            "reason": f"{target.describe()} is {occlusion.reason}",
+            "occlusion": occlusion.as_dict(),
+            "generation": fresh.generation,
+        }
 
     def _do() -> None:
         hal.mouse_click(cx, cy, button="left", click_count=2 if action == "double_click" else 1)
@@ -295,7 +349,11 @@ def act_on_element(
         "change": change,
         "settle": after.settle,
         "occlusion": occlusion.as_dict(),
-        "verification": {k: verification.get(k) for k in ("success", "delta_detected", "change_ratio", "message") if isinstance(verification, dict) and k in verification},
+        "verification": {
+            k: verification.get(k)
+            for k in ("success", "delta_detected", "change_ratio", "message")
+            if isinstance(verification, dict) and k in verification
+        },
     }
 
 
@@ -307,14 +365,13 @@ def decide_next_element(
     verb: str = "click",
     authorized: bool = False,
     k: int = 12,
-    app_name_filter: Optional[str] = None,
+    app_name_filter: str | None = None,
     confirm: bool = True,
     confirm_at: float = 0.9,
     visual_fallback: bool = False,
     visual_decider: Any = None,
-) -> Dict[str, Any]:
-    """
-    Observes, shortlists elements by the goal, lets the local decider choose one,
+) -> dict[str, Any]:
+    """Observes, shortlists elements by the goal, lets the local decider choose one,
     and gates the choice by the verb's risk. Acts on nothing: the caller acts
     only when ``gate.verdict`` is "act" (then :func:`act_on_element`).
 
@@ -332,14 +389,34 @@ def decide_next_element(
     from dobby.gemma.gate import GateResult, Verdict, gate
 
     state = observe(controller, tracker, app_name_filter=app_name_filter, settle="auto")
-    candidates = shortlist(goal, state.elements, k=max(1, min(25, k)), text=lambda e: f"{e.role} {e.label}")
+    candidates = shortlist(
+        goal, state.elements, k=max(1, min(25, k)), text=lambda e: f"{e.role} {e.label}"
+    )
     if not candidates:
-        out = {"generation": state.generation, "eid": None, "gate": {"verdict": "escalate", "reason": "no elements on screen"}}
-        return _visual_retry(out, controller, tracker, visual_decider or decider, goal, verb, authorized,
-                             app_name_filter) if visual_fallback else out
+        out = {
+            "generation": state.generation,
+            "eid": None,
+            "gate": {"verdict": "escalate", "reason": "no elements on screen"},
+        }
+        return (
+            _visual_retry(
+                out,
+                controller,
+                tracker,
+                visual_decider or decider,
+                goal,
+                verb,
+                authorized,
+                app_name_filter,
+            )
+            if visual_fallback
+            else out
+        )
     ctx = f"Goal: {goal.strip()}\n" + state.to_text(elements=[], max_text_lines=10)
     options = [e.describe() for e in candidates]
-    decision = decider.choose(ctx, f"Which element should be used to {verb} next to advance the goal?", options)
+    decision = decider.choose(
+        ctx, f"Which element should be used to {verb} next to advance the goal?", options
+    )
     eid = None if decision.is_none else candidates[decision.index].eid
     result = gate(decision, verb, authorized=authorized)
     confirmation = None
@@ -354,8 +431,16 @@ def decide_next_element(
         except Exception as e:  # a failed check must not turn into "act"
             logger.debug("confirmation failed: %s", e)
         if confirmation is None or confirmation.p_true < confirm_at:
-            p_txt = "failed" if confirmation is None else f"p={confirmation.p_true:.2f} < {confirm_at:.2f}"
-            result = GateResult(Verdict.ESCALATE, f"confirmation disagrees ({p_txt}): target may not be on screen", result.risk)
+            p_txt = (
+                "failed"
+                if confirmation is None
+                else f"p={confirmation.p_true:.2f} < {confirm_at:.2f}"
+            )
+            result = GateResult(
+                Verdict.ESCALATE,
+                f"confirmation disagrees ({p_txt}): target may not be on screen",
+                result.risk,
+            )
     out = {
         "generation": state.generation,
         "eid": eid,
@@ -367,18 +452,41 @@ def decide_next_element(
         "source": "text",
     }
     if visual_fallback and result.verdict == Verdict.ESCALATE:
-        return _visual_retry(out, controller, tracker, visual_decider or decider, goal, verb, authorized,
-                             app_name_filter)
+        return _visual_retry(
+            out,
+            controller,
+            tracker,
+            visual_decider or decider,
+            goal,
+            verb,
+            authorized,
+            app_name_filter,
+        )
     return out
 
 
-def _visual_retry(text_out: Dict[str, Any], controller: Any, tracker: StateTracker, decider: Any, goal: str,
-                  verb: str, authorized: bool, app_name_filter: Optional[str]) -> Dict[str, Any]:
+def _visual_retry(
+    text_out: dict[str, Any],
+    controller: Any,
+    tracker: StateTracker,
+    decider: Any,
+    goal: str,
+    verb: str,
+    authorized: bool,
+    app_name_filter: str | None,
+) -> dict[str, Any]:
     from dobby.screen_state.visual import decide_visual_element
 
     try:
-        visual = decide_visual_element(controller, tracker, decider, goal, verb=verb, authorized=authorized,
-                                       app_name_filter=app_name_filter)
+        visual = decide_visual_element(
+            controller,
+            tracker,
+            decider,
+            goal,
+            verb=verb,
+            authorized=authorized,
+            app_name_filter=app_name_filter,
+        )
     except Exception as e:
         logger.debug("visual fallback failed: %s", e)
         return {**text_out, "visual_error": str(e)}

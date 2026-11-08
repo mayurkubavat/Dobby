@@ -24,7 +24,11 @@ def _flush():
 
 def test_setup_is_idempotent_and_rotates_small(server_log):
     again = srv.setup_server_log(str(server_log), max_bytes=10_000, backups=1)
-    handlers = [h for h in logging.getLogger("dobby").handlers if getattr(h, "baseFilename", "") == str(server_log)]
+    handlers = [
+        h
+        for h in logging.getLogger("dobby").handlers
+        if getattr(h, "baseFilename", "") == str(server_log)
+    ]
     assert handlers == [again] and again.maxBytes == 10_000
 
 

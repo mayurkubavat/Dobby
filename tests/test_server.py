@@ -1,7 +1,9 @@
 """Integration tests for FastMCP server tools."""
 
-import pytest
 from subprocess import CalledProcessError
+
+import pytest
+
 import dobby.server as server
 
 

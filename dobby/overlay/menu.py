@@ -7,9 +7,9 @@ entries into an NSMenu.
 
 from __future__ import annotations
 
-from typing import Iterable, List, Optional, Tuple
+from collections.abc import Iterable
 
-Entry = Tuple[str, Optional[str], Optional[bool]]  # title, action selector, checkmark
+Entry = tuple[str, str | None, bool | None]  # title, action selector, checkmark
 SEPARATOR: Entry = ("-", None, None)
 
 
@@ -18,7 +18,7 @@ def _short(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def status_of(paused: bool, takeover: bool, working: bool, turbo: bool) -> Tuple[str, str]:
+def status_of(paused: bool, takeover: bool, working: bool, turbo: bool) -> tuple[str, str]:
     """(status text, one-glyph menu bar title). One glyph fits beside the notch."""
     if paused:
         status, title = "Paused", "‖"
@@ -34,37 +34,55 @@ def status_of(paused: bool, takeover: bool, working: bool, turbo: bool) -> Tuple
     return status, title
 
 
-def menu_entries(status: str, steps: Iterable[str], halted: bool, turbo: bool, overlay_on: bool,
-                 trail_on: bool, bar_shown: Optional[bool], awake: Optional[bool] = False) -> List[Entry]:
+def menu_entries(
+    status: str,
+    steps: Iterable[str],
+    halted: bool,
+    turbo: bool,
+    overlay_on: bool,
+    trail_on: bool,
+    bar_shown: bool | None,
+    awake: bool | None = False,
+) -> list[Entry]:
     """Menu items, top to bottom. ``bar_shown`` is None when there is no control bar.
 
     ``awake`` is None while Dobby works (no wake/sleep entry then).
     """
-    out: List[Entry] = [(f"Dobby: {status}", None, None), SEPARATOR]
+    out: list[Entry] = [(f"Dobby: {status}", None, None), SEPARATOR]
     if awake is not None:
-        out.append(("Put Dobby to sleep", "menuSleep:", None) if awake else ("Wake Dobby", "menuWake:", None))
+        out.append(
+            ("Put Dobby to sleep", "menuSleep:", None)
+            if awake
+            else ("Wake Dobby", "menuWake:", None)
+        )
     out.append(("Recent steps", None, None))
     recent = list(reversed(list(steps)))
     out += [("   " + _short(line, 60), None, None) for line in (recent or ["(none yet)"])]
-    out += [SEPARATOR,
-            ("Resume" if halted else "Pause", "menuPauseToggle:", None),
-            ("Stop", "menuStop:", None),
-            SEPARATOR,
-            ("Turbo mode (no prompts, ignores take-over)", "menuToggleTurbo:", turbo),
-            ("Show overlay", "menuToggleOverlay:", overlay_on)]
+    out += [
+        SEPARATOR,
+        ("Resume" if halted else "Pause", "menuPauseToggle:", None),
+        ("Stop", "menuStop:", None),
+        SEPARATOR,
+        ("Turbo mode (no prompts, ignores take-over)", "menuToggleTurbo:", turbo),
+        ("Show overlay", "menuToggleOverlay:", overlay_on),
+    ]
     if bar_shown is not None:
         out.append(("Show control bar (⌃⌥H)", "menuTogglePill:", bar_shown))
-    out += [("Show step trail", "menuToggleTrail:", trail_on),
-            ("Clear step trail", "menuClearTrail:", None)]
+    out += [
+        ("Show step trail", "menuToggleTrail:", trail_on),
+        ("Clear step trail", "menuClearTrail:", None),
+    ]
     return out
 
 
 # ---------------------------------------------------------- Dobby picker
 # (title, pid, [(item title, action selector)])
-PickerGroup = Tuple[str, int, List[Tuple[str, str]]]
+PickerGroup = tuple[str, int, list[tuple[str, str]]]
 
 
-def picker_groups(agents: Iterable[dict], own_pid: int, own_paused: bool = False) -> List[PickerGroup]:
+def picker_groups(
+    agents: Iterable[dict], own_pid: int, own_paused: bool = False
+) -> list[PickerGroup]:
     """One submenu per running Dobby, when more than one runs.
 
     ``agents`` come from ``dobby.control.commands.overview``. Each submenu
@@ -74,7 +92,7 @@ def picker_groups(agents: Iterable[dict], own_pid: int, own_paused: bool = False
     agents = list(agents)
     if len(agents) < 2:
         return []
-    groups: List[PickerGroup] = []
+    groups: list[PickerGroup] = []
     any_running = False
     for a in agents:
         pid = int(a.get("pid", 0))
@@ -92,21 +110,43 @@ def picker_groups(agents: Iterable[dict], own_pid: int, own_paused: bool = False
         title = _short(str(a.get("name") or f"Dobby-{pid}"), 28)
         if notes:
             title += "  · " + ", ".join(notes)
-        groups.append((title, pid, [("Resume" if paused else "Pause", "menuAgentPauseToggle:"),
-                                    ("Stop", "menuAgentStop:")]))
-    groups.append(("All Dobbys", 0, [("Pause all", "menuAllPause:"), ("Resume all", "menuAllResume:")]))
+        groups.append(
+            (
+                title,
+                pid,
+                [
+                    ("Resume" if paused else "Pause", "menuAgentPauseToggle:"),
+                    ("Stop", "menuAgentStop:"),
+                ],
+            )
+        )
+    groups.append(
+        ("All Dobbys", 0, [("Pause all", "menuAllPause:"), ("Resume all", "menuAllResume:")])
+    )
     return groups
 
 
 # ------------------------------------------------------------ control bar
 # (mode, text, primary button, secondary button, colour key, dot alpha)
-BarView = Tuple[str, str, str, str, str, float]
+BarView = tuple[str, str, str, str, str, float]
 
 
-def bar_view(*, paused: bool, takeover: bool, takeover_resume: str, working: bool, turbo: bool,
-             current_mode: str, bar_mode: str, owner: bool, awake: bool = False,
-             ai_waiting: bool = False, handoff: bool = False,
-             other_waiting: bool = False, locked: bool = False) -> Optional[BarView]:
+def bar_view(
+    *,
+    paused: bool,
+    takeover: bool,
+    takeover_resume: str,
+    working: bool,
+    turbo: bool,
+    current_mode: str,
+    bar_mode: str,
+    owner: bool,
+    awake: bool = False,
+    ai_waiting: bool = False,
+    handoff: bool = False,
+    other_waiting: bool = False,
+    locked: bool = False,
+) -> BarView | None:
     """What the control bar shows, or None to hide it.
 
     Colour keys: "caution", "ok", or "risk" (the current risk colour).
@@ -125,21 +165,40 @@ def bar_view(*, paused: bool, takeover: bool, takeover_resume: str, working: boo
     if paused:
         return ("paused", "Dobby is paused", "Resume", "Stop", "caution", 1.0)
     if takeover:
-        text = "You're in control · Dobby waits until you stop" if takeover_resume == "auto" else "You're in control"
+        text = (
+            "You're in control · Dobby waits until you stop"
+            if takeover_resume == "auto"
+            else "You're in control"
+        )
         return ("takeover", text, "Resume now", "Stop", "caution", 1.0)
     if current_mode == "stopped":
         return ("stopped", "Dobby stopped", "OK", "Hide", "danger", 1.0)
     if working:
         label = "Dobby ⚡ Turbo" if turbo else "Dobby is working"
-        return ("working", label + " · ⌃⌥⎋ stops", "Take over" if locked else "Pause", "Stop", "risk", 1.0)
+        return (
+            "working",
+            label + " · ⌃⌥⎋ stops",
+            "Take over" if locked else "Pause",
+            "Stop",
+            "risk",
+            1.0,
+        )
     if awake:
         if handoff:
-            label = "Dobby ⚡ Turbo · awake · handing back to the AI" if turbo else "Dobby is awake · handing back to the AI"
+            label = (
+                "Dobby ⚡ Turbo · awake · handing back to the AI"
+                if turbo
+                else "Dobby is awake · handing back to the AI"
+            )
         else:
             label = "Dobby is awake · no AI is waiting — ask your AI for a task"
         return ("awake", label, "Pause", "Stop", "ok", 1.0)
     if ai_waiting:
-        label = "Dobby ⚡ Turbo · sleeping · click to wake" if turbo else "Dobby is sleeping · click to wake"
+        label = (
+            "Dobby ⚡ Turbo · sleeping · click to wake"
+            if turbo
+            else "Dobby is sleeping · click to wake"
+        )
         return ("ready", label, "Pause", "Stop", "ok", 0.45)
     if bar_mode == "always" and owner and not other_waiting:
         label = "Dobby ⚡ Turbo · sleeping" if turbo else "Dobby is sleeping"
@@ -162,7 +221,7 @@ def bar_click(mode: str, which: str) -> str:
     return "none"
 
 
-def bar_tip(mode: str, ai_waiting: bool = False, reason: str = "") -> Optional[str]:
+def bar_tip(mode: str, ai_waiting: bool = False, reason: str = "") -> str | None:
     """Tooltip for the bar itself (clicking it wakes Dobby or puts it to sleep)."""
     if mode == "ready":
         if not ai_waiting:
@@ -184,8 +243,9 @@ def label_click(mode: str) -> str:
 INPUT_KINDS = ("move", "click", "drag", "scroll", "key")
 
 
-def takes_over(kind: str, *, working: bool, paused: bool, takeover: bool, turbo: bool,
-               confirming: bool) -> bool:
+def takes_over(
+    kind: str, *, working: bool, paused: bool, takeover: bool, turbo: bool, confirming: bool
+) -> bool:
     """Does this real input from the person count as taking over from Dobby?
 
     * Never while an Allow/Deny prompt is up: the person is reaching for it.
@@ -205,8 +265,17 @@ def takes_over(kind: str, *, working: bool, paused: bool, takeover: bool, turbo:
     return True
 
 
-def idle_cleanup(*, since_action: float, active_secs: float, linger_secs: float, cursor_state: str,
-                 pointer_visible: bool, awake: bool, halted: bool, confirming: bool) -> Tuple[bool, bool]:
+def idle_cleanup(
+    *,
+    since_action: float,
+    active_secs: float,
+    linger_secs: float,
+    cursor_state: str,
+    pointer_visible: bool,
+    awake: bool,
+    halted: bool,
+    confirming: bool,
+) -> tuple[bool, bool]:
     """What to put away once Dobby has stopped acting: ``(reset_thinking, hide_pointer)``.
 
     ``since_action`` is the seconds since Dobby's last step. After

@@ -14,10 +14,10 @@ layer coordinates (origin bottom-left of that screen).
 from __future__ import annotations
 
 import math
-from typing import Iterable, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
 
-Rect = Tuple[float, float, float, float]  # x, y, w, h
-Point = Tuple[float, float]
+Rect = tuple[float, float, float, float]  # x, y, w, h
+Point = tuple[float, float]
 
 
 def global_point_to_local(pt: Point, screen_frame: Rect, primary_height: float) -> Point:
@@ -49,7 +49,7 @@ def intersects(a: Rect, b: Rect) -> bool:
     return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
 
 
-def screen_index_for_point(pt: Point, global_frames: Sequence[Rect]) -> Optional[int]:
+def screen_index_for_point(pt: Point, global_frames: Sequence[Rect]) -> int | None:
     for i, fr in enumerate(global_frames):
         if contains(fr, pt):
             return i
@@ -63,8 +63,14 @@ def pixels_to_points(pt: Point, scale: float) -> Point:
     return (pt[0] / scale, pt[1] / scale)
 
 
-def glide_ms(start: Point, end: Point, min_ms: float = 250, max_ms: float = 450,
-             full_distance: float = 1200, speed: float = 1.0) -> int:
+def glide_ms(
+    start: Point,
+    end: Point,
+    min_ms: float = 250,
+    max_ms: float = 450,
+    full_distance: float = 1200,
+    speed: float = 1.0,
+) -> int:
     """Animation length for a pointer glide; 0 when speed is 0 (tests, replay)."""
     if speed <= 0:
         return 0
@@ -94,8 +100,9 @@ def occluded(target: Rect, above: Iterable[Rect], min_fraction: float = 0.25) ->
     return covered / area >= min_fraction
 
 
-def chip_rect(tip: Point, width: float, arrow_w: float, arrow_h: float, chip_h: float,
-              gap: float = 4.0) -> Rect:
+def chip_rect(
+    tip: Point, width: float, arrow_w: float, arrow_h: float, chip_h: float, gap: float = 4.0
+) -> Rect:
     """Global top-left rect of the name tag drawn below-right of the pointer tip.
 
     Matches the helper's layout: the tag's top-left sits ``arrow_w - gap``

@@ -20,8 +20,8 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Dict, Optional, Sequence
 
 from . import paths
 
@@ -30,7 +30,7 @@ CONNECT_TIMEOUT_S = 90.0  # the first start loads the models
 _FALSE = {"0", "false", "no", "off"}
 
 
-def shared_enabled(env: Optional[Dict[str, str]] = None) -> bool:
+def shared_enabled(env: dict[str, str] | None = None) -> bool:
     env = os.environ if env is None else env
     if not hasattr(socket, "AF_UNIX"):
         return False
@@ -43,18 +43,20 @@ def _mode(argv: Sequence[str]) -> str:
     return security_mode(argv=list(argv), env=os.environ)
 
 
-def _parent_name() -> Optional[str]:
+def _parent_name() -> str | None:
     """The client app's name, for the bar and status, when the OS tells us."""
     ppid = os.getppid()
     try:
-        out = subprocess.run(["ps", "-o", "comm=", "-p", str(ppid)], capture_output=True, text=True, timeout=1)
+        out = subprocess.run(
+            ["ps", "-o", "comm=", "-p", str(ppid)], capture_output=True, text=True, timeout=1
+        )
         name = os.path.basename(out.stdout.strip())
         return name or None
     except Exception:  # noqa: BLE001
         return None
 
 
-def hello(argv: Sequence[str]) -> Dict[str, object]:
+def hello(argv: Sequence[str]) -> dict[str, object]:
     return {
         "dobby_hello": HELLO_VERSION,
         "pid": os.getpid(),
@@ -65,7 +67,7 @@ def hello(argv: Sequence[str]) -> Dict[str, object]:
     }
 
 
-def _connect(path: Path) -> Optional[socket.socket]:
+def _connect(path: Path) -> socket.socket | None:
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         sock.connect(str(path))
@@ -80,7 +82,7 @@ def _connect(path: Path) -> Optional[socket.socket]:
 PER_CLIENT_ENV = ("DOBBY_AGENT_NAME", "DOBBY_MODE", "DOBBY_SECURE", "DOBBY_OVERLAY_LABEL")
 
 
-def daemon_env(env: Dict[str, str]) -> Dict[str, str]:
+def daemon_env(env: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in env.items() if k not in PER_CLIENT_ENV}
 
 
@@ -91,9 +93,10 @@ APP_ID = "dev.dobby.app"
 _APP_ENV_KEYS = ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "OLLAMA_HOST", "HF_HOME", "LANG")
 
 
-def find_app(env: Optional[Dict[str, str]] = None, platform: str = sys.platform) -> Optional[Path]:
+def find_app(env: dict[str, str] | None = None, platform: str = sys.platform) -> Path | None:
     """Dobby.app on macOS: ``DOBBY_APP``, ~/Applications, /Applications, or the
-    checkout's own build. ``DOBBY_APP=0`` never uses it."""
+    checkout's own build. ``DOBBY_APP=0`` never uses it.
+    """
     env = os.environ if env is None else env
     if platform != "darwin":
         return None
@@ -101,23 +104,35 @@ def find_app(env: Optional[Dict[str, str]] = None, platform: str = sys.platform)
     if choice.lower() in _FALSE:
         return None
     root = Path(__file__).resolve().parents[2]
-    candidates = [Path(os.path.expanduser(choice))] if choice else [
-        Path.home() / "Applications" / "Dobby.app",
-        Path("/Applications/Dobby.app"),
-        root / "apps" / "macos" / "build" / "Dobby.app",
-    ]
+    candidates = (
+        [Path(os.path.expanduser(choice))]
+        if choice
+        else [
+            Path.home() / "Applications" / "Dobby.app",
+            Path("/Applications/Dobby.app"),
+            root / "apps" / "macos" / "build" / "Dobby.app",
+        ]
+    )
     return next((c for c in candidates if (c / "Contents" / "MacOS").is_dir()), None)
 
 
-def app_config(env: Optional[Dict[str, str]] = None) -> Dict[str, object]:
+def app_config(env: dict[str, str] | None = None) -> dict[str, object]:
     env = os.environ if env is None else env
-    keep = {k: v for k, v in daemon_env(dict(env)).items() if k.startswith("DOBBY_") or k in _APP_ENV_KEYS}
+    keep = {
+        k: v
+        for k, v in daemon_env(dict(env)).items()
+        if k.startswith("DOBBY_") or k in _APP_ENV_KEYS
+    }
     keep.pop("DOBBY_APP", None)
-    return {"python": sys.executable, "cwd": str(Path(__file__).resolve().parents[2]), "env": keep,
-            "written_by": os.getpid()}
+    return {
+        "python": sys.executable,
+        "cwd": str(Path(__file__).resolve().parents[2]),
+        "env": keep,
+        "written_by": os.getpid(),
+    }
 
 
-def write_app_config(env: Optional[Dict[str, str]] = None) -> Path:
+def write_app_config(env: dict[str, str] | None = None) -> Path:
     path = paths.app_config_path()
     paths.ensure_private_dir(path.parent)
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
@@ -129,17 +144,24 @@ def write_app_config(env: Optional[Dict[str, str]] = None) -> Path:
 
 def start_app(app: Path) -> bool:
     """Open Dobby.app in the background; it starts ``dobby serve`` as its own
-    child, so macOS asks for Screen Recording / Accessibility for Dobby."""
+    child, so macOS asks for Screen Recording / Accessibility for Dobby.
+    """
     try:
         write_app_config()
-        return subprocess.run(["open", "-g", "-a", str(app)], capture_output=True, timeout=10).returncode == 0
+        return (
+            subprocess.run(
+                ["open", "-g", "-a", str(app)], capture_output=True, timeout=10
+            ).returncode
+            == 0
+        )
     except (OSError, subprocess.SubprocessError):
         return False
 
 
-def start_daemon(env: Optional[Dict[str, str]] = None) -> Optional[subprocess.Popen]:
+def start_daemon(env: dict[str, str] | None = None) -> subprocess.Popen | None:
     """Start the shared Dobby: through Dobby.app on macOS when it is
-    installed, else ``dobby serve`` detached from this client (it outlives it)."""
+    installed, else ``dobby serve`` detached from this client (it outlives it).
+    """
     app = find_app(env)
     if app is not None and start_app(app):
         return None
@@ -148,12 +170,16 @@ def start_daemon(env: Optional[Dict[str, str]] = None) -> Optional[subprocess.Po
     out = open(log, "ab", buffering=0)
     return subprocess.Popen(
         [sys.executable, "-m", "dobby", "serve"],
-        stdin=subprocess.DEVNULL, stdout=out, stderr=out,
-        env=daemon_env(os.environ if env is None else env), start_new_session=True, close_fds=True,
+        stdin=subprocess.DEVNULL,
+        stdout=out,
+        stderr=out,
+        env=daemon_env(os.environ if env is None else env),
+        start_new_session=True,
+        close_fds=True,
     )
 
 
-def connect_or_start(timeout_s: float = CONNECT_TIMEOUT_S) -> Optional[socket.socket]:
+def connect_or_start(timeout_s: float = CONNECT_TIMEOUT_S) -> socket.socket | None:
     path = paths.socket_path()
     sock = _connect(path)
     if sock is not None:
@@ -182,12 +208,16 @@ def _read_line(sock: socket.socket, timeout_s: float) -> bytes:
     return bytes(buf)
 
 
-def handshake(sock: socket.socket, argv: Sequence[str], timeout_s: float = CONNECT_TIMEOUT_S) -> Dict[str, object]:
+def handshake(
+    sock: socket.socket, argv: Sequence[str], timeout_s: float = CONNECT_TIMEOUT_S
+) -> dict[str, object]:
     sock.sendall((json.dumps(hello(argv)) + "\n").encode())
     line = _read_line(sock, timeout_s)
     reply = json.loads(line.decode() or "{}")
     if not reply.get("dobby_ready"):
-        raise ConnectionError(f"shared Dobby refused the connection: {reply.get('error') or line!r}")
+        raise ConnectionError(
+            f"shared Dobby refused the connection: {reply.get('error') or line!r}"
+        )
     return reply
 
 
@@ -236,15 +266,17 @@ def run_in_process() -> None:
     serve_stdio()
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     argv = list(sys.argv if argv is None else argv)
     if not shared_enabled():
         run_in_process()
         return
     sock = connect_or_start()
     if sock is None:
-        sys.stderr.write("dobby: the shared Dobby did not start (see ~/.dobby/logs/daemon.log); "
-                         "running a private one for this client\n")
+        sys.stderr.write(
+            "dobby: the shared Dobby did not start (see ~/.dobby/logs/daemon.log); "
+            "running a private one for this client\n"
+        )
         run_in_process()
         return
     try:

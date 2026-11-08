@@ -17,7 +17,7 @@ from dobby.gemma.decide import (
     option_labels,
     shortlist,
 )
-from dobby.gemma.gate import GatePolicy, Risk, RunBudget, Verdict, gate
+from dobby.gemma.gate import GatePolicy, RunBudget, Verdict, gate
 from dobby.vdom.gemma3_sidecar import Gemma3Grounder
 
 
@@ -39,11 +39,13 @@ class FakeLogprobOllama:
         content = self.contents.pop(0) if self.contents else (top[0][0] if top else "")
         reply = {"message": {"role": "assistant", "content": content}}
         if self.with_logprobs:
-            reply["logprobs"] = [{
-                "token": content,
-                "logprob": top[0][1] if top else 0.0,
-                "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top],
-            }]
+            reply["logprobs"] = [
+                {
+                    "token": content,
+                    "logprob": top[0][1] if top else 0.0,
+                    "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top],
+                }
+            ]
         return reply
 
 
@@ -89,9 +91,17 @@ def test_label_distribution_temperature_flattens():
 
 
 def test_first_token_logprobs_shapes():
-    ollama = {"logprobs": [{"token": "A", "logprob": -0.1, "top_logprobs": [{"token": "A", "logprob": -0.1}]}]}
+    ollama = {
+        "logprobs": [
+            {"token": "A", "logprob": -0.1, "top_logprobs": [{"token": "A", "logprob": -0.1}]}
+        ]
+    }
     assert first_token_logprobs(ollama) == [("A", -0.1)]
-    openai = {"choices": [{"logprobs": {"content": [{"token": "B", "logprob": -0.2, "top_logprobs": []}]}}]}
+    openai = {
+        "choices": [
+            {"logprobs": {"content": [{"token": "B", "logprob": -0.2, "top_logprobs": []}]}}
+        ]
+    }
     assert first_token_logprobs(openai) == [("B", -0.2)]
     assert first_token_logprobs({"message": {"content": "A"}}) is None
 
@@ -236,7 +246,11 @@ def test_ask_yes_no_falls_back_to_json_without_logprobs(monkeypatch):
             self.calls.append(body)
             if body.get("logprobs"):
                 return {"message": {"content": "yes"}}  # old Ollama: no logprobs field
-            return {"message": {"content": '{"answer": "yes", "confidence": 0.9, "evidence_type": "visual", "evidence": "green"}'}}
+            return {
+                "message": {
+                    "content": '{"answer": "yes", "confidence": 0.9, "evidence_type": "visual", "evidence": "green"}'
+                }
+            }
 
     fake = Fallback()
     res = Gemma3Grounder(client=GemmaClient(transport=fake)).ask_yes_no(IMG, "Is it green?")

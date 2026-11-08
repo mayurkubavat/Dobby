@@ -1,5 +1,4 @@
-"""
-Jev-style typed decisions from a local Gemma model.
+"""Jev-style typed decisions from a local Gemma model.
 
 Instead of letting Gemma write an answer, the decider shows a closed list of
 labelled options, asks for one token, and reads the probability Gemma gives
@@ -26,8 +25,9 @@ from __future__ import annotations
 import math
 import re
 import time
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any
 
 from dobby.gemma.client import GemmaClient, GemmaError
 
@@ -51,8 +51,8 @@ NOUL_SYSTEM = (
 class Decision:
     """A typed answer with its probability distribution."""
 
-    options: Tuple[str, ...]
-    probabilities: Tuple[float, ...]
+    options: tuple[str, ...]
+    probabilities: tuple[float, ...]
     calibrated: bool  # True when read from logprobs, False for a generated fallback
     coverage: float  # probability mass that landed on a valid label, 0..1
     latency_ms: float = 0.0
@@ -84,7 +84,7 @@ class Decision:
     def is_none(self) -> bool:
         return self.choice == NONE_OPTION
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "choice": self.choice,
             "p": round(self.p, 4),
@@ -113,7 +113,7 @@ class Noul:
     def confidence(self) -> float:
         return abs(2.0 * self.p_true - 1.0)
 
-    def answer(self, yes_at: float = 0.7, no_at: float = 0.3) -> Optional[bool]:
+    def answer(self, yes_at: float = 0.7, no_at: float = 0.3) -> bool | None:
         """True / False outside the band, None (unsure) inside it."""
         if self.p_true >= yes_at:
             return True
@@ -121,7 +121,7 @@ class Noul:
             return False
         return None
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "p_true": round(self.p_true, 4),
             "confidence": round(self.confidence, 4),
@@ -141,7 +141,7 @@ def choice_confidence(probabilities: Sequence[float]) -> float:
     return max(0.0, min(1.0, (p_max - 1.0 / n) / (1.0 - 1.0 / n)))
 
 
-def option_labels(n: int) -> List[str]:
+def option_labels(n: int) -> list[str]:
     if n > MAX_OPTIONS:
         raise ValueError(f"at most {MAX_OPTIONS} options, got {n}; shortlist first")
     return [chr(ord("A") + i) for i in range(n)]
@@ -152,13 +152,12 @@ def _norm_token(token: str) -> str:
 
 
 def label_distribution(
-    top: Iterable[Tuple[str, float]],
+    top: Iterable[tuple[str, float]],
     labels: Sequence[str],
     case_sensitive: bool = True,
     temperature: float = 1.0,
-) -> Tuple[List[float], float]:
-    """
-    Turns first-token alternatives into a distribution over ``labels``.
+) -> tuple[list[float], float]:
+    """Turns first-token alternatives into a distribution over ``labels``.
 
     Tokens are matched after stripping spaces and punctuation (" B", "B.", "B)").
     Variants of the same label add up. Returns ``(probabilities, coverage)``,
@@ -194,7 +193,28 @@ def label_distribution(
 # --------------------------------------------------------------------- shortlist
 
 _WORD = re.compile(r"[a-z0-9]+")
-_STOP = {"the", "a", "an", "to", "of", "in", "on", "and", "or", "for", "with", "my", "this", "that", "it", "is", "click", "open", "press", "button"}
+_STOP = {
+    "the",
+    "a",
+    "an",
+    "to",
+    "of",
+    "in",
+    "on",
+    "and",
+    "or",
+    "for",
+    "with",
+    "my",
+    "this",
+    "that",
+    "it",
+    "is",
+    "click",
+    "open",
+    "press",
+    "button",
+}
 
 
 def _words(text: str) -> set:
@@ -206,7 +226,19 @@ def element_text(el: Any) -> str:
     if isinstance(el, str):
         return el
     if isinstance(el, dict):
-        parts = [el.get(k) for k in ("title", "label", "name", "value", "description", "placeholder", "help", "role")]
+        parts = [
+            el.get(k)
+            for k in (
+                "title",
+                "label",
+                "name",
+                "value",
+                "description",
+                "placeholder",
+                "help",
+                "role",
+            )
+        ]
         return " ".join(str(p) for p in parts if p)
     return str(el)
 
@@ -216,9 +248,8 @@ def shortlist(
     elements: Sequence[Any],
     k: int = 12,
     text: Callable[[Any], str] = element_text,
-) -> List[Any]:
-    """
-    The ``k`` elements whose label words best overlap the goal, best first.
+) -> list[Any]:
+    """The ``k`` elements whose label words best overlap the goal, best first.
 
     Scoring is word overlap (with prefix matches counted half), so it is fast,
     deterministic and needs no model. Elements with no overlap are kept only to
@@ -230,7 +261,10 @@ def shortlist(
         words = _words(text(el))
         exact = len(goal_words & words)
         prefix = sum(
-            1 for g in goal_words - words for w in words if len(g) >= 3 and (w.startswith(g) or g.startswith(w))
+            1
+            for g in goal_words - words
+            for w in words
+            if len(g) >= 3 and (w.startswith(g) or g.startswith(w))
         )
         scored.append((exact + 0.5 * prefix, i, el))
     hits = sorted((s for s in scored if s[0] > 0), key=lambda s: (-s[0], s[1]))
@@ -258,20 +292,21 @@ class GemmaDecider:
     client: GemmaClient
     model: str = "gemma3:4b"
     timeout: float = 25.0
-    temperatures: Dict[str, float] = field(default_factory=dict)  # per question id, from calibration
+    temperatures: dict[str, float] = field(
+        default_factory=dict
+    )  # per question id, from calibration
 
     def choose(
         self,
         state: str,
         question: str,
         options: Sequence[str],
-        images: Optional[List[str]] = None,
+        images: list[str] | None = None,
         add_none: bool = True,
         question_id: str = "choice",
-        system: Optional[str] = None,
+        system: str | None = None,
     ) -> Decision:
-        """
-        Picks one of ``options`` (plus "None of these" when ``add_none``).
+        """Picks one of ``options`` (plus "None of these" when ``add_none``).
 
         ``state`` is the text the decision rests on (goal, window, numbered
         elements); ``images`` are optional base64 crops. Raises
@@ -288,37 +323,53 @@ class GemmaDecider:
         listing = "\n".join(f"{l}. {o}" for l, o in zip(labels, opts))
         user = f"{state.strip()}\n\nQuestion: {question.strip()}\n\nOptions:\n{listing}\n\nAnswer with one letter."
         start = time.perf_counter()
-        reply = self.client.chat_logprobs(self.model, system, user, images=images, timeout=self.timeout)
+        reply = self.client.chat_logprobs(
+            self.model, system, user, images=images, timeout=self.timeout
+        )
         ms = (time.perf_counter() - start) * 1000.0
         top = reply.get("top")
         if top:
-            probs, coverage = label_distribution(top, labels, temperature=self.temperatures.get(question_id, 1.0))
+            probs, coverage = label_distribution(
+                top, labels, temperature=self.temperatures.get(question_id, 1.0)
+            )
             return Decision(tuple(opts), tuple(probs), True, coverage, ms, reply.get("content", ""))
         # No logprobs from this Ollama: use the generated letter, uncalibrated.
         tok = _norm_token(reply.get("content", ""))[:1].upper()
         probs = [1.0 if l == tok else 0.0 for l in labels]
         if not any(probs):
             probs = [1.0 / len(labels)] * len(labels)
-        return Decision(tuple(opts), tuple(probs), False, 1.0 if tok in labels else 0.0, ms,
-                        reply.get("content", ""), source="gemma_generated")
+        return Decision(
+            tuple(opts),
+            tuple(probs),
+            False,
+            1.0 if tok in labels else 0.0,
+            ms,
+            reply.get("content", ""),
+            source="gemma_generated",
+        )
 
     def noul(
         self,
         state: str,
         statement: str,
-        images: Optional[List[str]] = None,
+        images: list[str] | None = None,
         question_id: str = "noul",
         system: str = NOUL_SYSTEM,
     ) -> Noul:
         """Probability that ``statement`` is true given ``state`` (and optional crops)."""
         user = f"{state.strip()}\n\nStatement: {statement.strip()}\n\nIs the statement true? Answer yes or no."
         start = time.perf_counter()
-        reply = self.client.chat_logprobs(self.model, system, user, images=images, timeout=self.timeout)
+        reply = self.client.chat_logprobs(
+            self.model, system, user, images=images, timeout=self.timeout
+        )
         ms = (time.perf_counter() - start) * 1000.0
         top = reply.get("top")
         if top:
             probs, coverage = label_distribution(
-                top, ["yes", "no"], case_sensitive=False, temperature=self.temperatures.get(question_id, 1.0)
+                top,
+                ["yes", "no"],
+                case_sensitive=False,
+                temperature=self.temperatures.get(question_id, 1.0),
             )
             return Noul(probs[0], True, coverage, ms, reply.get("content", ""))
         word = _norm_token(reply.get("content", "")).lower()
@@ -334,9 +385,9 @@ class GemmaDecider:
 __all__ = [
     "NONE_OPTION",
     "Decision",
-    "Noul",
     "GemmaDecider",
     "GemmaError",
+    "Noul",
     "choice_confidence",
     "label_distribution",
     "option_labels",

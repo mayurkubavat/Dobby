@@ -1,5 +1,4 @@
-"""
-Local OCR lane: screen pixels to text lines with boxes, at zero model-token cost.
+"""Local OCR lane: screen pixels to text lines with boxes, at zero model-token cost.
 
 Backends:
 
@@ -25,7 +24,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from PIL import Image
 
@@ -44,13 +43,15 @@ class OCRLine:
     confidence: float
 
     @property
-    def center(self) -> Tuple[int, int]:
+    def center(self) -> tuple[int, int]:
         return (self.x + self.width // 2, self.y + self.height // 2)
 
-    def shifted(self, dx: int, dy: int) -> "OCRLine":
-        return OCRLine(self.text, self.x + dx, self.y + dy, self.width, self.height, self.confidence)
+    def shifted(self, dx: int, dy: int) -> OCRLine:
+        return OCRLine(
+            self.text, self.x + dx, self.y + dy, self.width, self.height, self.confidence
+        )
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "text": self.text,
             "bbox": {"x": self.x, "y": self.y, "width": self.width, "height": self.height},
@@ -83,10 +84,10 @@ class OCREngine:
     def is_available(self) -> bool:
         return False
 
-    def _recognize(self, image: Image.Image) -> List[OCRLine]:  # pragma: no cover - abstract
+    def _recognize(self, image: Image.Image) -> list[OCRLine]:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    def recognize(self, image: Image.Image) -> List[OCRLine]:
+    def recognize(self, image: Image.Image) -> list[OCRLine]:
         """Text lines in ``image`` coordinates. Returns [] on any backend error."""
         if not self.is_available or image.width < 8 or image.height < 8:
             return []
@@ -105,13 +106,14 @@ class NullOCR(OCREngine):
 
 class RapidOCREngine(OCREngine):
     """PP-OCR via rapidocr_onnxruntime (Python <= 3.12, models bundled in the wheel) or
-    rapidocr 3.x + onnxruntime (Python 3.13+, models fetched once on first use)."""
+    rapidocr 3.x + onnxruntime (Python 3.13+, models fetched once on first use).
+    """
 
     name = "rapidocr"
 
     def __init__(self) -> None:
         self._engine = None
-        self._error: Optional[str] = None
+        self._error: str | None = None
         self._lock = threading.Lock()
 
     def _load(self):
@@ -131,7 +133,7 @@ class RapidOCREngine(OCREngine):
     def is_available(self) -> bool:
         return self._load() is not None
 
-    def _recognize(self, image: Image.Image) -> List[OCRLine]:
+    def _recognize(self, image: Image.Image) -> list[OCRLine]:
         import numpy as np
 
         engine = self._load()
@@ -141,12 +143,14 @@ class RapidOCREngine(OCREngine):
             result = out[0]
         else:  # rapidocr 3.x: RapidOCROutput with parallel boxes / txts / scores
             result = zip(out.boxes, out.txts, out.scores) if out.boxes is not None else []
-        lines: List[OCRLine] = []
+        lines: list[OCRLine] = []
         for box, text, score in result or []:
             xs = [p[0] for p in box]
             ys = [p[1] for p in box]
             x0, y0 = int(min(xs)), int(min(ys))
-            lines.append(OCRLine(str(text), x0, y0, int(max(xs)) - x0, int(max(ys)) - y0, float(score)))
+            lines.append(
+                OCRLine(str(text), x0, y0, int(max(xs)) - x0, int(max(ys)) - y0, float(score))
+            )
         return lines
 
 
@@ -157,7 +161,7 @@ class AppleVisionOCR(OCREngine):
 
     def __init__(self) -> None:
         self._mods = None
-        self._error: Optional[str] = None
+        self._error: str | None = None
 
     def _load(self):
         if self._mods is None and self._error is None:
@@ -177,7 +181,7 @@ class AppleVisionOCR(OCREngine):
     def is_available(self) -> bool:
         return self._load() is not None
 
-    def _recognize(self, image: Image.Image) -> List[OCRLine]:
+    def _recognize(self, image: Image.Image) -> list[OCRLine]:
         Vision, NSData = self._load()
         buf = io.BytesIO()
         image.convert("RGB").save(buf, format="PNG")
@@ -193,12 +197,11 @@ class AppleVisionOCR(OCREngine):
         return vision_observations_to_lines(request.results() or [], image.width, image.height)
 
 
-def vision_observations_to_lines(observations, width: int, height: int) -> List[OCRLine]:
-    """
-    Converts VNRecognizedTextObservation results to pixel lines. Vision boxes are
+def vision_observations_to_lines(observations, width: int, height: int) -> list[OCRLine]:
+    """Converts VNRecognizedTextObservation results to pixel lines. Vision boxes are
     normalized 0..1 with the origin at the bottom-left, so y is flipped.
     """
-    lines: List[OCRLine] = []
+    lines: list[OCRLine] = []
     for obs in observations:
         candidates = obs.topCandidates_(1)
         if not candidates:
@@ -220,7 +223,7 @@ class CachedOCR(OCREngine):
         self.inner = inner
         self.name = inner.name
         self.capacity = capacity
-        self._cache: "OrderedDict[Tuple[int, int, int], List[OCRLine]]" = OrderedDict()
+        self._cache: OrderedDict[tuple[int, int, int], list[OCRLine]] = OrderedDict()
         self.hits = 0
         self.calls = 0
         self.total_ms = 0.0
@@ -229,7 +232,7 @@ class CachedOCR(OCREngine):
     def is_available(self) -> bool:
         return self.inner.is_available
 
-    def recognize(self, image: Image.Image) -> List[OCRLine]:
+    def recognize(self, image: Image.Image) -> list[OCRLine]:
         from dobby.vdom.gemma3_sidecar import compute_dhash
 
         if image.width < 8 or image.height < 8:
@@ -249,7 +252,7 @@ class CachedOCR(OCREngine):
             self._cache.popitem(last=False)
         return list(lines)
 
-    def diagnostics(self) -> Dict[str, Any]:
+    def diagnostics(self) -> dict[str, Any]:
         return {
             "engine": self.name,
             "available": self.is_available,
@@ -260,7 +263,7 @@ class CachedOCR(OCREngine):
         }
 
 
-def get_ocr_engine(kind: Optional[str] = None) -> CachedOCR:
+def get_ocr_engine(kind: str | None = None) -> CachedOCR:
     """Builds the configured OCR engine. "auto": Apple Vision on macOS, else RapidOCR."""
     kind = (kind or CONFIG.ocr_engine or "auto").lower()
     if kind == "auto":
@@ -276,11 +279,10 @@ def get_ocr_engine(kind: Optional[str] = None) -> CachedOCR:
 
 
 def assign_text_to_boxes(
-    proposals: List[Dict[str, Any]],
-    lines: List[OCRLine],
+    proposals: list[dict[str, Any]],
+    lines: list[OCRLine],
 ) -> int:
-    """
-    Gives each detector proposal with empty text the OCR line whose center lies
+    """Gives each detector proposal with empty text the OCR line whose center lies
     inside it (largest overlap first). Returns how many proposals were named.
     Both lists must be in the same coordinate space.
     """
@@ -290,8 +292,10 @@ def assign_text_to_boxes(
             continue
         b = p["bbox"]
         inside = [
-            ln for ln in lines
-            if b["x"] <= ln.center[0] <= b["x"] + b["width"] and b["y"] <= ln.center[1] <= b["y"] + b["height"]
+            ln
+            for ln in lines
+            if b["x"] <= ln.center[0] <= b["x"] + b["width"]
+            and b["y"] <= ln.center[1] <= b["y"] + b["height"]
         ]
         if inside:
             inside.sort(key=lambda ln: (ln.y, ln.x))

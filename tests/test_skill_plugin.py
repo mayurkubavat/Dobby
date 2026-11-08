@@ -32,8 +32,15 @@ def test_manifests_are_valid():
 def test_every_skill_has_frontmatter_and_existing_references():
     skills = sorted(p for p in SKILLS.iterdir() if p.is_dir())
     assert {p.name for p in skills} >= {
-        "orchestrator", "perception", "skill-crafting", "eval", "troubleshoot",
-        "app-claude", "app-chrome", "app-vivado", "app-verdi",
+        "orchestrator",
+        "perception",
+        "skill-crafting",
+        "eval",
+        "troubleshoot",
+        "app-claude",
+        "app-chrome",
+        "app-vivado",
+        "app-verdi",
     }
     for skill in skills:
         text = (skill / "SKILL.md").read_text(encoding="utf-8")
@@ -41,7 +48,9 @@ def test_every_skill_has_frontmatter_and_existing_references():
         assert meta.get("name") == skill.name
         assert 20 < len(meta.get("description", "")) <= 1024
         for ref in re.findall(r"`references/([\w.-]+\.md)`", text):
-            assert (skill / "references" / ref).is_file(), f"{skill.name} cites missing references/{ref}"
+            assert (skill / "references" / ref).is_file(), (
+                f"{skill.name} cites missing references/{ref}"
+            )
 
 
 def test_skills_only_name_tools_the_server_has():
@@ -57,6 +66,8 @@ def test_skills_only_name_tools_the_server_has():
 def test_generated_references_are_current():
     proc = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "build_skill_refs.py"), "--check"],
-        capture_output=True, text=True, cwd=ROOT,
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr

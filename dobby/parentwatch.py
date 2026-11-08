@@ -10,20 +10,24 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from dobby.control.lease import pid_alive
 
 
-def parent_gone(parent: int, current: Optional[int] = None, alive: Callable[[int], bool] = pid_alive) -> bool:
+def parent_gone(
+    parent: int, current: int | None = None, alive: Callable[[int], bool] = pid_alive
+) -> bool:
     current = os.getppid() if current is None else current
     return current != parent or not alive(parent)
 
 
-def watch_parent(on_orphan: Callable[[], None], interval: float = 2.0,
-                 parent: Optional[int] = None) -> Optional[threading.Thread]:
+def watch_parent(
+    on_orphan: Callable[[], None], interval: float = 2.0, parent: int | None = None
+) -> threading.Thread | None:
     """Start a daemon thread that calls ``on_orphan`` once the parent is gone.
-    Returns None when there is no real parent to watch (already orphaned, or pid 1)."""
+    Returns None when there is no real parent to watch (already orphaned, or pid 1).
+    """
     parent = os.getppid() if parent is None else parent
     if parent <= 1:
         return None

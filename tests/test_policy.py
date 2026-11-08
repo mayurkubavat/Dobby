@@ -48,7 +48,9 @@ def test_policy_is_reread_when_the_file_changes(tmp_path, monkeypatch):
     assert policy.current().tool_allowed("a") and not policy.current().tool_allowed("b")
 
 
-@pytest.mark.parametrize("raw", ["{not json", "[1, 2]", '{"mode": "fast"}', '{"apps": {"Slack": "write"}}'])
+@pytest.mark.parametrize(
+    "raw", ["{not json", "[1, 2]", '{"mode": "fast"}', '{"apps": {"Slack": "write"}}']
+)
 def test_broken_policy_fails_closed(tmp_path, monkeypatch, raw):
     _write(tmp_path, monkeypatch, None, raw=raw)
     p = policy.current()
@@ -171,7 +173,9 @@ def test_app_default_applies_to_unlisted_apps(tmp_path, monkeypatch):
         grants.check("Notes", "click", _never_asked)
 
 
-def test_without_an_overlay_the_policy_still_holds_and_questions_are_denied(tmp_path, monkeypatch, mock_hal):
+def test_without_an_overlay_the_policy_still_holds_and_questions_are_denied(
+    tmp_path, monkeypatch, mock_hal
+):
     from dobby.overlay import NullOverlay, OverlayDenied
 
     assert wrap_hal(mock_hal, overlay=NullOverlay()) is mock_hal  # no policy: unchanged

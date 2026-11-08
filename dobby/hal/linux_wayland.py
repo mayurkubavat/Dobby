@@ -8,14 +8,12 @@ Operations fail closed. XWayland sessions keep using the X11 driver.
 from __future__ import annotations
 
 import os
-from typing import List, Optional, Tuple
 
 from PIL import Image
 
 from dobby.hal.base import IDesktopHAL
 from dobby.hal.errors import CapabilityUnavailable
 from dobby.types import WindowInfo
-
 
 _MSG = (
     "No X11 display: native Wayland capture and input are not supported yet, "
@@ -32,15 +30,15 @@ class WaylandHAL(IDesktopHAL):
     def _unavailable(self) -> None:
         raise CapabilityUnavailable(_MSG)
 
-    def get_screen_size(self) -> Tuple[int, int]:
+    def get_screen_size(self) -> tuple[int, int]:
         self._unavailable()
         return (0, 0)
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Image.Image:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
         self._unavailable()
         return Image.new("RGB", (1, 1))
 
-    def get_cursor_position(self) -> Tuple[int, int]:
+    def get_cursor_position(self) -> tuple[int, int]:
         self._unavailable()
         return (0, 0)
 
@@ -64,14 +62,14 @@ class WaylandHAL(IDesktopHAL):
     def keyboard_press_key(self, key_name: str) -> None:
         self._unavailable()
 
-    def keyboard_hotkey(self, keys: List[str]) -> None:
+    def keyboard_hotkey(self, keys: list[str]) -> None:
         self._unavailable()
 
-    def list_windows(self) -> List[WindowInfo]:
+    def list_windows(self) -> list[WindowInfo]:
         self._unavailable()
         return []
 
-    def get_active_window(self) -> Optional[WindowInfo]:
+    def get_active_window(self) -> WindowInfo | None:
         self._unavailable()
         return None
 

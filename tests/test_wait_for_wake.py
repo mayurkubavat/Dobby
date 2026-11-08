@@ -49,7 +49,12 @@ class FakeOverlay(NullOverlay):
 
     def __init__(self, result=None, block=False):
         self.calls = []
-        self.result = result or {"woken": True, "stopped": False, "timed_out": False, "waited_s": 1.0}
+        self.result = result or {
+            "woken": True,
+            "stopped": False,
+            "timed_out": False,
+            "waited_s": 1.0,
+        }
         self.block = block
         self.cancel = None
 
@@ -58,7 +63,13 @@ class FakeOverlay(NullOverlay):
         self.cancel = cancel
         if self.block:
             assert cancel is not None and cancel.wait(10)
-            return {"woken": False, "stopped": False, "timed_out": False, "waited_s": 0.1, "cancelled": True}
+            return {
+                "woken": False,
+                "stopped": False,
+                "timed_out": False,
+                "waited_s": 0.1,
+                "cancelled": True,
+            }
         return dict(self.result)
 
 
@@ -78,7 +89,9 @@ def server(monkeypatch):
     monkeypatch.setattr(srv, "_control_or_none", lambda: ctl)
 
     def install(overlay):
-        monkeypatch.setattr(srv, "hal", OverlayHAL(object(), overlay) if overlay is not None else object())
+        monkeypatch.setattr(
+            srv, "hal", OverlayHAL(object(), overlay) if overlay is not None else object()
+        )
 
     srv.fake_ctl = ctl
     return srv, install
@@ -113,11 +126,23 @@ def test_tool_caps_the_timeout(server):
     assert [c[0] for c in ov.calls] == [srv.WAIT_FOR_WAKE_CAP_S, 0.0]
 
 
-@pytest.mark.parametrize("result,word", [
-    ({"woken": False, "stopped": True, "timed_out": False, "waited_s": 2.0}, "Stop"),
-    ({"woken": False, "stopped": False, "timed_out": True, "waited_s": 600.0}, "again"),
-    ({"woken": False, "stopped": False, "timed_out": False, "waited_s": 0.0, "unavailable": True}, "End your turn"),
-])
+@pytest.mark.parametrize(
+    "result,word",
+    [
+        ({"woken": False, "stopped": True, "timed_out": False, "waited_s": 2.0}, "Stop"),
+        ({"woken": False, "stopped": False, "timed_out": True, "waited_s": 600.0}, "again"),
+        (
+            {
+                "woken": False,
+                "stopped": False,
+                "timed_out": False,
+                "waited_s": 0.0,
+                "unavailable": True,
+            },
+            "End your turn",
+        ),
+    ],
+)
 def test_tool_explains_each_outcome(server, result, word):
     srv, install = server
     install(FakeOverlay(result))

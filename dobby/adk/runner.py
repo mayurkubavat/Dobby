@@ -17,13 +17,13 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator, Dict, List, Optional
-
-from pydantic import ConfigDict
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from google.adk.agents import BaseAgent
 from google.adk.events import Event, EventActions
 from google.genai import types
+from pydantic import ConfigDict
 
 from dobby.adk.backends import DesktopBackend
 from dobby.adk.judges import Verdict, make_triage, make_verifier
@@ -36,13 +36,13 @@ MAX_OBS_LINES = 60
 MAX_AX_NODES = 40
 
 
-def _lines(ocr: Any) -> List[str]:
+def _lines(ocr: Any) -> list[str]:
     if isinstance(ocr, dict):
         return [str(b.get("text", "")) for b in ocr.get("lines", []) if b.get("text")]
     return []
 
 
-def _nodes(ax: Any) -> List[Dict[str, Any]]:
+def _nodes(ax: Any) -> list[dict[str, Any]]:
     if isinstance(ax, dict):
         ax = ax.get("nodes", [])
     return [n for n in (ax or []) if isinstance(n, dict)]
@@ -56,23 +56,28 @@ def _short(result: Any) -> Any:
 
 
 class Observation:
-    def __init__(self, ocr_lines: List[str], nodes: List[Dict[str, Any]]) -> None:
+    def __init__(self, ocr_lines: list[str], nodes: list[dict[str, Any]]) -> None:
         self.ocr_lines = ocr_lines
         self.nodes = nodes
 
     @property
-    def dialogs(self) -> List[str]:
+    def dialogs(self) -> list[str]:
         return [str(n.get("name") or "dialog") for n in self.nodes if n.get("role") == "dialog"]
 
     @property
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         return [str(n.get("name")) for n in self.nodes if n.get("name")]
 
     def as_text(self) -> str:
         ocr = "\n".join(f"- {t}" for t in self.ocr_lines[:MAX_OBS_LINES]) or "(none)"
-        ax = "\n".join(
-            f"- {n.get('role', '?')}: {n.get('name', '')}" for n in self.nodes[:MAX_AX_NODES] if n.get("name")
-        ) or "(none)"
+        ax = (
+            "\n".join(
+                f"- {n.get('role', '?')}: {n.get('name', '')}"
+                for n in self.nodes[:MAX_AX_NODES]
+                if n.get("name")
+            )
+            or "(none)"
+        )
         return f"Text on screen:\n{ocr}\n\nAccessible elements:\n{ax}"
 
 
@@ -95,12 +100,17 @@ class DesktopPlanAgent(BaseAgent):
             ax = []
         return Observation(_lines(ocr), _nodes(ax))
 
-    async def _judge(self, agent: Any, ctx: Any, key: str, text: str, out: Dict[str, Any]) -> AsyncGenerator[Event, None]:
+    async def _judge(
+        self, agent: Any, ctx: Any, key: str, text: str, out: dict[str, Any]
+    ) -> AsyncGenerator[Event, None]:
         """Runs a judge sub-agent, yielding its events; ``out["value"]`` gets its output dict or None.
 
         Events are yielded as they come so the runner applies their state (input, output_key).
         """
-        yield Event(author=self.name, actions=EventActions(state_delta={f"{agent.name}_input": text, key: None}))
+        yield Event(
+            author=self.name,
+            actions=EventActions(state_delta={f"{agent.name}_input": text, key: None}),
+        )
         try:
             async for ev in agent.run_async(ctx):
                 yield ev
@@ -110,7 +120,9 @@ class DesktopPlanAgent(BaseAgent):
         value = ctx.session.state.get(key)
         out["value"] = value if isinstance(value, dict) else None
 
-    async def _check(self, step: Step, obs: Observation, ctx: Any, out: Dict[str, Any]) -> AsyncGenerator[Event, None]:
+    async def _check(
+        self, step: Step, obs: Observation, ctx: Any, out: dict[str, Any]
+    ) -> AsyncGenerator[Event, None]:
         """Checks ``step.expect`` against ``obs``; ``out["value"]`` gets {status, tier, ...}."""
         exp = step.expect
         if exp.empty:
@@ -120,18 +132,32 @@ class DesktopPlanAgent(BaseAgent):
         missing = [t for t in exp.text if not text_matches(t, screen)]
         present = [t for t in exp.text_absent if text_matches(t, screen)]
         if present:
-            out["value"] = {"status": "failed", "tier": "ocr", "detail": f"unwanted text on screen: {present}"}
+            out["value"] = {
+                "status": "failed",
+                "tier": "ocr",
+                "detail": f"unwanted text on screen: {present}",
+            }
             return
         if exp.text and not missing:
             out["value"] = {"status": "passed", "tier": "ocr", "detail": f"found {exp.text}"}
             return
         if not exp.question:
-            out["value"] = {"status": "unsure", "tier": "ocr", "detail": f"text not found: {missing}"}
+            out["value"] = {
+                "status": "unsure",
+                "tier": "ocr",
+                "detail": f"text not found: {missing}",
+            }
             return
 
-        want = exp.question if not exp.text else f"{exp.question} (expected text: {', '.join(exp.text)})"
-        holder: Dict[str, Any] = {}
-        async for ev in self._judge(self.verifier, ctx, "verdict", f"Expected outcome: {want}\n\n{obs.as_text()}", holder):
+        want = (
+            exp.question
+            if not exp.text
+            else f"{exp.question} (expected text: {', '.join(exp.text)})"
+        )
+        holder: dict[str, Any] = {}
+        async for ev in self._judge(
+            self.verifier, ctx, "verdict", f"Expected outcome: {want}\n\n{obs.as_text()}", holder
+        ):
             yield ev
         raw = holder.get("value")
         verdict = None
@@ -143,7 +169,9 @@ class DesktopPlanAgent(BaseAgent):
         bar = CONFIG.gemma3_visual_min_confidence
         if verdict is not None:
             v = verdict.model_dump()
-            grounded = bool(verdict.evidence) and evidence_in_ocr(verdict.evidence, obs.ocr_lines + obs.names)
+            grounded = bool(verdict.evidence) and evidence_in_ocr(
+                verdict.evidence, obs.ocr_lines + obs.names
+            )
             if verdict.outcome == "pass" and verdict.confidence >= bar and grounded:
                 out["value"] = {"status": "passed", "tier": "gemma_text", "verdict": v}
                 return
@@ -158,24 +186,44 @@ class DesktopPlanAgent(BaseAgent):
         seen = await self.backend.call("ask_screen", {"question": exp.question})
         seen = seen if isinstance(seen, dict) else {}
         ans, conf = seen.get("answer"), float(seen.get("confidence") or 0.0)
-        looked = {"answer": ans, "confidence": conf, "evidence": seen.get("evidence"), "source": seen.get("source")}
+        looked = {
+            "answer": ans,
+            "confidence": conf,
+            "evidence": seen.get("evidence"),
+            "source": seen.get("source"),
+        }
         if ans is True and conf >= bar:
-            out["value"] = {"status": "passed", "tier": "gemma_vision", "verdict": v, "ask_screen": looked}
+            out["value"] = {
+                "status": "passed",
+                "tier": "gemma_vision",
+                "verdict": v,
+                "ask_screen": looked,
+            }
         elif ans is False and conf >= bar:
-            out["value"] = {"status": "failed", "tier": "gemma_vision", "verdict": v, "ask_screen": looked}
+            out["value"] = {
+                "status": "failed",
+                "tier": "gemma_vision",
+                "verdict": v,
+                "ask_screen": looked,
+            }
         else:
-            out["value"] = {"status": "unsure", "tier": "gemma_vision", "verdict": v, "ask_screen": looked}
+            out["value"] = {
+                "status": "unsure",
+                "tier": "gemma_vision",
+                "verdict": v,
+                "ask_screen": looked,
+            }
 
     async def _run_async_impl(self, ctx: Any) -> AsyncGenerator[Event, None]:
         sleep = self.sleep or asyncio.sleep
-        report: Dict[str, Any] = {"plan": self.plan.name, "status": "running", "steps": []}
+        report: dict[str, Any] = {"plan": self.plan.name, "status": "running", "steps": []}
         await self.backend.enable(self.plan.domains)
         before = await self._observe()
 
         for step in self.plan.steps:
             t0 = time.monotonic()
-            row: Dict[str, Any] = {"id": step.id, "tool": step.tool}
-            obs: Optional[Observation] = None
+            row: dict[str, Any] = {"id": step.id, "tool": step.tool}
+            obs: Observation | None = None
             result = await self.backend.call(step.tool, step.args)
             row["tool_result"] = _short(result)
             if isinstance(result, dict) and result.get("success") is False:
@@ -187,14 +235,24 @@ class DesktopPlanAgent(BaseAgent):
                     row["attempts"] = attempt + 1
                     new = [d for d in obs.dialogs if d not in before.dialogs]
                     if new and not step.expect.allow_dialog:
-                        holder: Dict[str, Any] = {}
-                        async for ev in self._judge(self.triage, ctx, "triage", f"Dialog: {new[0]}\n\n{obs.as_text()}", holder):
+                        holder: dict[str, Any] = {}
+                        async for ev in self._judge(
+                            self.triage,
+                            ctx,
+                            "triage",
+                            f"Dialog: {new[0]}\n\n{obs.as_text()}",
+                            holder,
+                        ):
                             yield ev
                         tri = holder.get("value")
                         row["dialog"] = {"name": new[0], "triage": tri}
                         tier = (tri or {}).get("risk_tier")
                         if tier not in ("BENIGN_DISMISSIBLE", "INFORMATIVE_ACK"):
-                            row.update(status="failed", tier="dialog", detail=f"unexpected dialog '{new[0]}' ({tier})")
+                            row.update(
+                                status="failed",
+                                tier="dialog",
+                                detail=f"unexpected dialog '{new[0]}' ({tier})",
+                            )
                             break
                     holder = {}
                     async for ev in self._check(step, obs, ctx, holder):
@@ -210,23 +268,35 @@ class DesktopPlanAgent(BaseAgent):
             report["steps"].append(row)
             yield Event(
                 author=self.name,
-                content=types.Content(role="model", parts=[types.Part(text=f"{step.id} {step.tool}: {row.get('status')} ({row.get('tier')})")]),
+                content=types.Content(
+                    role="model",
+                    parts=[
+                        types.Part(
+                            text=f"{step.id} {step.tool}: {row.get('status')} ({row.get('tier')})"
+                        )
+                    ],
+                ),
                 actions=EventActions(state_delta={"report": report}),
             )
             if row.get("status") != "passed":
                 report.update(
                     status="escalated",
                     stopped_at=step.id,
-                    reason=row.get("detail") or f"step {step.id} not verified ({row.get('status')})",
+                    reason=row.get("detail")
+                    or f"step {step.id} not verified ({row.get('status')})",
                     observation=obs.as_text() if obs is not None else None,
                 )
                 break
         else:
             report["status"] = "done"
-        yield Event(author=self.name, actions=EventActions(state_delta={"report": report}, escalate=True))
+        yield Event(
+            author=self.name, actions=EventActions(state_delta={"report": report}, escalate=True)
+        )
 
 
-async def run_plan(plan: Plan, backend: DesktopBackend, model: Any, sleep: Any = None) -> Dict[str, Any]:
+async def run_plan(
+    plan: Plan, backend: DesktopBackend, model: Any, sleep: Any = None
+) -> dict[str, Any]:
     """Runs ``plan`` and returns the report dict."""
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService

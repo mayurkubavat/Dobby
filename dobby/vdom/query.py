@@ -1,5 +1,4 @@
-"""
-Zero-Token Spatial & Semantic Query Engine for Virtual DOM (vDOM).
+"""Zero-Token Spatial & Semantic Query Engine for Virtual DOM (vDOM).
 
 Allows the agent to address UI elements without visual context via CSS-like
 selectors and topological spatial constraints (below, above, right_of, left_of, inside, near).
@@ -7,33 +6,29 @@ selectors and topological spatial constraints (below, above, right_of, left_of, 
 
 import math
 import re
-from typing import List, Optional, Tuple
 
 from dobby.types import (
     BoundingBox,
+    UIRole,
     VDOMNode,
     VirtualDOMSnapshot,
-    UIRole,
 )
 
 
 class VDOMQueryEngine:
-    """
-    Evaluates spatial and semantic queries against an in-memory VirtualDOMSnapshot with 0 visual tokens.
-    """
+    """Evaluates spatial and semantic queries against an in-memory VirtualDOMSnapshot with 0 visual tokens."""
 
     def __init__(self, snapshot: VirtualDOMSnapshot) -> None:
         self.snapshot = snapshot
         self.nodes = list(snapshot.nodes.values())
 
-    def query_selector(self, selector: str, limit: int = 10) -> List[VDOMNode]:
-        """
-        Parses composite CSS-like spatial selectors:
-          - 'push_button[name*="Run Synthesis"]:enabled'
-          - 'text_input:right_of("Period (ns):")'
-          - 'waveform_signal[name="clk_div2"]:inside("Waveform")'
-          - 'push_button:below("Summary"):enabled'
-          - '#vdom_0142'
+    def query_selector(self, selector: str, limit: int = 10) -> list[VDOMNode]:
+        """Parses composite CSS-like spatial selectors:
+        - 'push_button[name*="Run Synthesis"]:enabled'
+        - 'text_input:right_of("Period (ns):")'
+        - 'waveform_signal[name="clk_div2"]:inside("Waveform")'
+        - 'push_button:below("Summary"):enabled'
+        - '#vdom_0142'
         """
         clean_sel = selector.strip()
 
@@ -45,7 +40,7 @@ class VDOMQueryEngine:
 
         # Role extract (leading identifier, e.g. 'push_button' or ':sash_divider')
         role_match = re.match(r"^:?([a-z_]+)", clean_sel)
-        role: Optional[UIRole] = None
+        role: UIRole | None = None
         if role_match:
             cand = role_match.group(1).lower()
             try:
@@ -55,7 +50,7 @@ class VDOMQueryEngine:
 
         # Name extract: [name*="..."] or [name="..."]
         name_match = re.search(r'\[name(\*?)=["\']([^"\']+)["\']\]', clean_sel)
-        text_regex: Optional[str] = None
+        text_regex: str | None = None
         exact_name: bool = False
         if name_match:
             exact_name = name_match.group(1) != "*"
@@ -63,7 +58,9 @@ class VDOMQueryEngine:
             text_regex = f"^{re.escape(val)}$" if exact_name else re.escape(val)
 
         # State extract: :enabled, :focused, :checked, :expanded
-        state_match = re.search(r":(enabled|focused|checked|expanded|visible)\b", clean_sel, re.IGNORECASE)
+        state_match = re.search(
+            r":(enabled|focused|checked|expanded|visible)\b", clean_sel, re.IGNORECASE
+        )
         state = state_match.group(1).upper() if state_match else None
 
         # Spatial constraints
@@ -90,18 +87,18 @@ class VDOMQueryEngine:
 
     def find_elements(
         self,
-        role: Optional[UIRole] = None,
-        text_regex: Optional[str] = None,
-        state: Optional[str] = None,
-        below_text: Optional[str] = None,
-        above_text: Optional[str] = None,
-        right_of_text: Optional[str] = None,
-        left_of_text: Optional[str] = None,
-        inside_text: Optional[str] = None,
-        near_text: Optional[str] = None,
+        role: UIRole | None = None,
+        text_regex: str | None = None,
+        state: str | None = None,
+        below_text: str | None = None,
+        above_text: str | None = None,
+        right_of_text: str | None = None,
+        left_of_text: str | None = None,
+        inside_text: str | None = None,
+        near_text: str | None = None,
         near_max_dist: int = 150,
         limit: int = 10,
-    ) -> List[VDOMNode]:
+    ) -> list[VDOMNode]:
         """Multi-constraint filtering and spatial sorting over vDOM nodes."""
         candidates = list(self.nodes)
 
@@ -114,8 +111,7 @@ class VDOMQueryEngine:
         if text_regex:
             pat = re.compile(text_regex, re.IGNORECASE)
             candidates = [
-                n for n in candidates
-                if pat.search(n.name) or (n.value and pat.search(n.value))
+                n for n in candidates if pat.search(n.name) or (n.value and pat.search(n.value))
             ]
 
         # Spatial: inside container
@@ -123,7 +119,8 @@ class VDOMQueryEngine:
             anchor = self._find_best_anchor(inside_text)
             if anchor:
                 candidates = [
-                    n for n in candidates
+                    n
+                    for n in candidates
                     if anchor.bbox.containment_ratio(n.bbox) >= 0.70 and n.node_id != anchor.node_id
                 ]
 
@@ -133,7 +130,8 @@ class VDOMQueryEngine:
             if anchor:
                 anchor_bottom = anchor.bbox.bottom
                 candidates = [
-                    n for n in candidates
+                    n
+                    for n in candidates
                     if n.bbox.y >= (anchor_bottom - 4)
                     and self._horizontal_overlap(anchor.bbox, n.bbox) > 0
                 ]
@@ -145,7 +143,8 @@ class VDOMQueryEngine:
             if anchor:
                 anchor_top = anchor.bbox.y
                 candidates = [
-                    n for n in candidates
+                    n
+                    for n in candidates
                     if n.bbox.bottom <= (anchor_top + 4)
                     and self._horizontal_overlap(anchor.bbox, n.bbox) > 0
                 ]
@@ -157,7 +156,8 @@ class VDOMQueryEngine:
             if anchor:
                 anchor_right = anchor.bbox.right
                 candidates = [
-                    n for n in candidates
+                    n
+                    for n in candidates
                     if n.bbox.x >= (anchor_right - 4)
                     and self._vertical_overlap(anchor.bbox, n.bbox) > 0
                 ]
@@ -169,7 +169,8 @@ class VDOMQueryEngine:
             if anchor:
                 anchor_left = anchor.bbox.x
                 candidates = [
-                    n for n in candidates
+                    n
+                    for n in candidates
                     if n.bbox.right <= (anchor_left + 4)
                     and self._vertical_overlap(anchor.bbox, n.bbox) > 0
                 ]
@@ -193,7 +194,7 @@ class VDOMQueryEngine:
 
         return candidates[:limit]
 
-    def _find_best_anchor(self, text: str) -> Optional[VDOMNode]:
+    def _find_best_anchor(self, text: str) -> VDOMNode | None:
         """Finds closest node matching text anchor for relative spatial queries."""
         # Check node_id first
         if text in self.snapshot.nodes:

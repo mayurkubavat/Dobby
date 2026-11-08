@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,13 +17,15 @@ class Verdict(BaseModel):
 
 
 class DialogTriage(BaseModel):
-    risk_tier: Literal["BENIGN_DISMISSIBLE", "INFORMATIVE_ACK", "WORKFLOW_BRANCHING", "DESTRUCTIVE_OR_SYSTEM"]
-    suggested_button: Optional[str] = None
+    risk_tier: Literal[
+        "BENIGN_DISMISSIBLE", "INFORMATIVE_ACK", "WORKFLOW_BRANCHING", "DESTRUCTIVE_OR_SYSTEM"
+    ]
+    suggested_button: str | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str = ""
 
 
-def gemma_model(model: Optional[str] = None, api_base: Optional[str] = None) -> Any:
+def gemma_model(model: str | None = None, api_base: str | None = None) -> Any:
     """ADK model object for local Gemma on Ollama (via LiteLLM)."""
     from google.adk.models.lite_llm import LiteLlm
 

@@ -1,5 +1,4 @@
-"""
-Minimal, dependency-free client for local Gemma models served by Ollama.
+"""Minimal, dependency-free client for local Gemma models served by Ollama.
 
 Every call goes to ``/api/chat`` with ``format`` set to a JSON schema, so the
 reply is constrained to that schema and always parses. Model availability is
@@ -21,15 +20,16 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set
+from typing import Any
 
 from PIL import Image
 
 logger = logging.getLogger(__name__)
 
 # (method, url, json_body_or_None, timeout_seconds) -> parsed JSON response
-Transport = Callable[[str, str, Optional[Dict[str, Any]], float], Dict[str, Any]]
+Transport = Callable[[str, str, dict[str, Any] | None, float], dict[str, Any]]
 
 _LEGACY_SUFFIXES = ("/api/generate", "/api/chat", "/api/tags", "/api")
 
@@ -55,7 +55,9 @@ def encode_image(image: Image.Image, quality: int = 90) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def _urllib_transport(method: str, url: str, body: Optional[Dict[str, Any]], timeout: float) -> Dict[str, Any]:
+def _urllib_transport(
+    method: str, url: str, body: dict[str, Any] | None, timeout: float
+) -> dict[str, Any]:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(
         url,
@@ -75,9 +77,8 @@ def _model_matches(wanted: str, installed: Iterable[str]) -> bool:
     return any(name in candidates for name in installed)
 
 
-def first_token_logprobs(raw: Dict[str, Any]) -> Optional[List[tuple]]:
-    """
-    The first generated token's alternatives as ``[(token, logprob), ...]``.
+def first_token_logprobs(raw: dict[str, Any]) -> list[tuple] | None:
+    """The first generated token's alternatives as ``[(token, logprob), ...]``.
 
     Reads Ollama's ``logprobs`` list (``[{token, logprob, top_logprobs: [...]}, ...]``)
     and, for OpenAI-compatible servers, ``choices[0].logprobs.content``. Returns
@@ -95,7 +96,7 @@ def first_token_logprobs(raw: Dict[str, Any]) -> Optional[List[tuple]]:
         return None
     first = entries[0] if isinstance(entries[0], dict) else {}
     alts = first.get("top_logprobs") or []
-    out: List[tuple] = []
+    out: list[tuple] = []
     for alt in alts:
         if isinstance(alt, dict) and "token" in alt and "logprob" in alt:
             try:
@@ -122,10 +123,10 @@ class GemmaStats:
     calls: int = 0
     errors: int = 0
     total_ms: float = 0.0
-    last_error: Optional[str] = None
-    per_model: Dict[str, _ModelStats] = field(default_factory=dict)
+    last_error: str | None = None
+    per_model: dict[str, _ModelStats] = field(default_factory=dict)
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         ok = self.calls - self.errors
         return {
             "calls": self.calls,
@@ -151,26 +152,30 @@ class GemmaClient:
         self,
         base_url: str = "http://127.0.0.1:11434",
         timeout: float = 25.0,
-        keep_alive: Optional[str] = "10m",
+        keep_alive: str | None = "10m",
         availability_ttl: float = 30.0,
-        transport: Optional[Transport] = None,
+        transport: Transport | None = None,
     ) -> None:
         self.base_url = normalize_base_url(base_url)
         self.timeout = timeout
         self.keep_alive = keep_alive
         self.availability_ttl = availability_ttl
         self._transport: Transport = transport or _urllib_transport
-        self._models: Optional[Set[str]] = None
+        self._models: set[str] | None = None
         self._models_at: float = 0.0
         self._lock = threading.Lock()
         self._stats = GemmaStats()
 
     # ------------------------------------------------------------------ models
 
-    def installed_models(self, refresh: bool = False) -> Set[str]:
+    def installed_models(self, refresh: bool = False) -> set[str]:
         """Names reported by ``/api/tags``; empty when Ollama is unreachable."""
         now = time.monotonic()
-        if not refresh and self._models is not None and now - self._models_at < self.availability_ttl:
+        if (
+            not refresh
+            and self._models is not None
+            and now - self._models_at < self.availability_ttl
+        ):
             return self._models
         try:
             data = self._transport("GET", f"{self.base_url}/api/tags", None, 2.0)
@@ -195,23 +200,22 @@ class GemmaClient:
         model: str,
         system: str,
         user: str,
-        schema: Dict[str, Any],
-        images: Optional[List[str]] = None,
-        timeout: Optional[float] = None,
+        schema: dict[str, Any],
+        images: list[str] | None = None,
+        timeout: float | None = None,
         temperature: float = 0.0,
-        max_tokens: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """
-        Sends one chat turn and returns the reply parsed as a JSON object.
+        max_tokens: int | None = None,
+    ) -> dict[str, Any]:
+        """Sends one chat turn and returns the reply parsed as a JSON object.
 
         ``images`` are base64 strings (see :func:`encode_image`). Raises
         :class:`GemmaError` on transport errors, a missing model, or a reply
         that is not a JSON object.
         """
-        user_msg: Dict[str, Any] = {"role": "user", "content": user}
+        user_msg: dict[str, Any] = {"role": "user", "content": user}
         if images:
             user_msg["images"] = list(images)
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [{"role": "system", "content": system}, user_msg],
             "format": schema,
@@ -224,11 +228,13 @@ class GemmaClient:
             payload["keep_alive"] = self.keep_alive
 
         start = time.perf_counter()
-        error: Optional[str] = None
+        error: str | None = None
         try:
             if not self.has_model(model):
                 raise GemmaError(f"model '{model}' is not installed in Ollama at {self.base_url}")
-            raw = self._transport("POST", f"{self.base_url}/api/chat", payload, timeout or self.timeout)
+            raw = self._transport(
+                "POST", f"{self.base_url}/api/chat", payload, timeout or self.timeout
+            )
             content = (raw.get("message") or {}).get("content", "")
             try:
                 parsed = json.loads(content)
@@ -251,23 +257,22 @@ class GemmaClient:
         model: str,
         system: str,
         user: str,
-        images: Optional[List[str]] = None,
+        images: list[str] | None = None,
         top_logprobs: int = 20,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         max_tokens: int = 1,
-    ) -> Dict[str, Any]:
-        """
-        Sends one chat turn asking for the first token's log-probabilities.
+    ) -> dict[str, Any]:
+        """Sends one chat turn asking for the first token's log-probabilities.
 
         Returns ``{"content": str, "top": [(token, logprob), ...] or None}``.
         ``top`` is None when this Ollama does not return logprobs (older than
         the release that added them), so callers can fall back. Raises
         :class:`GemmaError` on transport errors or a missing model.
         """
-        user_msg: Dict[str, Any] = {"role": "user", "content": user}
+        user_msg: dict[str, Any] = {"role": "user", "content": user}
         if images:
             user_msg["images"] = list(images)
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [{"role": "system", "content": system}, user_msg],
             "stream": False,
@@ -279,11 +284,13 @@ class GemmaClient:
             payload["keep_alive"] = self.keep_alive
 
         start = time.perf_counter()
-        error: Optional[str] = None
+        error: str | None = None
         try:
             if not self.has_model(model):
                 raise GemmaError(f"model '{model}' is not installed in Ollama at {self.base_url}")
-            raw = self._transport("POST", f"{self.base_url}/api/chat", payload, timeout or self.timeout)
+            raw = self._transport(
+                "POST", f"{self.base_url}/api/chat", payload, timeout or self.timeout
+            )
             content = str((raw.get("message") or {}).get("content", ""))
             return {"content": content, "top": first_token_logprobs(raw)}
         except GemmaError as exc:
@@ -300,7 +307,7 @@ class GemmaClient:
         if not self.has_model(model):
             return False
         try:
-            body: Dict[str, Any] = {"model": model, "prompt": "", "stream": False}
+            body: dict[str, Any] = {"model": model, "prompt": "", "stream": False}
             if self.keep_alive is not None:
                 body["keep_alive"] = self.keep_alive
             self._transport("POST", f"{self.base_url}/api/generate", body, timeout)
@@ -311,7 +318,7 @@ class GemmaClient:
 
     # ------------------------------------------------------------------- stats
 
-    def _record(self, model: str, ms: float, error: Optional[str]) -> None:
+    def _record(self, model: str, ms: float, error: str | None) -> None:
         with self._lock:
             s = self._stats
             s.calls += 1
@@ -324,7 +331,7 @@ class GemmaClient:
                 m.errors += 1
                 s.last_error = error
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         with self._lock:
             out = self._stats.as_dict()
         out["base_url"] = self.base_url

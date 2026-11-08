@@ -1,5 +1,4 @@
-"""
-Wait for the screen to settle before reading it.
+"""Wait for the screen to settle before reading it.
 
 A page that is still loading, a sheet that is still sliding in or a list that
 is still filling looks like a finished result to a single snapshot. Before an
@@ -15,8 +14,9 @@ blocking forever on an animation.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple
+from typing import Any
 
 from PIL import Image, ImageChops, ImageStat
 
@@ -26,7 +26,7 @@ class SettleResult:
     settled: bool
     waited_ms: float
     samples: int
-    last_delta: Optional[float]  # mean abs pixel difference (0-255) of the last two samples
+    last_delta: float | None  # mean abs pixel difference (0-255) of the last two samples
 
     def as_dict(self) -> dict:
         return {
@@ -62,18 +62,17 @@ def wait_until_settled(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> SettleResult:
-    """
-    Calls ``capture`` every ``interval_s`` until ``stable_samples`` consecutive
+    """Calls ``capture`` every ``interval_s`` until ``stable_samples`` consecutive
     thumbnails differ by at most ``max_delta``, or ``timeout_s`` passes.
 
     A screen that is already still returns after one interval (two samples).
     Capture errors end the wait as "not settled" instead of raising.
     """
     start = clock()
-    prev: Optional[Image.Image] = None
+    prev: Image.Image | None = None
     calm = 0
     samples = 0
-    delta: Optional[float] = None
+    delta: float | None = None
     while True:
         try:
             cur = thumbnail(capture())
@@ -91,7 +90,9 @@ def wait_until_settled(
         sleep(interval_s)
 
 
-def settle_window(controller: Any, region: Optional[Tuple[int, int, int, int]], **kw: Any) -> SettleResult:
+def settle_window(
+    controller: Any, region: tuple[int, int, int, int] | None, **kw: Any
+) -> SettleResult:
     """``wait_until_settled`` on the controller's HAL capture of ``region`` (the active window)."""
     hal = controller.hal
     return wait_until_settled(lambda: hal.capture_screen(region=region), **kw)

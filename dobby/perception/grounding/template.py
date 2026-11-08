@@ -1,23 +1,21 @@
 """Visual Template & Icon Grounding Provider using OpenCV Pattern Matching."""
 
-from typing import List, Optional, Tuple, Dict
+import cv2
 import numpy as np
 from PIL import Image
-import cv2
 
 from dobby.perception.grounding.base import BaseGroundingProvider
-from dobby.types import UIElement, BoundingBox
+from dobby.types import BoundingBox, UIElement
 
 
 class TemplateGroundingProvider(BaseGroundingProvider):
-    """
-    Grounding provider that matches specific visual icons or UI snippets using
+    """Grounding provider that matches specific visual icons or UI snippets using
     OpenCV normalized cross-correlation (cv2.TM_CCOEFF_NORMED).
     """
 
     def __init__(self, match_threshold: float = 0.80) -> None:
         self.match_threshold = match_threshold
-        self._templates: Dict[str, np.ndarray] = {}
+        self._templates: dict[str, np.ndarray] = {}
 
     @property
     def name(self) -> str:
@@ -36,15 +34,15 @@ class TemplateGroundingProvider(BaseGroundingProvider):
         self,
         image: Image.Image,
         scale_factor: float = 1.0,
-        app_filter: Optional[str] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-    ) -> List[UIElement]:
+        app_filter: str | None = None,
+        region: tuple[int, int, int, int] | None = None,
+    ) -> list[UIElement]:
         """Matches all registered templates against the current screen image."""
         if not self._templates:
             return []
 
         screen_bgr = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
-        elements: List[UIElement] = []
+        elements: list[UIElement] = []
         elem_id = 1
 
         for name, tpl in self._templates.items():

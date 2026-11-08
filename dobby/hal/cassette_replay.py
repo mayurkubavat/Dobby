@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from dobby.hal.errors import CassetteMismatch
 from dobby.hal.mock_replay import MockReplayHAL, load_cassette
 
 
-def _expectations(path: Path) -> Dict[str, Any]:
+def _expectations(path: Path) -> dict[str, Any]:
     folder = path if path.is_dir() else path.parent
     exp = folder / "expect.json"
     if exp.is_file():
@@ -32,9 +32,9 @@ def _expectations(path: Path) -> Dict[str, Any]:
     return {}
 
 
-def _ax_names(hal: MockReplayHAL) -> List[str]:
+def _ax_names(hal: MockReplayHAL) -> list[str]:
     tree = hal.get_accessibility_tree()
-    names: List[str] = []
+    names: list[str] = []
 
     def walk(node: Any) -> None:
         if isinstance(node, dict):
@@ -48,15 +48,14 @@ def _ax_names(hal: MockReplayHAL) -> List[str]:
     return names
 
 
-def replay_cassette(path: str | Path) -> Dict[str, Any]:
-    """
-    Replays every transition through the HAL input API, so argument shapes are
+def replay_cassette(path: str | Path) -> dict[str, Any]:
+    """Replays every transition through the HAL input API, so argument shapes are
     checked exactly as a live agent would call them, then checks expect.json.
     Returns {"ok", "steps", "final_frame", "failures": [...]}.
     """
     path = Path(path)
     hal = load_cassette(path)
-    failures: List[str] = []
+    failures: list[str] = []
     steps = 0
     for t in list(hal.transitions):
         try:
@@ -94,7 +93,7 @@ def replay_cassette(path: str | Path) -> Dict[str, Any]:
     }
 
 
-def discover_cassettes(root: str | Path) -> List[Path]:
+def discover_cassettes(root: str | Path) -> list[Path]:
     """Folders under ``root`` that contain index.json, plus *.halpack files."""
     root = Path(root).expanduser()
     if not root.is_dir():

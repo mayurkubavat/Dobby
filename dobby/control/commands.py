@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from . import registry
 from .lease import LeaseStore, file_lock
@@ -21,7 +21,7 @@ def _path(root: Path, pid: int) -> Path:
     return Path(root) / "commands" / f"{int(pid)}.json"
 
 
-def read(root: Path, pid: int) -> Dict[str, Any]:
+def read(root: Path, pid: int) -> dict[str, Any]:
     try:
         data = json.loads(_path(root, pid).read_text(encoding="utf-8"))
         if isinstance(data, dict):
@@ -31,7 +31,7 @@ def read(root: Path, pid: int) -> Dict[str, Any]:
     return {"paused": False, "stop": 0}
 
 
-def _update(root: Path, pid: int, **change: Any) -> Dict[str, Any]:
+def _update(root: Path, pid: int, **change: Any) -> dict[str, Any]:
     path = _path(root, pid)
     path.parent.mkdir(parents=True, exist_ok=True)
     with file_lock(path.with_suffix(".lock")):
@@ -47,11 +47,11 @@ def _update(root: Path, pid: int, **change: Any) -> Dict[str, Any]:
         return cur
 
 
-def set_paused(root: Path, pid: int, paused: bool) -> Dict[str, Any]:
+def set_paused(root: Path, pid: int, paused: bool) -> dict[str, Any]:
     return _update(root, pid, paused=bool(paused))
 
 
-def request_stop(root: Path, pid: int) -> Dict[str, Any]:
+def request_stop(root: Path, pid: int) -> dict[str, Any]:
     return _update(root, pid, stop=True)
 
 
@@ -63,7 +63,7 @@ def clear(root: Path, pid: int) -> None:
             pass
 
 
-def overview(root: Path) -> List[Dict[str, Any]]:
+def overview(root: Path) -> list[dict[str, Any]]:
     """Running Dobbys for the picker: name, pid, paused, holding, waiting."""
     root = Path(root)
     try:
@@ -75,18 +75,20 @@ def overview(root: Path) -> List[Dict[str, Any]]:
     out = []
     for rec in registry.list_agents(root):
         pid = int(rec.get("pid", 0))
-        out.append({
-            "pid": pid,
-            "name": str(rec.get("name") or f"Dobby-{pid}"),
-            "paused": read(root, pid)["paused"],
-            "holding": pid == holder,
-            "waiting": pid in waiting,
-            "started": float(rec.get("started", 0) or 0),
-            "color": rec.get("color"),
-        })
+        out.append(
+            {
+                "pid": pid,
+                "name": str(rec.get("name") or f"Dobby-{pid}"),
+                "paused": read(root, pid)["paused"],
+                "holding": pid == holder,
+                "waiting": pid in waiting,
+                "started": float(rec.get("started", 0) or 0),
+                "color": rec.get("color"),
+            }
+        )
     out.sort(key=lambda a: (a["name"].lower(), a["pid"]))
     return out
 
 
-def find(root: Path, pid: int) -> Optional[Dict[str, Any]]:
+def find(root: Path, pid: int) -> dict[str, Any] | None:
     return next((a for a in overview(root) if a["pid"] == pid), None)

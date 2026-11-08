@@ -7,12 +7,13 @@ require those packages.
 
 import os
 import time
-from typing import Any, Tuple, List, Optional
+from typing import Any
+
 from PIL import Image
 
-from dobby.hal.base import IDesktopHAL
-from dobby.types import WindowInfo, BoundingBox, DisplayMetrics, DisplayTopology
 from dobby.config import CONFIG
+from dobby.hal.base import IDesktopHAL
+from dobby.types import BoundingBox, DisplayMetrics, DisplayTopology, WindowInfo
 
 _native_loaded = False
 mss: Any = None
@@ -34,18 +35,16 @@ def _load_native() -> None:
         return
     try:
         import mss as _mss
-        from pynput.mouse import Button as _Button
-        from pynput.mouse import Controller as _MouseController
         from pynput.keyboard import Controller as _KeyboardController
         from pynput.keyboard import Key as _Key
+        from pynput.mouse import Button as _Button
+        from pynput.mouse import Controller as _MouseController
         from Xlib import X as _X
         from Xlib import display as _display
         from Xlib import error as _xlib_error
         from Xlib.protocol import event as _protocol_event
     except ImportError as exc:
-        raise ImportError(
-            "Linux HAL needs the 'linux' extra: pip install -e '.[linux]'"
-        ) from exc
+        raise ImportError("Linux HAL needs the 'linux' extra: pip install -e '.[linux]'") from exc
     mss = _mss
     MouseController = _MouseController
     Button = _Button
@@ -59,8 +58,7 @@ def _load_native() -> None:
 
 
 class LinuxHAL(IDesktopHAL):
-    """
-    Linux Desktop HAL supporting X11 natively and Wayland via compatible protocols.
+    """Linux Desktop HAL supporting X11 natively and Wayland via compatible protocols.
     Uses mss for high-speed screen capture, pynput for mouse/keyboard injection,
     and python-xlib for window hierarchy querying.
     """
@@ -71,7 +69,7 @@ class LinuxHAL(IDesktopHAL):
         self.keyboard = KeyboardController()
         self._sct = mss.MSS()
         self._is_wayland = bool(os.environ.get("WAYLAND_DISPLAY"))
-        self._x_display: Optional[display.Display] = None
+        self._x_display: display.Display | None = None
         # Open X whenever DISPLAY is set. Under XWayland both DISPLAY and
         # WAYLAND_DISPLAY are set and X11 clients are still reachable.
         if os.environ.get("DISPLAY"):
@@ -89,11 +87,13 @@ class LinuxHAL(IDesktopHAL):
     def _check_failsafe(self, x: int, y: int) -> None:
         """Emergency abort if pointer is directed to top-left (0, 0)."""
         if CONFIG.failsafe_corner and x == 0 and y == 0:
-            raise RuntimeError("VisionMCP Failsafe Triggered: Cursor moved to (0, 0). Aborting execution.")
+            raise RuntimeError(
+                "VisionMCP Failsafe Triggered: Cursor moved to (0, 0). Aborting execution."
+            )
 
     def display_topology(self) -> DisplayTopology:
         """Logical virtual desktop from mss monitors. Monitor 0 is the union."""
-        displays: List[DisplayMetrics] = []
+        displays: list[DisplayMetrics] = []
         monitors = self._sct.monitors
         indexed = monitors[1:] if len(monitors) > 1 else monitors
         for i, mon in enumerate(indexed):
@@ -117,9 +117,13 @@ class LinuxHAL(IDesktopHAL):
         the same physical pixels, so display scale stays 1.0 in the topology.
         """
         try:
-            res = self._x_display.screen().root.get_full_property(
-                self._x_display.intern_atom("RESOURCE_MANAGER"), X.AnyPropertyType
-            ) if self._x_display else None
+            res = (
+                self._x_display.screen().root.get_full_property(
+                    self._x_display.intern_atom("RESOURCE_MANAGER"), X.AnyPropertyType
+                )
+                if self._x_display
+                else None
+            )
             text = res.value.decode("utf-8", "ignore") if res is not None else ""
             for line in text.splitlines():
                 if line.startswith("Xft.dpi:"):
@@ -128,7 +132,7 @@ class LinuxHAL(IDesktopHAL):
             pass
         return 1.0
 
-    def get_screen_size(self) -> Tuple[int, int]:
+    def get_screen_size(self) -> tuple[int, int]:
         """Returns primary monitor dimensions in pixels."""
         if len(self._sct.monitors) > 1:
             # Monitor 1 is the primary monitor in mss
@@ -137,7 +141,7 @@ class LinuxHAL(IDesktopHAL):
         mon = self._sct.monitors[0]
         return mon["width"], mon["height"]
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Image.Image:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
         """Captures full screen or region (x, y, width, height)."""
         if region:
             x, y, w, h = region
@@ -164,7 +168,7 @@ class LinuxHAL(IDesktopHAL):
         img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
         return img
 
-    def get_cursor_position(self) -> Tuple[int, int]:
+    def get_cursor_position(self) -> tuple[int, int]:
         """Returns current pointer position."""
         pos = self.mouse.position
         return int(pos[0]), int(pos[1])
@@ -178,11 +182,17 @@ class LinuxHAL(IDesktopHAL):
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1) -> None:
         """Moves cursor and executes button click(s)."""
         self.mouse_move(x, y)
-        btn = Button.left if button == "left" else (Button.right if button == "right" else Button.middle)
+        btn = (
+            Button.left
+            if button == "left"
+            else (Button.right if button == "right" else Button.middle)
+        )
         self.mouse.click(btn, click_count)
         time.sleep(CONFIG.action_cooldown_ms / 1000.0)
 
-    def mouse_drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3) -> None:
+    def mouse_drag(
+        self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3
+    ) -> None:
         """Smoothly drags cursor between two points."""
         self.mouse_move(start_x, start_y)
         self.mouse.press(Button.left)
@@ -212,25 +222,63 @@ class LinuxHAL(IDesktopHAL):
     # keycode, the same trick xdotool uses.
 
     _KEYSYM_NAMES = {
-        "enter": "Return", "return": "Return", "tab": "Tab", "space": "space",
-        "backspace": "BackSpace", "delete": "Delete", "del": "Delete",
-        "escape": "Escape", "esc": "Escape",
-        "up": "Up", "down": "Down", "left": "Left", "right": "Right",
-        "home": "Home", "end": "End",
-        "pageup": "Prior", "page_up": "Prior", "pgup": "Prior",
-        "pagedown": "Next", "page_down": "Next", "pgdn": "Next",
-        "insert": "Insert", "ins": "Insert",
-        "ctrl": "Control_L", "control": "Control_L", "lctrl": "Control_L", "rctrl": "Control_R",
-        "alt": "Alt_L", "option": "Alt_L", "opt": "Alt_L", "altgr": "ISO_Level3_Shift",
-        "shift": "Shift_L", "lshift": "Shift_L", "rshift": "Shift_R",
-        "super": "Super_L", "meta": "Super_L", "cmd": "Super_L", "command": "Super_L",
-        "win": "Super_L", "windows": "Super_L",
-        "capslock": "Caps_Lock", "caps_lock": "Caps_Lock", "numlock": "Num_Lock",
-        "scrolllock": "Scroll_Lock", "menu": "Menu", "apps": "Menu", "pause": "Pause",
-        "printscreen": "Print", "print_screen": "Print", "print": "Print",
-        "volumeup": "XF86AudioRaiseVolume", "volumedown": "XF86AudioLowerVolume",
-        "volumemute": "XF86AudioMute", "mute": "XF86AudioMute",
-        "playpause": "XF86AudioPlay", "nexttrack": "XF86AudioNext", "prevtrack": "XF86AudioPrev",
+        "enter": "Return",
+        "return": "Return",
+        "tab": "Tab",
+        "space": "space",
+        "backspace": "BackSpace",
+        "delete": "Delete",
+        "del": "Delete",
+        "escape": "Escape",
+        "esc": "Escape",
+        "up": "Up",
+        "down": "Down",
+        "left": "Left",
+        "right": "Right",
+        "home": "Home",
+        "end": "End",
+        "pageup": "Prior",
+        "page_up": "Prior",
+        "pgup": "Prior",
+        "pagedown": "Next",
+        "page_down": "Next",
+        "pgdn": "Next",
+        "insert": "Insert",
+        "ins": "Insert",
+        "ctrl": "Control_L",
+        "control": "Control_L",
+        "lctrl": "Control_L",
+        "rctrl": "Control_R",
+        "alt": "Alt_L",
+        "option": "Alt_L",
+        "opt": "Alt_L",
+        "altgr": "ISO_Level3_Shift",
+        "shift": "Shift_L",
+        "lshift": "Shift_L",
+        "rshift": "Shift_R",
+        "super": "Super_L",
+        "meta": "Super_L",
+        "cmd": "Super_L",
+        "command": "Super_L",
+        "win": "Super_L",
+        "windows": "Super_L",
+        "capslock": "Caps_Lock",
+        "caps_lock": "Caps_Lock",
+        "numlock": "Num_Lock",
+        "scrolllock": "Scroll_Lock",
+        "menu": "Menu",
+        "apps": "Menu",
+        "pause": "Pause",
+        "printscreen": "Print",
+        "print_screen": "Print",
+        "print": "Print",
+        "volumeup": "XF86AudioRaiseVolume",
+        "volumedown": "XF86AudioLowerVolume",
+        "volumemute": "XF86AudioMute",
+        "mute": "XF86AudioMute",
+        "playpause": "XF86AudioPlay",
+        "nexttrack": "XF86AudioNext",
+        "prevtrack": "XF86AudioPrev",
         **{f"f{i}": f"F{i}" for i in range(1, 25)},
     }
 
@@ -254,7 +302,7 @@ class LinuxHAL(IDesktopHAL):
             raise ValueError(f"Unknown key name: {key!r}")
         return sym
 
-    def _keycode_for(self, keysym: int) -> Tuple[Optional[int], bool]:
+    def _keycode_for(self, keysym: int) -> tuple[int | None, bool]:
         """(keycode, needs_shift) for keysym in the current layout, or (None, False)."""
         best = None
         for keycode, index in self._x_display.keysym_to_keycodes(keysym):
@@ -264,7 +312,7 @@ class LinuxHAL(IDesktopHAL):
             return None, False
         return best[0], best[1] == 1
 
-    def _spare_keycode(self) -> Optional[int]:
+    def _spare_keycode(self) -> int | None:
         cached = self.__dict__.get("_spare")
         if cached:
             return cached
@@ -330,7 +378,7 @@ class LinuxHAL(IDesktopHAL):
         self._tap_keysym(self._keysym_for(key_name), hold=0.02)
         time.sleep(CONFIG.action_cooldown_ms / 1000.0)
 
-    def keyboard_hotkey(self, keys: List[str]) -> None:
+    def keyboard_hotkey(self, keys: list[str]) -> None:
         """Presses a chord (["ctrl", "shift", "t"]) and releases it in reverse order."""
         if not self._x_display:
             raise RuntimeError("No X display for keyboard input")
@@ -379,7 +427,7 @@ class LinuxHAL(IDesktopHAL):
             return None
         return p.value if p is not None else None
 
-    def _active_id(self) -> Optional[int]:
+    def _active_id(self) -> int | None:
         root = self._x_display.screen().root
         val = self._prop(root, "_NET_ACTIVE_WINDOW")
         try:
@@ -388,7 +436,7 @@ class LinuxHAL(IDesktopHAL):
             wid = 0
         return wid or None
 
-    def _stacked_ids(self) -> List[int]:
+    def _stacked_ids(self) -> list[int]:
         """Managed windows, front to back (stacking order when the WM provides it)."""
         root = self._x_display.screen().root
         stacking = self._prop(root, "_NET_CLIENT_LIST_STACKING")
@@ -397,7 +445,7 @@ class LinuxHAL(IDesktopHAL):
         clients = self._prop(root, "_NET_CLIENT_LIST")
         return [int(w) for w in clients] if clients is not None else []
 
-    def _window_info(self, win_id: int, active_id: Optional[int]) -> Optional[WindowInfo]:
+    def _window_info(self, win_id: int, active_id: int | None) -> WindowInfo | None:
         win = self._x_display.create_resource_object("window", win_id)
         types = self._prop(win, "_NET_WM_WINDOW_TYPE")
         if types is not None:
@@ -430,7 +478,9 @@ class LinuxHAL(IDesktopHAL):
         geom = win.get_geometry()
         root = self._x_display.screen().root
         coords = root.translate_coords(win, 0, 0)
-        x, y, w, h = self._without_csd_shadow(win, int(coords.x), int(coords.y), int(geom.width), int(geom.height))
+        x, y, w, h = self._without_csd_shadow(
+            win, int(coords.x), int(coords.y), int(geom.width), int(geom.height)
+        )
         # Include the WM decoration (title bar, borders) so occlusion matches what is drawn.
         extents = self._prop(win, "_NET_FRAME_EXTENTS")
         if extents is not None and len(extents) == 4:
@@ -447,7 +497,7 @@ class LinuxHAL(IDesktopHAL):
             app_name=app_name,
         )
 
-    def _without_csd_shadow(self, win, x: int, y: int, w: int, h: int) -> Tuple[int, int, int, int]:
+    def _without_csd_shadow(self, win, x: int, y: int, w: int, h: int) -> tuple[int, int, int, int]:
         """Drop the invisible shadow border a client-side-decorated (GTK) window draws around itself.
 
         _GTK_FRAME_EXTENTS is (left, right, top, bottom). GTK 4 widget positions are relative
@@ -460,7 +510,7 @@ class LinuxHAL(IDesktopHAL):
                 return x + left, y + top, w - left - right, h - top - bottom
         return x, y, w, h
 
-    def client_windows(self) -> List[dict]:
+    def client_windows(self) -> list[dict]:
         """Front-to-back client areas (no WM frame) with pid and title.
 
         The AT-SPI inspector uses these to place GTK 4 widgets, which only
@@ -468,7 +518,7 @@ class LinuxHAL(IDesktopHAL):
         """
         if not self._x_display:
             return []
-        out: List[dict] = []
+        out: list[dict] = []
         try:
             root = self._x_display.screen().root
             for win_id in self._stacked_ids():
@@ -480,28 +530,38 @@ class LinuxHAL(IDesktopHAL):
                     name = self._prop(win, "_NET_WM_NAME")
                     if name is None:
                         name = self._prop(win, "WM_NAME")
-                    title = name.decode("utf-8", "ignore") if isinstance(name, bytes) else str(name or "")
+                    title = (
+                        name.decode("utf-8", "ignore")
+                        if isinstance(name, bytes)
+                        else str(name or "")
+                    )
                     x, y, w, h = self._without_csd_shadow(
-                        win, int(coords.x), int(coords.y), int(geom.width), int(geom.height))
-                    out.append({
-                        "window_id": hex(win_id),
-                        "pid": int(pid[0]) if pid is not None and len(pid) else None,
-                        "title": title,
-                        "x": x, "y": y, "width": w, "height": h,
-                    })
+                        win, int(coords.x), int(coords.y), int(geom.width), int(geom.height)
+                    )
+                    out.append(
+                        {
+                            "window_id": hex(win_id),
+                            "pid": int(pid[0]) if pid is not None and len(pid) else None,
+                            "title": title,
+                            "x": x,
+                            "y": y,
+                            "width": w,
+                            "height": h,
+                        }
+                    )
                 except (xlib_error.BadWindow, xlib_error.BadDrawable, xlib_error.BadMatch):
                     continue
         except Exception:
             return out
         return out
 
-    def list_windows(self) -> List[WindowInfo]:
+    def list_windows(self) -> list[WindowInfo]:
         """Visible top-level windows, front to back, docks and minimised windows excluded."""
         if not self._x_display:
             return []
         try:
             active_id = self._active_id()
-            results: List[WindowInfo] = []
+            results: list[WindowInfo] = []
             for win_id in self._stacked_ids():
                 try:
                     info = self._window_info(win_id, active_id)
@@ -513,7 +573,7 @@ class LinuxHAL(IDesktopHAL):
         except Exception:
             return []
 
-    def get_active_window(self) -> Optional[WindowInfo]:
+    def get_active_window(self) -> WindowInfo | None:
         """The window named by _NET_ACTIVE_WINDOW, if it is a visible top-level window."""
         if not self._x_display:
             return None
@@ -525,7 +585,7 @@ class LinuxHAL(IDesktopHAL):
         except Exception:
             return None
 
-    def window_pid(self, window_id: str) -> Optional[int]:
+    def window_pid(self, window_id: str) -> int | None:
         """Owning process id from _NET_WM_PID (set by GTK, Qt, Electron and most toolkits)."""
         if not self._x_display:
             return None
@@ -539,7 +599,8 @@ class LinuxHAL(IDesktopHAL):
     def background_click(self, x: int, y: int, window_id: str) -> bool:
         """Press the button at (x, y) in window ``window_id`` through AT-SPI,
         without moving the real pointer (the Linux side of background clicks).
-        False: nothing pressable there, so the caller clicks normally."""
+        False: nothing pressable there, so the caller clicks normally.
+        """
         pid = self.window_pid(window_id)
         if pid is None or pid <= 0:
             return False

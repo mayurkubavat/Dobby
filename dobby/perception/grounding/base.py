@@ -1,10 +1,10 @@
 """Base abstract interface for pluggable grounding and perception providers."""
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+
 from PIL import Image
 
-from dobby.types import UIElement, BoundingBox
+from dobby.types import UIElement
 
 
 class BaseGroundingProvider(ABC):
@@ -14,24 +14,21 @@ class BaseGroundingProvider(ABC):
     @abstractmethod
     def name(self) -> str:
         """Unique provider identifier (e.g. 'semantic', 'cv', 'template', 'ensemble')."""
-        pass
 
     @property
     @abstractmethod
     def is_available(self) -> bool:
         """Checks if dependencies and system hooks for this provider are functional."""
-        pass
 
     @abstractmethod
     def detect(
         self,
         image: Image.Image,
         scale_factor: float = 1.0,
-        app_filter: Optional[str] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-    ) -> List[UIElement]:
-        """
-        Discovers interactable UI elements on the screen.
+        app_filter: str | None = None,
+        region: tuple[int, int, int, int] | None = None,
+    ) -> list[UIElement]:
+        """Discovers interactable UI elements on the screen.
 
         Args:
             image: Screen frame (PIL Image, potentially scaled).
@@ -42,17 +39,15 @@ class BaseGroundingProvider(ABC):
         Returns:
             List of UIElement objects with physical screen coordinates.
         """
-        pass
 
     def find_by_text(
         self,
         query: str,
-        image: Optional[Image.Image] = None,
+        image: Image.Image | None = None,
         scale_factor: float = 1.0,
         fuzzy: bool = True,
-    ) -> List[UIElement]:
-        """
-        Searches for UI elements matching text or label query.
+    ) -> list[UIElement]:
+        """Searches for UI elements matching text or label query.
         Default implementation filters results from detect().
         """
         if image is None:
@@ -62,8 +57,6 @@ class BaseGroundingProvider(ABC):
         matches = []
         for elem in all_elements:
             name = (elem.name or "").lower()
-            if fuzzy and (q in name or name in q):
-                matches.append(elem)
-            elif not fuzzy and q == name:
+            if (fuzzy and (q in name or name in q)) or (not fuzzy and q == name):
                 matches.append(elem)
         return matches

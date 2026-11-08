@@ -2,11 +2,12 @@
 Tests for the Gemma dialog tie-breaker and the VISUAL_QUERY post-condition.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image
+from test_gemma3_sidecar import FakeOllama
 
 from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.agent_loop.obstruction import SemanticModalRouter
@@ -22,18 +23,24 @@ from dobby.types import (
 )
 from dobby.vdom.gemma3_sidecar import Gemma3Grounder
 
-from test_gemma3_sidecar import FakeOllama
 
-
-def _buttons(*labels: str) -> List[ModalButtonOption]:
+def _buttons(*labels: str) -> list[ModalButtonOption]:
     return [
-        ModalButtonOption(button_id=f"btn_{i}", label=lbl, bbox=BoundingBox(x=10 * i, y=0, width=8, height=8))
+        ModalButtonOption(
+            button_id=f"btn_{i}", label=lbl, bbox=BoundingBox(x=10 * i, y=0, width=8, height=8)
+        )
         for i, lbl in enumerate(labels)
     ]
 
 
-def _verdict(tier: str, button=None, confidence=0.95) -> Dict[str, Any]:
-    return {"risk_tier": tier, "suggested_button": button, "confidence": confidence, "reason": "r", "source": "gemma"}
+def _verdict(tier: str, button=None, confidence=0.95) -> dict[str, Any]:
+    return {
+        "risk_tier": tier,
+        "suggested_button": button,
+        "confidence": confidence,
+        "reason": "r",
+        "source": "gemma",
+    }
 
 
 class RecordingClassifier:
@@ -54,7 +61,9 @@ class RecordingClassifier:
 def test_unmatched_dialog_dismissed_on_confident_safe_verdict():
     clf = RecordingClassifier(_verdict("BENIGN_DISMISSIBLE", "Not now"))
     router = SemanticModalRouter(classifier=clf)
-    tier, btn, payload = router.classify_and_route("Rate this app", "Enjoying the tool?", _buttons("Rate", "Not now"))
+    tier, btn, payload = router.classify_and_route(
+        "Rate this app", "Enjoying the tool?", _buttons("Rate", "Not now")
+    )
     assert tier == ModalRiskTier.BENIGN_DISMISSIBLE
     assert btn is not None and btn.label == "Not now"
     assert payload is None
@@ -65,7 +74,9 @@ def test_unmatched_dialog_dismissed_on_confident_safe_verdict():
 def test_gemma_can_make_verdict_stricter():
     clf = RecordingClassifier(_verdict("DESTRUCTIVE_OR_SYSTEM"))
     router = SemanticModalRouter(classifier=clf)
-    tier, btn, payload = router.classify_and_route("Vivado", "Clear all results from this run?", _buttons("Yes", "Cancel"))
+    tier, btn, payload = router.classify_and_route(
+        "Vivado", "Clear all results from this run?", _buttons("Yes", "Cancel")
+    )
     assert tier == ModalRiskTier.DESTRUCTIVE_OR_SYSTEM
     assert btn is None
     assert payload.risk_tier == ModalRiskTier.DESTRUCTIVE_OR_SYSTEM
@@ -77,13 +88,20 @@ def test_gemma_can_make_verdict_stricter():
         _verdict("BENIGN_DISMISSIBLE", "Not now", confidence=0.5),  # not confident enough
         _verdict("BENIGN_DISMISSIBLE", "Rate"),  # not a known-safe dismiss label
         _verdict("WORKFLOW_BRANCHING"),
-        {"risk_tier": "BENIGN_DISMISSIBLE", "suggested_button": "Not now", "confidence": 0.99, "source": "fallback"},
+        {
+            "risk_tier": "BENIGN_DISMISSIBLE",
+            "suggested_button": "Not now",
+            "confidence": 0.99,
+            "source": "fallback",
+        },
         RuntimeError("ollama down"),
     ],
 )
 def test_unsafe_or_uncertain_verdicts_escalate(verdict):
     router = SemanticModalRouter(classifier=RecordingClassifier(verdict))
-    tier, btn, payload = router.classify_and_route("Rate this app", "Enjoying the tool?", _buttons("Rate", "Not now"))
+    tier, btn, payload = router.classify_and_route(
+        "Rate this app", "Enjoying the tool?", _buttons("Rate", "Not now")
+    )
     assert tier == ModalRiskTier.WORKFLOW_BRANCHING
     assert btn is None
     assert payload is not None
@@ -93,10 +111,14 @@ def test_rules_win_and_gemma_not_called_when_rules_match():
     clf = RecordingClassifier(_verdict("BENIGN_DISMISSIBLE", "OK"))
     router = SemanticModalRouter(classifier=clf)
     # Destructive keyword: rules decide, Gemma is never asked
-    tier, btn, _ = router.classify_and_route("Confirm", "Delete the project directory?", _buttons("OK", "Cancel"))
+    tier, btn, _ = router.classify_and_route(
+        "Confirm", "Delete the project directory?", _buttons("OK", "Cancel")
+    )
     assert tier == ModalRiskTier.DESTRUCTIVE_OR_SYSTEM and btn is None
     # Branching keyword: rules escalate, Gemma is never asked
-    tier, btn, _ = router.classify_and_route("Vivado", "Design is out-of-date. Re-run?", _buttons("OK", "Cancel"))
+    tier, btn, _ = router.classify_and_route(
+        "Vivado", "Design is out-of-date. Re-run?", _buttons("OK", "Cancel")
+    )
     assert tier == ModalRiskTier.WORKFLOW_BRANCHING and btn is None
     assert clf.calls == []
     assert router.last_source == "rules"
@@ -104,7 +126,9 @@ def test_rules_win_and_gemma_not_called_when_rules_match():
 
 def test_no_classifier_keeps_old_behaviour():
     router = SemanticModalRouter()
-    tier, btn, payload = router.classify_and_route("Rate this app", "Enjoying the tool?", _buttons("Rate", "Not now"))
+    tier, btn, payload = router.classify_and_route(
+        "Rate this app", "Enjoying the tool?", _buttons("Rate", "Not now")
+    )
     assert tier == ModalRiskTier.WORKFLOW_BRANCHING and btn is None and payload is not None
 
 
@@ -130,17 +154,21 @@ def _controller_with_fake(fake: FakeOllama) -> FeedbackLoopController:
 
 
 def _contract(question="Is the Save dialog closed?", region=None):
-    return PostConditionContract(assertions=[
-        PostConditionAssertion(
-            assertion_type=StateAssertionType.VISUAL_QUERY,
-            visual_question=question,
-            visual_region=region,
-        )
-    ])
+    return PostConditionContract(
+        assertions=[
+            PostConditionAssertion(
+                assertion_type=StateAssertionType.VISUAL_QUERY,
+                visual_question=question,
+                visual_region=region,
+            )
+        ]
+    )
 
 
 def test_visual_query_passes_and_crops_active_window():
-    fake = FakeOllama(replies=[{"answer": True, "confidence": 0.9, "evidence": "No dialog visible"}])
+    fake = FakeOllama(
+        replies=[{"answer": True, "confidence": 0.9, "evidence": "No dialog visible"}]
+    )
     ctrl = _controller_with_fake(fake)
     ok, details = ctrl.verify_post_conditions(_contract())
     assert ok, details
@@ -152,7 +180,8 @@ def test_visual_query_passes_and_crops_active_window():
 
 
 def test_visual_query_downscales_crop_to_gemma_tile():
-    import base64, io
+    import base64
+    import io
 
     fake = FakeOllama(replies=[{"answer": True, "confidence": 0.9, "evidence": "ok"}])
     ctrl = _controller_with_fake(fake)
@@ -164,7 +193,9 @@ def test_visual_query_downscales_crop_to_gemma_tile():
 @pytest.mark.parametrize(
     "fake",
     [
-        FakeOllama(replies=[{"answer": False, "confidence": 0.9, "evidence": "Save dialog still open"}]),
+        FakeOllama(
+            replies=[{"answer": False, "confidence": 0.9, "evidence": "Save dialog still open"}]
+        ),
         FakeOllama(replies=[{"answer": True, "confidence": 0.3, "evidence": "unclear"}]),
         FakeOllama(fail=TimeoutError("timed out")),
     ],
@@ -206,25 +237,37 @@ def test_visual_query_expected_text_found_by_ocr_skips_gemma():
     from dobby.perception.ocr import OCRLine
 
     fake = FakeOllama()  # no replies queued: any Gemma call would fail the test
-    ctrl = _with_ocr(_controller_with_fake(fake), [OCRLine("Simulation finished", 10, 10, 200, 20, 0.97)])
-    contract = PostConditionContract(assertions=[PostConditionAssertion(
-        assertion_type=StateAssertionType.VISUAL_QUERY,
-        visual_question="Has the simulation finished?",
-        visual_expected_text="simulation finished",
-    )])
+    ctrl = _with_ocr(
+        _controller_with_fake(fake), [OCRLine("Simulation finished", 10, 10, 200, 20, 0.97)]
+    )
+    contract = PostConditionContract(
+        assertions=[
+            PostConditionAssertion(
+                assertion_type=StateAssertionType.VISUAL_QUERY,
+                visual_question="Has the simulation finished?",
+                visual_expected_text="simulation finished",
+            )
+        ]
+    )
     ok, details = ctrl.verify_post_conditions(contract)
     assert ok and "[ocr]" in details[0]
     assert fake.chat_calls == []
 
 
 def test_visual_query_falls_back_to_gemma_when_text_absent():
-    fake = FakeOllama(replies=[{"answer": True, "confidence": 0.9, "evidence": "green status icon"}])
+    fake = FakeOllama(
+        replies=[{"answer": True, "confidence": 0.9, "evidence": "green status icon"}]
+    )
     ctrl = _with_ocr(_controller_with_fake(fake), [])
-    contract = PostConditionContract(assertions=[PostConditionAssertion(
-        assertion_type=StateAssertionType.VISUAL_QUERY,
-        visual_question="Is the status icon green?",
-        visual_expected_text="Done",
-    )])
+    contract = PostConditionContract(
+        assertions=[
+            PostConditionAssertion(
+                assertion_type=StateAssertionType.VISUAL_QUERY,
+                visual_question="Is the status icon green?",
+                visual_expected_text="Done",
+            )
+        ]
+    )
     ok, details = ctrl.verify_post_conditions(contract)
     assert ok and "[gemma]" in details[0]
     assert len(fake.chat_calls) == 1

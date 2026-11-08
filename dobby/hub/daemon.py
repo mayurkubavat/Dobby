@@ -16,7 +16,7 @@ import os
 import socket
 import sys
 import time
-from typing import Any, Optional
+from typing import Any
 
 import anyio
 import anyio.abc
@@ -35,7 +35,7 @@ def _idle_exit_s() -> float:
         return 600.0
 
 
-def _peer_pid(sock: Any) -> Optional[int]:
+def _peer_pid(sock: Any) -> int | None:
     """The connecting process, from the kernel (not from what it claims)."""
     raw = sock.extra(anyio.abc.SocketAttribute.raw_socket, None)
     if raw is None:
@@ -64,8 +64,9 @@ def _same_user(sock: Any) -> bool:
     import struct
 
     try:
-        _pid, uid, _gid = struct.unpack("3i", raw.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED,
-                                                              struct.calcsize("3i")))
+        _pid, uid, _gid = struct.unpack(
+            "3i", raw.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+        )
     except OSError:
         return False
     return uid == os.getuid()
@@ -105,7 +106,11 @@ class Hub:
             from dobby.policy import current as admin_policy
 
             # An admin policy can make every client secure, whatever it asked for.
-            mode = "secure" if hello.get("mode") == "secure" or admin_policy().forces_secure else "turbo"
+            mode = (
+                "secure"
+                if hello.get("mode") == "secure" or admin_policy().forces_secure
+                else "turbo"
+            )
             name = str(hello.get("name") or "AI client")[:40]
             from dobby.control import pick_first_name
             from dobby.control.names import display
@@ -115,10 +120,16 @@ class Hub:
             first = pick_first_name(pid or 0)
             info = sessions.open_session(display(first, name), pid, mode)
             info.first_name, info.client = first, name
-            ctl = await anyio.to_thread.run_sync(lambda: new_session_controller(name, pid, first_name=first))
+            ctl = await anyio.to_thread.run_sync(
+                lambda: new_session_controller(name, pid, first_name=first)
+            )
             log.info("client %s connected: %s (pid %s, %s)", info.id, name, pid, mode)
-            await stream.send((json.dumps({"dobby_ready": 1, "server_pid": os.getpid(),
-                                           "session": info.id}) + "\n").encode())
+            await stream.send(
+                (
+                    json.dumps({"dobby_ready": 1, "server_pid": os.getpid(), "session": info.id})
+                    + "\n"
+                ).encode()
+            )
             token = sessions.CURRENT.set(info)
             try:
                 with session_mode(mode), session_controller(ctl):
@@ -141,11 +152,20 @@ class Hub:
         """The Dobby app's connection: status, menu content, Pause/Stop, quit."""
         from . import control
 
-        await stream.send((json.dumps({"dobby_ready": 1, "control": 1, "server_pid": os.getpid()}) + "\n").encode())
+        await stream.send(
+            (
+                json.dumps({"dobby_ready": 1, "control": 1, "server_pid": os.getpid()}) + "\n"
+            ).encode()
+        )
         while True:
             try:
                 line = await buffered.receive_until(b"\n", 1024 * 1024)
-            except (anyio.IncompleteRead, anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError):
+            except (
+                anyio.IncompleteRead,
+                anyio.EndOfStream,
+                anyio.BrokenResourceError,
+                anyio.ClosedResourceError,
+            ):
                 return
             if not line.strip():
                 continue
@@ -157,7 +177,9 @@ class Hub:
             except ValueError as exc:
                 reply = {"ok": False, "error": f"bad request: {exc}"}
             else:
-                reply = await anyio.to_thread.run_sync(lambda: control.handle(request, lambda: quit_asked.append(1)))
+                reply = await anyio.to_thread.run_sync(
+                    lambda: control.handle(request, lambda: quit_asked.append(1))
+                )
             await stream.send((json.dumps(reply) + "\n").encode())
             if quit_asked:
                 self.quit()
@@ -183,8 +205,12 @@ class Hub:
                 while True:
                     try:
                         line = await buffered.receive_until(b"\n", MAX_LINE)
-                    except (anyio.IncompleteRead, anyio.EndOfStream, anyio.BrokenResourceError,
-                            anyio.ClosedResourceError):
+                    except (
+                        anyio.IncompleteRead,
+                        anyio.EndOfStream,
+                        anyio.BrokenResourceError,
+                        anyio.ClosedResourceError,
+                    ):
                         break
                     if not line.strip():
                         continue
@@ -223,7 +249,7 @@ class Hub:
                 return
 
 
-def _take_lock() -> Optional[Any]:
+def _take_lock() -> Any | None:
     path = paths.lock_path()
     paths.ensure_private_dir(path.parent)
     fh = open(path, "a+")
@@ -295,4 +321,3 @@ def serve() -> int:
             sock_path.unlink()
         lock.close()
     return 0
-

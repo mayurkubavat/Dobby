@@ -48,7 +48,7 @@ import os
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import gi
 
@@ -57,13 +57,21 @@ gi.require_version("Gdk", "3.0")
 import cairo  # noqa: E402
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-from . import geometry, inputlock, protocol, style, topbar  # noqa: E402
 from ..personality import Voice  # noqa: E402
-from .barlock import (BAR_LOCK, BarOwner, BarRow, mark_waiting, others_showing, others_waiting,  # noqa: E402
-                      showing_dir, waiting_dir)
+from . import geometry, inputlock, protocol, style, topbar  # noqa: E402
+from .barlock import (  # noqa: E402
+    BAR_LOCK,
+    BarOwner,
+    BarRow,
+    mark_waiting,
+    others_showing,
+    others_waiting,
+    showing_dir,
+    waiting_dir,
+)
 from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
 
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "color": "#7C5CFF",
     "caution_color": "#F5A524",
     "danger_color": "#F04438",
@@ -74,14 +82,14 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "track_hz": 5.0,
     "intent_ms": 1600,
     "turbo": False,
-    "active_secs": 8.0,   # "working" lasts this long after an action
+    "active_secs": 8.0,  # "working" lasts this long after an action
     "linger_secs": 20.0,  # then "thinking" stops and the pointer is put away
     "awake_secs": 120.0,  # woken from the bar: stays awake this long without a task
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
-    "pill": "always",     # control bar: "always", "auto" (only while working) or "off"
-    "narrate": True,      # modern look: say what Dobby does on the bar and the tag
+    "pill": "always",  # control bar: "always", "auto" (only while working) or "off"
+    "narrate": True,  # modern look: say what Dobby does on the bar and the tag
     "input_lock": "off",  # "window": shield Dobby's window while it works (inputlock)
-    "menu_bar": True,     # tray icon in the panel listing every Dobby (topbar); bar owner only
+    "menu_bar": True,  # tray icon in the panel listing every Dobby (topbar); bar owner only
 }
 
 # Classic arrow, y down, tip at (0, 0) (same outline as the macOS helper).
@@ -91,23 +99,39 @@ _STATE_ICON = {"idle": "", "thinking": "…", "typing": "⌨", "waiting_user": "
 # (cycle-panels), so Stop falls back to Ctrl+Alt+End there.
 _HOTKEYS = {"stop": ("Escape", "End"), "pause": ("p",)}
 # The combo actually grabbed for each action, e.g. {"stop": "Ctrl+Alt+End"}; shown in tooltips.
-HOTKEY_LABELS: Dict[str, str] = {}
+HOTKEY_LABELS: dict[str, str] = {}
 
 
-def _rgb(value: str) -> Tuple[float, float, float]:
+def _rgb(value: str) -> tuple[float, float, float]:
     v = value.lstrip("#")
-    return tuple(int(v[i:i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
+    return tuple(int(v[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
 
 
 # Palette "Elf Violet, tuned": the card follows the desktop's light/dark
 # theme; filled buttons use #5B3FE0 (white text passes 4.5:1, #7C5CFF does not).
 _CONFIRM_THEMES = {
-    "light": {"bg": "rgba(251,250,255,0.97)", "text": "#1E1A2E", "dim": "#4A4560", "count": "#7A7590",
-              "border": "rgba(124,92,255,0.28)", "accent": "#7C5CFF", "neutral": "#ECE8FA",
-              "neutral_hover": "#E0DAF7", "neutral_text": "#1E1A2E"},
-    "dark": {"bg": "rgba(27,24,38,0.96)", "text": "#F3F0FF", "dim": "#C9C3E0", "count": "#8E88A8",
-             "border": "rgba(155,130,255,0.35)", "accent": "#9B82FF", "neutral": "#3A3550",
-             "neutral_hover": "#454060", "neutral_text": "#F3F0FF"},
+    "light": {
+        "bg": "rgba(251,250,255,0.97)",
+        "text": "#1E1A2E",
+        "dim": "#4A4560",
+        "count": "#7A7590",
+        "border": "rgba(124,92,255,0.28)",
+        "accent": "#7C5CFF",
+        "neutral": "#ECE8FA",
+        "neutral_hover": "#E0DAF7",
+        "neutral_text": "#1E1A2E",
+    },
+    "dark": {
+        "bg": "rgba(27,24,38,0.96)",
+        "text": "#F3F0FF",
+        "dim": "#C9C3E0",
+        "count": "#8E88A8",
+        "border": "rgba(155,130,255,0.35)",
+        "accent": "#9B82FF",
+        "neutral": "#3A3550",
+        "neutral_hover": "#454060",
+        "neutral_text": "#F3F0FF",
+    },
 }
 _CONFIRM_FILL, _CONFIRM_DANGER = "#5B3FE0", "#F04438"
 
@@ -121,7 +145,10 @@ def _desktop_is_dark() -> bool:
         source = Gio.SettingsSchemaSource.get_default()
         if source is not None and source.lookup("org.gnome.desktop.interface", True) is not None:
             schema = Gio.Settings.new("org.gnome.desktop.interface")
-            if "color-scheme" in schema.list_keys() and schema.get_string("color-scheme") == "prefer-dark":
+            if (
+                "color-scheme" in schema.list_keys()
+                and schema.get_string("color-scheme") == "prefer-dark"
+            ):
                 return True
     except Exception:  # noqa: BLE001
         pass
@@ -138,26 +165,27 @@ def _confirm_css(kind: str, dark: bool) -> bytes:
     t = _CONFIRM_THEMES["dark" if dark else "light"]
     who = _CONFIRM_DANGER if kind == "danger" else t["accent"]
     return f"""
-#dobby-confirm {{ background-color: {t['bg']}; border: 1px solid {t['border']}; border-radius: 14px; }}
+#dobby-confirm {{ background-color: {t["bg"]}; border: 1px solid {t["border"]}; border-radius: 14px; }}
 #dobby-confirm .dobby-who {{ color: {who}; font-weight: bold; font-size: 11px; letter-spacing: 1px; }}
-#dobby-confirm .dobby-title {{ color: {t['text']}; font-weight: bold; font-size: 15px; }}
-#dobby-confirm .dobby-detail {{ color: {t['dim']}; font-size: 12px; }}
-#dobby-confirm .dobby-count {{ color: {t['count']}; font-size: 10px; }}
+#dobby-confirm .dobby-title {{ color: {t["text"]}; font-weight: bold; font-size: 15px; }}
+#dobby-confirm .dobby-detail {{ color: {t["dim"]}; font-size: 12px; }}
+#dobby-confirm .dobby-count {{ color: {t["count"]}; font-size: 10px; }}
 #dobby-confirm button {{ border-radius: 8px; padding: 4px 16px; min-height: 26px; background-image: none;
   box-shadow: none; text-shadow: none; }}
 #dobby-confirm button.dobby-allow {{ background-color: {_CONFIRM_FILL}; color: #ffffff; border-color: {_CONFIRM_FILL}; }}
 #dobby-confirm button.dobby-allow:hover {{ background-color: #6A50EA; }}
 #dobby-confirm button.dobby-deny-danger {{ background-color: {_CONFIRM_DANGER}; color: #ffffff;
   border-color: {_CONFIRM_DANGER}; }}
-#dobby-confirm button.dobby-deny {{ background-color: {t['neutral']}; color: {t['neutral_text']};
-  border-color: {t['border']}; }}
-#dobby-confirm button.dobby-deny:hover {{ background-color: {t['neutral_hover']}; }}
+#dobby-confirm button.dobby-deny {{ background-color: {t["neutral"]}; color: {t["neutral_text"]};
+  border-color: {t["border"]}; }}
+#dobby-confirm button.dobby-deny:hover {{ background-color: {t["neutral_hover"]}; }}
 #dobby-confirm button label {{ color: inherit; }}
 """.encode()
 
 
-def _confirm_window(text: str, detail: str, allow: str, deny: str, kind: str, who: str, accent: str,
-                    on_answer) -> Tuple[Any, Any]:
+def _confirm_window(
+    text: str, detail: str, allow: str, deny: str, kind: str, who: str, accent: str, on_answer
+) -> tuple[Any, Any]:
     """The Allow / Deny card: who asks, what, why, two clear buttons.
 
     Enter answers with the default button and Escape always denies. The
@@ -184,7 +212,9 @@ def _confirm_window(text: str, detail: str, allow: str, deny: str, kind: str, wh
         widget.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         child = widget.get_child() if isinstance(widget, Gtk.Button) else None
         if child is not None:
-            child.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            child.get_style_context().add_provider(
+                provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
         if cls:
             widget.get_style_context().add_class(cls)
         return widget
@@ -204,7 +234,9 @@ def _confirm_window(text: str, detail: str, allow: str, deny: str, kind: str, wh
     row = Gtk.Box(spacing=8, margin_top=12)
     countdown = styled(Gtk.Label(label="", xalign=0), "dobby-count")
     row.pack_start(countdown, True, True, 0)
-    deny_btn = styled(Gtk.Button(label=deny), "dobby-deny-danger" if kind == "danger" else "dobby-deny")
+    deny_btn = styled(
+        Gtk.Button(label=deny), "dobby-deny-danger" if kind == "danger" else "dobby-deny"
+    )
     allow_btn = styled(Gtk.Button(label=allow), "dobby-allow")
     deny_btn.connect("clicked", lambda *_: on_answer(False))
     allow_btn.connect("clicked", lambda *_: on_answer(True))
@@ -284,11 +316,11 @@ class _Frame:
     def __init__(self, width: int) -> None:
         self.width = width
         self.color = (0.5, 0.4, 1.0)
-        self.edges: List[_Panel] = []
+        self.edges: list[_Panel] = []
         for _ in range(4):
             p = _Panel(False, 1, 1, painter=self._paint)
             self.edges.append(p)
-        self.rect: Optional[Tuple[int, int, int, int]] = None
+        self.rect: tuple[int, int, int, int] | None = None
         self.visible = False
 
     def _paint(self, cr, w, h) -> None:
@@ -301,7 +333,7 @@ class _Frame:
         for e in self.edges:
             e.queue_draw()
 
-    def place(self, rect: Optional[Tuple[int, int, int, int]]) -> None:
+    def place(self, rect: tuple[int, int, int, int] | None) -> None:
         self.rect = rect
         if rect is None:
             self.hide()
@@ -311,8 +343,8 @@ class _Frame:
         boxes = [
             (x - t, y - t, w + 2 * t, t),  # top
             (x - t, y + h, w + 2 * t, t),  # bottom
-            (x - t, y, t, h),              # left
-            (x + w, y, t, h),              # right
+            (x - t, y, t, h),  # left
+            (x + w, y, t, h),  # right
         ]
         for edge, (bx, by, bw, bh) in zip(self.edges, boxes):
             edge.resize(max(bw, 1), max(bh, 1))
@@ -353,13 +385,13 @@ def _bar_css(dark: bool, composited: bool = True) -> bytes:
     return f"""
 #dobby-bar {{ background-color: rgba({r}, {g}, {b}, {fill_alpha}); border-radius: {BAR_RADIUS}px;
   border: 1px solid rgba({ar}, {ag}, {ab}, {border_alpha}); }}
-#dobby-bar label {{ color: {t['text']}; font-size: 12.5pt; font-weight: 500;
+#dobby-bar label {{ color: {t["text"]}; font-size: 12.5pt; font-weight: 500;
   font-feature-settings: "tnum"; }}
 #dobby-bar button {{ padding: 0 6px; min-width: 28px; min-height: 24px; background-image: none;
   box-shadow: none; text-shadow: none; border-radius: 7px; background-color: transparent;
   border-color: transparent; }}
 #dobby-bar button:hover {{ background-color: rgba({hr}, {hg}, {hb}, {ha}); }}
-#dobby-bar button label {{ color: {t['text']}; }}
+#dobby-bar button label {{ color: {t["text"]}; }}
 #dobby-bar button.dobby-fill {{ background-color: {style.FILL_COLOR}; }}
 #dobby-bar button.dobby-fill:hover {{ background-color: #6A50EA; }}
 #dobby-bar button.dobby-fill label {{ color: #ffffff; }}
@@ -395,7 +427,9 @@ class _Bar:
         if visual is not None:  # see-through corners and fill
             self.win.set_visual(visual)
         else:  # recut the rounded shape whenever the bar changes size
-            self.win.connect("size-allocate", lambda _w, alloc: self._round(alloc.width, alloc.height))
+            self.win.connect(
+                "size-allocate", lambda _w, alloc: self._round(alloc.width, alloc.height)
+            )
         provider = Gtk.CssProvider()
         provider.load_from_data(_bar_css(_desktop_is_dark(), self.composited))
         Gtk.StyleContext.add_provider_for_screen(
@@ -405,9 +439,12 @@ class _Bar:
         try:  # follow the desktop when it switches between light and dark
             settings = Gtk.Settings.get_default()
             for prop in ("gtk-theme-name", "gtk-application-prefer-dark-theme"):
-                settings.connect(f"notify::{prop}",
-                                 lambda *_: self._css.load_from_data(
-                                     _bar_css(_desktop_is_dark(), self.composited)))
+                settings.connect(
+                    f"notify::{prop}",
+                    lambda *_: self._css.load_from_data(
+                        _bar_css(_desktop_is_dark(), self.composited)
+                    ),
+                )
         except Exception:  # noqa: BLE001 - theme following is a nicety
             pass
         # Mac spacing: 12 left, dot, label, 10 to the buttons, 2 between them, 12 right.
@@ -467,7 +504,9 @@ class _Bar:
             self.marked_showing = showing
             mark_waiting(self.show_dir, os.getpid(), showing)
 
-    def show(self, mode: str, text: str, primary: str, secondary: str, rgb, dot_alpha: float = 1.0) -> None:
+    def show(
+        self, mode: str, text: str, primary: str, secondary: str, rgb, dot_alpha: float = 1.0
+    ) -> None:
         self.mode = mode
         self.text.set_text(text)
         if primary:
@@ -477,7 +516,9 @@ class _Bar:
             self.secondary.set_label(secondary)
             _set_fill(self.secondary, secondary in style.FILL_TITLES)
         r, g, b = (int(v * 255) for v in rgb)
-        self.dot.set_markup(f'<span foreground="#{r:02x}{g:02x}{b:02x}" alpha="{int(dot_alpha * 100)}%">●</span>')
+        self.dot.set_markup(
+            f'<span foreground="#{r:02x}{g:02x}{b:02x}" alpha="{int(dot_alpha * 100)}%">●</span>'
+        )
         self.visible = True
         self._sync_presence()
         self.win.resize(1, 1)
@@ -522,30 +563,35 @@ class _Tray:
     the legacy ``Gtk.StatusIcon`` builds it when clicked.
     """
 
-    def __init__(self, overlay: "X11Overlay") -> None:
+    def __init__(self, overlay: X11Overlay) -> None:
         self.ov = overlay
         self.indicator = None
         self.status_icon = None
-        self.menu: Optional[Gtk.Menu] = None
-        self.items: Dict[str, Any] = {}
-        self.shape: Optional[tuple] = None
-        self.icon_sig: Optional[tuple] = None
-        self.view: Optional[topbar.View] = None
+        self.menu: Gtk.Menu | None = None
+        self.items: dict[str, Any] = {}
+        self.shape: tuple | None = None
+        self.icon_sig: tuple | None = None
+        self.view: topbar.View | None = None
         self.ai = self._appindicator()
         if self.ai is not None:
-            self.indicator = self.ai.Indicator.new("dobby", "dialog-information",
-                                                   self.ai.IndicatorCategory.APPLICATION_STATUS)
+            self.indicator = self.ai.Indicator.new(
+                "dobby", "dialog-information", self.ai.IndicatorCategory.APPLICATION_STATUS
+            )
             self.indicator.set_status(self.ai.IndicatorStatus.ACTIVE)
             self.indicator.set_title("Dobby")
         else:
             # Most panels today (GNOME Flashback's indicator applet, Ubuntu, KDE) only take
             # AppIndicator icons; the legacy icon needs a notification-area applet.
-            sys.stderr.write("dobby.overlay: no AppIndicator binding (install gir1.2-ayatanaappindicator3-0.1); "
-                             "using the legacy tray icon, which shows only with a notification-area applet\n")
+            sys.stderr.write(
+                "dobby.overlay: no AppIndicator binding (install gir1.2-ayatanaappindicator3-0.1); "
+                "using the legacy tray icon, which shows only with a notification-area applet\n"
+            )
             self.status_icon = Gtk.StatusIcon()
             self.status_icon.set_title("Dobby")
             self.status_icon.connect("activate", self._popup)
-            self.status_icon.connect("popup-menu", lambda _i, button, t: self._popup(None, button, t))
+            self.status_icon.connect(
+                "popup-menu", lambda _i, button, t: self._popup(None, button, t)
+            )
 
     @staticmethod
     def _appindicator():
@@ -584,8 +630,11 @@ class _Tray:
 
     # ------------------------------------------------------------ menu
     def _shape(self, view: topbar.View) -> tuple:
-        return (tuple((r.pid, tuple(r.actions)) for r in view.rows), tuple(view.all_actions),
-                bool(self.ov.cfg.get("turbo")))
+        return (
+            tuple((r.pid, tuple(r.actions)) for r in view.rows),
+            tuple(view.all_actions),
+            bool(self.ov.cfg.get("turbo")),
+        )
 
     @staticmethod
     def _row_label(row: topbar.Row) -> str:
@@ -609,8 +658,14 @@ class _Tray:
                 item.set_image(Gtk.Image.new_from_file(path))
                 item._dobby_icon = path
 
-    def _item(self, menu: Gtk.Menu, label: str, action=None, icon: Optional[str] = None,
-              check: Optional[bool] = None):
+    def _item(
+        self,
+        menu: Gtk.Menu,
+        label: str,
+        action=None,
+        icon: str | None = None,
+        check: bool | None = None,
+    ):
         if check is not None:
             item = Gtk.CheckMenuItem.new_with_label(label)
             item.set_active(check)
@@ -633,7 +688,9 @@ class _Tray:
         self.items = {"header": self._item(menu, f"{view.header} · {view.subtitle}")}
         menu.append(Gtk.SeparatorMenuItem())
         for row in view.rows:
-            item = self._item(menu, self._row_label(row), icon=topbar.row_icon_path(row.color, row.shape, 32))
+            item = self._item(
+                menu, self._row_label(row), icon=topbar.row_icon_path(row.color, row.shape, 32)
+            )
             item.set_sensitive(True)
             sub = Gtk.Menu()
             for title, action in row.actions:
@@ -645,17 +702,27 @@ class _Tray:
             for title, action in view.all_actions:
                 self._item(menu, title, lambda a=action: self.ov.topbar_action(a, 0))
         menu.append(Gtk.SeparatorMenuItem())
-        self._item(menu, "Turbo mode (no prompts)", lambda: self.ov.topbar_action("turbo", 0),
-                   check=bool(self.ov.cfg.get("turbo")))
+        self._item(
+            menu,
+            "Turbo mode (no prompts)",
+            lambda: self.ov.topbar_action("turbo", 0),
+            check=bool(self.ov.cfg.get("turbo")),
+        )
         menu.show_all()
         return menu
 
-    def _popup(self, _icon, button: int = 1, when: Optional[int] = None) -> None:
+    def _popup(self, _icon, button: int = 1, when: int | None = None) -> None:
         view = self.ov.topbar_view()
         self.update(view)
         self.menu = self._build(view)
-        self.menu.popup(None, None, Gtk.StatusIcon.position_menu, self.status_icon, button,
-                        when if when is not None else Gtk.get_current_event_time())
+        self.menu.popup(
+            None,
+            None,
+            Gtk.StatusIcon.position_menu,
+            self.status_icon,
+            button,
+            when if when is not None else Gtk.get_current_event_time(),
+        )
 
     def close(self) -> None:
         if self.indicator is not None:
@@ -665,7 +732,7 @@ class _Tray:
 
 
 class X11Overlay:
-    def __init__(self, cfg: Dict[str, Any], out=None) -> None:
+    def __init__(self, cfg: dict[str, Any], out=None) -> None:
         self.cfg = dict(DEFAULT_CONFIG)
         self.cfg.update(cfg or {})
         self.out = out or sys.stdout
@@ -687,14 +754,14 @@ class X11Overlay:
         self.bar_second = -1
         self.intent = ""
         self.intent_until = 0.0
-        self.cursor: Optional[Tuple[float, float]] = None
-        self._anim_id: Optional[int] = None
+        self.cursor: tuple[float, float] | None = None
+        self._anim_id: int | None = None
         self.user_visible = True
         self.capture_hidden = False
         self.paused = False
-        self.pending_confirm: Optional[Tuple[Any, Gtk.Window, int]] = None
-        self.track_wid: Optional[int] = None
-        self.track_pid: Optional[int] = None
+        self.pending_confirm: tuple[Any, Gtk.Window, int] | None = None
+        self.track_wid: int | None = None
+        self.track_pid: int | None = None
 
         now = time.monotonic()
         self.last_action = now - 10 * float(self.cfg["active_secs"])  # start asleep
@@ -709,9 +776,12 @@ class X11Overlay:
         self.bar_owner = BarOwner(self.cfg.get("bar_lock", BAR_LOCK))
         self.bar_owner_retry = 0.0
         self.wait_dir = waiting_dir(self.cfg.get("bar_lock", BAR_LOCK))
-        self.bar = None if self.bar_mode == "off" else _Bar(self.on_bar_label, self.on_bar,
-                                                           self.cfg.get("bar_lock", BAR_LOCK))
-        self.tray: Optional[_Tray] = None
+        self.bar = (
+            None
+            if self.bar_mode == "off"
+            else _Bar(self.on_bar_label, self.on_bar, self.cfg.get("bar_lock", BAR_LOCK))
+        )
+        self.tray: _Tray | None = None
         self.tray_next = 0.0
         self.publish_next = 0.0
 
@@ -725,8 +795,8 @@ class X11Overlay:
 
         self._hal = None
         self._probe = None
-        self.track_found: Optional[int] = None  # the tracked window's id, as found
-        self.lock_rect: Optional[Tuple[int, int, int, int]] = None
+        self.track_found: int | None = None  # the tracked window's id, as found
+        self.lock_rect: tuple[int, int, int, int] | None = None
         self.lock = None
         self.lock_stopped = False  # Stop frees the window until Dobby acts again
         self._lock_cursor = None
@@ -747,25 +817,26 @@ class X11Overlay:
             except (BrokenPipeError, ValueError):
                 GLib.idle_add(self.quit)
 
-    def emit(self, obj: Dict[str, Any]) -> None:
+    def emit(self, obj: dict[str, Any]) -> None:
         self._write(json.dumps(obj, separators=(",", ":")) + "\n")
 
     def send_event(self, name: str) -> None:
         self._write(protocol.event(name))
 
-    def ack(self, msg_id: Any, ok: bool = True, error: Optional[str] = None) -> bool:
+    def ack(self, msg_id: Any, ok: bool = True, error: str | None = None) -> bool:
         if msg_id is not None:
             self._write(protocol.ack(msg_id, ok, error))
         return False  # usable as a one-shot GLib callback
 
     # ------------------------------------------------------------- colors
-    def _color(self) -> Tuple[float, float, float]:
+    def _color(self) -> tuple[float, float, float]:
         key = {"caution": "caution_color", "danger": "danger_color"}.get(self.risk, "color")
         return _rgb(self.cfg[key])
 
-    def _tag_color(self) -> Tuple[float, float, float]:
+    def _tag_color(self) -> tuple[float, float, float]:
         """The pointer tag carries white text: Dobby violet #7C5CFF is too light
-        for that (4.3:1), so the tag uses the deeper #5B3FE0."""
+        for that (4.3:1), so the tag uses the deeper #5B3FE0.
+        """
         if self.risk not in ("caution", "danger") and str(self.cfg["color"]).upper() == "#7C5CFF":
             return _rgb(style.FILL_COLOR)
         return self._color()
@@ -855,7 +926,7 @@ class X11Overlay:
         panel.reshape()
         return False
 
-    def _place_pointer(self, pt: Tuple[float, float]) -> None:
+    def _place_pointer(self, pt: tuple[float, float]) -> None:
         self.cursor = pt
         if not self._overlay_shown():
             return
@@ -886,13 +957,13 @@ class X11Overlay:
             self.box.show()
 
     # ------------------------------------------------------------- motion
-    def _duration(self, ms: Optional[float]) -> float:
+    def _duration(self, ms: float | None) -> float:
         speed = float(self.cfg["speed"])
         if speed <= 0 or not ms:
             return 0.0
         return float(ms) / 1000.0
 
-    def _glide(self, target: Tuple[float, float], dur: float, msg_id: Any) -> None:
+    def _glide(self, target: tuple[float, float], dur: float, msg_id: Any) -> None:
         if self._anim_id is not None:
             GLib.source_remove(self._anim_id)
             self._anim_id = None
@@ -906,7 +977,9 @@ class X11Overlay:
         def step() -> bool:
             f = min((time.monotonic() - t0) / dur, 1.0)
             e = 1 - (1 - f) ** 3  # ease-out cubic
-            self._place_pointer((start[0] + (target[0] - start[0]) * e, start[1] + (target[1] - start[1]) * e))
+            self._place_pointer(
+                (start[0] + (target[0] - start[0]) * e, start[1] + (target[1] - start[1]) * e)
+            )
             if f >= 1.0:
                 self._anim_id = None
                 self.ack(msg_id)
@@ -944,7 +1017,7 @@ class X11Overlay:
                 self._hal = False
         return self._hal or None
 
-    def _tracked_rect(self) -> Optional[Tuple[int, int, int, int]]:
+    def _tracked_rect(self) -> tuple[int, int, int, int] | None:
         hal = self._get_hal()
         if hal is None:
             return None
@@ -977,15 +1050,23 @@ class X11Overlay:
                 gi.require_version("GdkX11", "3.0")
                 from gi.repository import GdkX11
 
-                self._lock_cursor = Gdk.Cursor.new_from_name(Gdk.Display.get_default(), "not-allowed")
+                self._lock_cursor = Gdk.Cursor.new_from_name(
+                    Gdk.Display.get_default(), "not-allowed"
+                )
                 if self._lock_cursor is not None:
                     cursor_xid = int(GdkX11.X11Cursor.get_xcursor(self._lock_cursor))
                     Gdk.flush()
             except Exception as exc:  # noqa: BLE001 - fall back to the X cursor font
                 sys.stderr.write(f"dobby.overlay: lock cursor: {exc}\n")
-            self.lock = X11InputLock(self._on_lock_swallowed, self._on_lock_insist,
-                                     lambda which: self._on_hotkey(which), cursor_xid=cursor_xid)
-            GLib.io_add_watch(self.lock.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, self._lock_readable)
+            self.lock = X11InputLock(
+                self._on_lock_swallowed,
+                self._on_lock_insist,
+                lambda which: self._on_hotkey(which),
+                cursor_xid=cursor_xid,
+            )
+            GLib.io_add_watch(
+                self.lock.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, self._lock_readable
+            )
             sys.stderr.write("dobby.overlay: input lock ready (window)\n")
         except Exception as exc:  # noqa: BLE001 - Dobby works without the lock
             sys.stderr.write(f"dobby.overlay: input lock unavailable: {exc}\n")
@@ -1002,9 +1083,13 @@ class X11Overlay:
 
     def lock_armed(self) -> bool:
         return inputlock.armed(
-            mode="window" if self.lock is not None else "off", working=self._working(),
-            paused=self.paused or self.lock_stopped, takeover=False,
-            confirming=self.pending_confirm is not None, has_target=self.lock_rect is not None)
+            mode="window" if self.lock is not None else "off",
+            working=self._working(),
+            paused=self.paused or self.lock_stopped,
+            takeover=False,
+            confirming=self.pending_confirm is not None,
+            has_target=self.lock_rect is not None,
+        )
 
     def _lock_sync(self) -> None:
         if self.lock is not None:
@@ -1034,12 +1119,14 @@ class X11Overlay:
         return True
 
     def _tag_tick(self) -> bool:
-        if self.intent and (time.monotonic() >= self.intent_until or (self.narrate and not self._working())):
+        if self.intent and (
+            time.monotonic() >= self.intent_until or (self.narrate and not self._working())
+        ):
             self.intent = ""  # narration: the action stays until Dobby goes idle
             self._layout_tag()
         return True
 
-    def _probe_at(self, x: float, y: float) -> Tuple[str, Optional[Tuple[int, int, int, int]]]:
+    def _probe_at(self, x: float, y: float) -> tuple[str, tuple[int, int, int, int] | None]:
         if self._probe is None:
             try:
                 from dobby.perception.atspi import ATSPIInspector
@@ -1092,15 +1179,26 @@ class X11Overlay:
             return
         now = time.monotonic()
         working = self._working()
-        mode = topbar.dobby_mode(paused=self.paused, takeover=False, confirming=self.pending_confirm is not None,
-                                 stopped=now < self.stopped_until, working=working, awake=self._awake())
-        topbar.publish(self.server_pid, mode=mode, step=self.current_step if working else "",
-                       steps=self.task_steps if working else 0,
-                       elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
-                       turbo=bool(self.cfg.get("turbo")), app=self._app_name() if working else "")
+        mode = topbar.dobby_mode(
+            paused=self.paused,
+            takeover=False,
+            confirming=self.pending_confirm is not None,
+            stopped=now < self.stopped_until,
+            working=working,
+            awake=self._awake(),
+        )
+        topbar.publish(
+            self.server_pid,
+            mode=mode,
+            step=self.current_step if working else "",
+            steps=self.task_steps if working else 0,
+            elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
+            turbo=bool(self.cfg.get("turbo")),
+            app=self._app_name() if working else "",
+        )
         self.publish_next = now + 5.0
 
-    def topbar_view(self) -> "topbar.View":
+    def topbar_view(self) -> topbar.View:
         try:
             from dobby.control import commands, control_root
 
@@ -1172,19 +1270,29 @@ class X11Overlay:
         if self.bar.mode == "stopped" and time.monotonic() < self.stopped_until:
             return
         view = bar_view(
-            paused=self.paused, takeover=False, takeover_resume="auto",
-            working=self._working(), turbo=bool(self.cfg.get("turbo")),
-            current_mode=self.bar.mode, bar_mode=self.bar_mode,
-            owner=self.bar_owner.owned, awake=self._awake(), ai_waiting=self.ai_waiting > 0,
-            handoff=self.handoff, other_waiting=self.others_waiting,
+            paused=self.paused,
+            takeover=False,
+            takeover_resume="auto",
+            working=self._working(),
+            turbo=bool(self.cfg.get("turbo")),
+            current_mode=self.bar.mode,
+            bar_mode=self.bar_mode,
+            owner=self.bar_owner.owned,
+            awake=self._awake(),
+            ai_waiting=self.ai_waiting > 0,
+            handoff=self.handoff,
+            other_waiting=self.others_waiting,
             locked=self.lock is not None,
         )
         if view is None:
             self.bar.hide()
             return
         mode, text, primary, secondary, color, dot_alpha = view
-        rgb = {"ok": _rgb(self.cfg["color"]), "caution": _rgb(self.cfg["caution_color"]),
-               "danger": _rgb(self.cfg["danger_color"])}.get(color) or self._color()
+        rgb = {
+            "ok": _rgb(self.cfg["color"]),
+            "caution": _rgb(self.cfg["caution_color"]),
+            "danger": _rgb(self.cfg["danger_color"]),
+        }.get(color) or self._color()
         if self.style == "classic":
             view = self.voice.dress(view, str(self.cfg["label"]), self.task_steps)
             mode, text, primary, secondary, color, dot_alpha = view
@@ -1192,17 +1300,28 @@ class X11Overlay:
             return
         now = time.monotonic()
         # No hover tracking here: the sleeping bar always shows its full text.
-        spec = style.bar_spec(view, hovered=True, label=str(self.cfg["label"]), step=self.current_step,
-                              steps=self.task_steps,
-                              elapsed=(now - self.task_started) if self.task_started else 0.0,
-                              turbo=bool(self.cfg.get("turbo")), thinking=self.state == "thinking",
-                              narrate=self.narrate, voice=self.voice)
+        spec = style.bar_spec(
+            view,
+            hovered=True,
+            label=str(self.cfg["label"]),
+            step=self.current_step,
+            steps=self.task_steps,
+            elapsed=(now - self.task_started) if self.task_started else 0.0,
+            turbo=bool(self.cfg.get("turbo")),
+            thinking=self.state == "thinking",
+            narrate=self.narrate,
+            voice=self.voice,
+        )
         self.bar.show_spec(spec, rgb)
 
     def _refresh_agents(self) -> None:
         """Take this Dobby's colour from the agent registry (modern look)."""
-        if (self.style != "modern" or not self.server_pid or self.cfg.get("color_fixed")
-                or not self.cfg.get("agent_colors", True)):
+        if (
+            self.style != "modern"
+            or not self.server_pid
+            or self.cfg.get("color_fixed")
+            or not self.cfg.get("agent_colors", True)
+        ):
             return
         try:
             from dobby.control import commands, control_root
@@ -1218,10 +1337,15 @@ class X11Overlay:
     def _put_away_when_done(self, now: float) -> None:
         """The task is over: stop "thinking", hide the agent pointer and tag."""
         reset_thinking, hide_pointer = idle_cleanup(
-            since_action=now - self.last_action, active_secs=float(self.cfg["active_secs"]),
-            linger_secs=float(self.cfg.get("linger_secs", 20.0)), cursor_state=self.state,
-            pointer_visible=bool(self.pointer.get_visible()), awake=self._awake(),
-            halted=self.paused, confirming=self.pending_confirm is not None)
+            since_action=now - self.last_action,
+            active_secs=float(self.cfg["active_secs"]),
+            linger_secs=float(self.cfg.get("linger_secs", 20.0)),
+            cursor_state=self.state,
+            pointer_visible=bool(self.pointer.get_visible()),
+            awake=self._awake(),
+            halted=self.paused,
+            confirming=self.pending_confirm is not None,
+        )
         if reset_thinking:
             self.state = "idle"
             self._layout_tag()
@@ -1259,7 +1383,8 @@ class X11Overlay:
             # Step aside while another helper's AI waits or another Dobby's bar shows.
             others = not self.ai_waiting and (
                 others_waiting(self.wait_dir, os.getpid())
-                or others_showing(showing_dir(self.cfg.get("bar_lock", BAR_LOCK)), os.getpid()))
+                or others_showing(showing_dir(self.cfg.get("bar_lock", BAR_LOCK)), os.getpid())
+            )
             if others != self.others_waiting:
                 self.others_waiting = others
                 self._refresh_bar()
@@ -1384,17 +1509,31 @@ class X11Overlay:
             self.stopped_until = time.monotonic() + 2.0
 
     # ------------------------------------------------------------- confirm
-    def _start_confirm(self, msg_id: Any, text: str, secs: float, detail: str = "",
-                       allow: str = "Allow", deny: str = "Deny", kind: str = "danger") -> None:
+    def _start_confirm(
+        self,
+        msg_id: Any,
+        text: str,
+        secs: float,
+        detail: str = "",
+        allow: str = "Allow",
+        deny: str = "Deny",
+        kind: str = "danger",
+    ) -> None:
         if self.cfg.get("turbo"):
             self.ack(msg_id, True)
             return
         if self.pending_confirm is not None:
             self._answer_confirm(False)
         win, countdown = _confirm_window(
-            text, detail, allow or "Allow", deny or "Deny", kind, str(self.cfg["label"]),
+            text,
+            detail,
+            allow or "Allow",
+            deny or "Deny",
+            kind,
+            str(self.cfg["label"]),
             self.cfg["color"] if kind == "access" else self.cfg["danger_color"],
-            on_answer=self._answer_confirm)
+            on_answer=self._answer_confirm,
+        )
         deadline = time.monotonic() + max(secs, 1.0)
 
         def tick() -> bool:
@@ -1439,7 +1578,7 @@ class X11Overlay:
             sys.stderr.write(f"dobby.overlay: {exc}\n")
             self.ack(msg_id, False, str(exc))
 
-    def handle(self, msg: Dict[str, Any]) -> None:
+    def handle(self, msg: dict[str, Any]) -> None:
         op, msg_id = msg["op"], msg.get("id")
         if op == "cursor.move":
             self._mark_active()
@@ -1447,8 +1586,12 @@ class X11Overlay:
             verb = msg.get("verb")
             if msg.get("probe"):
                 name, frame = self._probe_at(*target)
-                if frame is not None and 3 <= frame[2] <= 1600 and 3 <= frame[3] <= 900 \
-                        and geometry.contains(frame, target):
+                if (
+                    frame is not None
+                    and 3 <= frame[2] <= 1600
+                    and 3 <= frame[3] <= 900
+                    and geometry.contains(frame, target)
+                ):
                     self.box.place(frame)
                     if not self._overlay_shown():
                         self.box.hide()
@@ -1505,9 +1648,15 @@ class X11Overlay:
             self.ack(msg_id)  # not drawn on Linux yet
         elif op == "confirm":
             self._mark_active()
-            self._start_confirm(msg_id, msg["text"], float(msg.get("secs", 30.0)),
-                                detail=str(msg.get("detail") or ""), allow=str(msg.get("allow") or "Allow"),
-                                deny=str(msg.get("deny") or "Deny"), kind=str(msg.get("kind") or "danger"))
+            self._start_confirm(
+                msg_id,
+                msg["text"],
+                float(msg.get("secs", 30.0)),
+                detail=str(msg.get("detail") or ""),
+                allow=str(msg.get("allow") or "Allow"),
+                deny=str(msg.get("deny") or "Deny"),
+                kind=str(msg.get("kind") or "danger"),
+            )
         elif op == "confirm.cancel":
             self._answer_confirm(False)
             self.ack(msg_id)
@@ -1557,7 +1706,7 @@ class X11Overlay:
             self.ack(msg_id)
             self.quit()
 
-    def _set_intent(self, text: str, ms: Optional[float] = None) -> None:
+    def _set_intent(self, text: str, ms: float | None = None) -> None:
         if text and text != "Stopped":
             self.task_steps += 1
             self.current_step = text
@@ -1569,7 +1718,7 @@ class X11Overlay:
             self.intent_until = time.monotonic() + secs if secs is not None else float("inf")
         self._layout_tag()
 
-    def _real_mouse(self) -> Tuple[float, float]:
+    def _real_mouse(self) -> tuple[float, float]:
         try:
             seat = Gdk.Display.get_default().get_default_seat()
             _screen, x, y = seat.get_pointer().get_position()
@@ -1583,7 +1732,8 @@ class X11Overlay:
 
     def _hotkey_loop(self) -> None:
         try:
-            from Xlib import X, display as xdisplay
+            from Xlib import X
+            from Xlib import display as xdisplay
 
             d = xdisplay.Display()
             keys = grab_hotkeys(d, d.screen().root)
@@ -1624,18 +1774,18 @@ class X11Overlay:
         return False
 
 
-def grab_hotkeys(d, root) -> Dict[int, str]:
+def grab_hotkeys(d, root) -> dict[int, str]:
     """Grab Ctrl+Alt+<key> for each action in ``_HOTKEYS``; returns {keycode: action}.
 
     A key another client already grabbed (BadAccess) is skipped for the next candidate,
     and ``HOTKEY_LABELS`` records the combo that is live.
     """
-    from Xlib import X, XK, error
+    from Xlib import XK, X, error
 
     mods = X.ControlMask | X.Mod1Mask
     # Also grab with NumLock (Mod2) and CapsLock (Lock) on, which X counts as modifiers.
     extras = (0, X.Mod2Mask, X.LockMask, X.Mod2Mask | X.LockMask)
-    keys: Dict[int, str] = {}
+    keys: dict[int, str] = {}
     for action, names in _HOTKEYS.items():
         for name in names:
             code = d.keysym_to_keycode(XK.string_to_keysym(name))
@@ -1643,7 +1793,9 @@ def grab_hotkeys(d, root) -> Dict[int, str]:
                 continue
             catch = error.CatchError(error.BadAccess)
             for extra in extras:
-                root.grab_key(code, mods | extra, True, X.GrabModeAsync, X.GrabModeAsync, onerror=catch)
+                root.grab_key(
+                    code, mods | extra, True, X.GrabModeAsync, X.GrabModeAsync, onerror=catch
+                )
             d.sync()
             if catch.get_error() is None:
                 keys[code] = action
@@ -1675,7 +1827,9 @@ def _stdin_watch(overlay: X11Overlay) -> None:
             overlay.handle_line(line.decode("utf-8", "replace"))
         return True
 
-    GLib.io_add_watch(sys.stdin.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_input)
+    GLib.io_add_watch(
+        sys.stdin.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_input
+    )
 
 
 def _demo(overlay: X11Overlay) -> None:
@@ -1703,9 +1857,9 @@ def _demo(overlay: X11Overlay) -> None:
         GLib.timeout_add(int(delay * 1000), lambda m=msg: (overlay.handle(m), False)[1])
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     argv = list(argv or [])
-    cfg: Dict[str, Any] = {}
+    cfg: dict[str, Any] = {}
     raw = os.environ.get("DOBBY_OVERLAY_CONFIG")
     if raw:
         try:

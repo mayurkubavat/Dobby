@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -35,7 +34,7 @@ def match_magnitude(
     template: Image.Image | np.ndarray,
     threshold: float = 0.72,
     ambiguity: float = 0.05,
-) -> Optional[Tuple[float, Tuple[int, int], Tuple[int, int]]]:
+) -> tuple[float, tuple[int, int], tuple[int, int]] | None:
     """Returns (score, top_left, template_size) or None when the peak is weak or ambiguous."""
     search_mag = magnitude_map(_to_bgr(search))
     tpl_mag = magnitude_map(_to_bgr(template))
@@ -58,7 +57,9 @@ def match_magnitude(
     return float(max_val), (int(x), int(y)), (int(tw), int(th))
 
 
-def anchor_window(label_box: Tuple[int, int, int, int], anchor: RelationalAnchor) -> Tuple[int, int, int, int]:
+def anchor_window(
+    label_box: tuple[int, int, int, int], anchor: RelationalAnchor
+) -> tuple[int, int, int, int]:
     """Pixel window placed dx, dy from the label box's top-left."""
     lx, ly, _lw, _lh = label_box
     bw, bh = anchor.box
@@ -68,10 +69,10 @@ def anchor_window(label_box: Tuple[int, int, int, int], anchor: RelationalAnchor
 def ground_magnitude_icon(
     image: Image.Image,
     template: Image.Image,
-    anchor: Optional[RelationalAnchor] = None,
-    ocr_lines: Optional[list] = None,
+    anchor: RelationalAnchor | None = None,
+    ocr_lines: list | None = None,
     scale_factor: float = 1.0,
-) -> Optional[UIElement]:
+) -> UIElement | None:
     """Matches a magnitude template, restricted to an OCR offset window when a label is present."""
     search: Image.Image | np.ndarray = image
     origin_x, origin_y = 0, 0
@@ -79,8 +80,15 @@ def ground_magnitude_icon(
         label = anchor.label.lower()
         hit = next((line for line in ocr_lines if label in str(line.get("text", "")).lower()), None)
         if hit is not None:
-            box = hit.get("bbox") or [hit.get("x", 0), hit.get("y", 0), hit.get("width", 0), hit.get("height", 0)]
-            wx, wy, ww, wh = anchor_window((int(box[0]), int(box[1]), int(box[2]), int(box[3])), anchor)
+            box = hit.get("bbox") or [
+                hit.get("x", 0),
+                hit.get("y", 0),
+                hit.get("width", 0),
+                hit.get("height", 0),
+            ]
+            wx, wy, ww, wh = anchor_window(
+                (int(box[0]), int(box[1]), int(box[2]), int(box[3])), anchor
+            )
             search = image.crop((wx, wy, wx + ww, wy + wh))
             origin_x, origin_y = wx, wy
     found = match_magnitude(search, template)

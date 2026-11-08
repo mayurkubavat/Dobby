@@ -1,5 +1,4 @@
-"""
-macOS Accessibility (AXUIElement) inspector with the same interface as
+"""macOS Accessibility (AXUIElement) inspector with the same interface as
 ``ATSPIInspector`` (``is_available``, ``inspect_desktop``, ``inspect``).
 
 Roles are mapped to the AT-SPI role names the rest of the code already
@@ -14,7 +13,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 from dobby.config import CONFIG
 from dobby.perception.atspi import INTERACTABLE_ROLES
@@ -73,8 +73,8 @@ class AXInspector:
         appkit: Any = None,
         max_nodes: int = 4000,
         max_seconds: float = 0.6,
-        screen_bounds: Optional[Tuple[int, int, int, int]] = None,
-        front_pid_fn: Optional[Callable[[], Optional[int]]] = None,
+        screen_bounds: tuple[int, int, int, int] | None = None,
+        front_pid_fn: Callable[[], int | None] | None = None,
     ) -> None:
         self.screen_bounds = screen_bounds
         # NSWorkspace's frontmost app goes stale in a server (no run loop turns),
@@ -88,7 +88,7 @@ class AXInspector:
         self.max_seconds = max_seconds
         self._ax = ax
         self._appkit = appkit
-        self.error: Optional[str] = None
+        self.error: str | None = None
         # pid -> True if AXManualAccessibility was accepted, False if the app refused it
         self.web_content_enabled: dict = {}
         if self._ax is None:
@@ -97,7 +97,9 @@ class AXInspector:
 
                 self._ax = ApplicationServices
             except Exception as e:
-                self.error = f"{type(e).__name__}: {e} (pip install pyobjc-framework-ApplicationServices)"
+                self.error = (
+                    f"{type(e).__name__}: {e} (pip install pyobjc-framework-ApplicationServices)"
+                )
         if self._appkit is None and self._ax is not None:
             try:
                 import AppKit  # type: ignore
@@ -127,7 +129,7 @@ class AXInspector:
             return None
         return value if err == 0 else None
 
-    def _frame(self, el) -> Optional[Tuple[int, int, int, int]]:
+    def _frame(self, el) -> tuple[int, int, int, int] | None:
         pos, size = self._attr(el, "AXPosition"), self._attr(el, "AXSize")
         if pos is None or size is None:
             return None
@@ -141,8 +143,7 @@ class AXInspector:
         return int(p.x), int(p.y), int(s.width), int(s.height)
 
     def _enable_web_content(self, root, pid: int) -> bool:
-        """
-        Electron and Chromium build their web-content AX tree only after a client
+        """Electron and Chromium build their web-content AX tree only after a client
         sets AXManualAccessibility on the app element. Native apps reject the
         attribute (kAXErrorAttributeUnsupported), which is harmless. Tried once
         per pid. AXEnhancedUserInterface is deliberately not used: it breaks
@@ -165,7 +166,7 @@ class AXInspector:
         self.web_content_enabled[pid] = ok
         return ok
 
-    def _apps(self, app_name_filter: Optional[str]):
+    def _apps(self, app_name_filter: str | None):
         ws = self._appkit.NSWorkspace.sharedWorkspace()
         if not app_name_filter:
             front = None
@@ -173,7 +174,9 @@ class AXInspector:
                 try:
                     pid = self._front_pid_fn()
                     if pid:
-                        front = self._appkit.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+                        front = self._appkit.NSRunningApplication.runningApplicationWithProcessIdentifier_(
+                            pid
+                        )
                 except Exception:  # noqa: BLE001 - fall back to NSWorkspace
                     front = None
             if front is None:
@@ -181,7 +184,8 @@ class AXInspector:
             return [front] if front is not None else []
         needle = app_name_filter.lower()
         return [
-            a for a in ws.runningApplications()
+            a
+            for a in ws.runningApplications()
             if a.activationPolicy() == 0 and needle in str(a.localizedName() or "").lower()
         ]
 
@@ -189,10 +193,10 @@ class AXInspector:
 
     def inspect_desktop(
         self,
-        app_name_filter: Optional[str] = None,
+        app_name_filter: str | None = None,
         max_depth: int = 16,
         filter_interactable: bool = True,
-    ) -> List[UIElement]:
+    ) -> list[UIElement]:
         if not self.is_available:
             return []
         screen = self.screen_bounds
@@ -219,11 +223,13 @@ class AXInspector:
         return elements
 
     @staticmethod
-    def _near_empty(elements: List[UIElement]) -> bool:
-        return sum(1 for e in elements if e.role != "menu item" and e.role != "menubar") < _NEAR_EMPTY
+    def _near_empty(elements: list[UIElement]) -> bool:
+        return (
+            sum(1 for e in elements if e.role != "menu item" and e.role != "menubar") < _NEAR_EMPTY
+        )
 
-    def _collect(self, apps, max_depth, filter_interactable, screen) -> List[UIElement]:
-        elements: List[UIElement] = []
+    def _collect(self, apps, max_depth, filter_interactable, screen) -> list[UIElement]:
+        elements: list[UIElement] = []
         budget = [self.max_nodes]
         deadline = time.monotonic() + self.max_seconds
         if CONFIG.ax_include_menu_bar and apps:
@@ -231,16 +237,36 @@ class AXInspector:
             # before the closed menus, which have no on-screen frame anyway.
             bar = self._attr(apps[0], "AXMenuBar")
             if bar is not None:
-                self._walk(bar, 1, 2, filter_interactable, elements, deadline, budget, screen, parent_role="")
+                self._walk(
+                    bar,
+                    1,
+                    2,
+                    filter_interactable,
+                    elements,
+                    deadline,
+                    budget,
+                    screen,
+                    parent_role="",
+                )
         for root in apps:
             for win in self._attr(root, "AXWindows") or []:
-                self._walk(win, 1, max_depth, filter_interactable, elements, deadline, budget, screen, parent_role="")
+                self._walk(
+                    win,
+                    1,
+                    max_depth,
+                    filter_interactable,
+                    elements,
+                    deadline,
+                    budget,
+                    screen,
+                    parent_role="",
+                )
                 if len(elements) >= CONFIG.som_max_elements or time.monotonic() > deadline:
                     break
         return elements[: CONFIG.som_max_elements]
 
     @staticmethod
-    def _main_screen() -> Optional[Tuple[int, int, int, int]]:
+    def _main_screen() -> tuple[int, int, int, int] | None:
         try:
             import Quartz  # type: ignore
 
@@ -249,7 +275,7 @@ class AXInspector:
         except Exception:
             return None
 
-    def hit_test(self, x: int, y: int) -> Optional[dict]:
+    def hit_test(self, x: int, y: int) -> dict | None:
         """The deepest element at screen point (x, y) as ``{"role", "name", "bbox"}``, or None."""
         if not self.is_available:
             return None
@@ -273,17 +299,28 @@ class AXInspector:
                 break
         secure = ax_role == "AXSecureTextField" or subrole == "AXSecureTextField"
         if secure:
-            name = str(self._attr(el, "AXTitle") or self._attr(el, "AXDescription") or "").strip()[:120]
+            name = str(self._attr(el, "AXTitle") or self._attr(el, "AXDescription") or "").strip()[
+                :120
+            ]
         frame = self._frame(el)
-        bbox = {"x": frame[0], "y": frame[1], "width": frame[2], "height": frame[3]} if frame else None
+        bbox = (
+            {"x": frame[0], "y": frame[1], "width": frame[2], "height": frame[3]} if frame else None
+        )
         return {"role": role, "name": name, "bbox": bbox, "secure": secure}
 
-    def inspect(self) -> List[UIElement]:
+    def inspect(self) -> list[UIElement]:
         """All elements (not just interactable) of the frontmost app."""
         return self.inspect_desktop(filter_interactable=False)
 
-    def _walk(self, el, depth, max_depth, filter_interactable, out, deadline, budget, screen, parent_role) -> None:
-        if depth > max_depth or budget[0] <= 0 or time.monotonic() > deadline or len(out) >= CONFIG.som_max_elements:
+    def _walk(
+        self, el, depth, max_depth, filter_interactable, out, deadline, budget, screen, parent_role
+    ) -> None:
+        if (
+            depth > max_depth
+            or budget[0] <= 0
+            or time.monotonic() > deadline
+            or len(out) >= CONFIG.som_max_elements
+        ):
             return
         budget[0] -= 1
         ax_role = str(self._attr(el, "AXRole") or "")
@@ -305,7 +342,13 @@ class AXInspector:
                 interactable = role in INTERACTABLE_ROLES
                 if not filter_interactable or interactable or role == "dialog":
                     name = ""
-                    for attr in ("AXTitle", "AXDescription", "AXValue", "AXPlaceholderValue", "AXHelp"):
+                    for attr in (
+                        "AXTitle",
+                        "AXDescription",
+                        "AXValue",
+                        "AXPlaceholderValue",
+                        "AXHelp",
+                    ):
                         v = self._attr(el, attr)
                         if isinstance(v, str) and v.strip():
                             name = v.strip()[:200]
@@ -333,7 +376,17 @@ class AXInspector:
         # They do not count toward max_depth; the node budget and deadline still bound the walk.
         next_depth = depth if ax_role in PASSTHROUGH_ROLES and not subrole else depth + 1
         for child in self._attr(el, "AXChildren") or []:
-            self._walk(child, next_depth, max_depth, filter_interactable, out, deadline, budget, screen, ax_role)
+            self._walk(
+                child,
+                next_depth,
+                max_depth,
+                filter_interactable,
+                out,
+                deadline,
+                budget,
+                screen,
+                ax_role,
+            )
 
 
 def get_accessibility_inspector():

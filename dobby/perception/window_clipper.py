@@ -5,11 +5,8 @@ Reduces multimodal token consumption and pixel payload by 60-80% while
 maintaining full pixel fidelity for interactive elements.
 """
 
-from typing import Optional, Tuple, Dict, Any, List
-from PIL import Image
-
 from dobby.hal.base import IDesktopHAL
-from dobby.types import WindowInfo, BoundingBox, UIElement, DisplayTopology
+from dobby.types import BoundingBox, DisplayTopology, UIElement, WindowInfo
 
 
 class WindowClipper:
@@ -20,13 +17,15 @@ class WindowClipper:
 
     def resolve_target_window(
         self,
-        window_id: Optional[str] = None,
-        title_filter: Optional[str] = None,
-    ) -> Optional[WindowInfo]:
+        window_id: str | None = None,
+        title_filter: str | None = None,
+    ) -> WindowInfo | None:
         """Resolves target window metadata."""
         if window_id:
             for win in self.hal.list_windows():
-                if win.window_id == window_id or hex(int(win.window_id, 16)) == hex(int(window_id, 16) if window_id.startswith("0x") else int(window_id)):
+                if win.window_id == window_id or hex(int(win.window_id, 16)) == hex(
+                    int(window_id, 16) if window_id.startswith("0x") else int(window_id)
+                ):
                     return win
 
         if title_filter:
@@ -41,9 +40,9 @@ class WindowClipper:
     def clip_region_to_screen(
         self,
         bbox: BoundingBox,
-        screen_size: Tuple[int, int],
-        topology: Optional[DisplayTopology] = None,
-    ) -> Tuple[int, int, int, int]:
+        screen_size: tuple[int, int],
+        topology: DisplayTopology | None = None,
+    ) -> tuple[int, int, int, int]:
         """Clips a window box to the virtual desktop, which may start left of the origin."""
         topology = topology if topology is not None else getattr(self.hal, "topology", None)
         if isinstance(topology, DisplayTopology) and topology.displays:
@@ -63,15 +62,14 @@ class WindowClipper:
 
     def filter_and_offset_elements(
         self,
-        elements: List[UIElement],
+        elements: list[UIElement],
         window_bbox: BoundingBox,
-    ) -> List[UIElement]:
-        """
-        Filters elements that lie within the window bounds.
+    ) -> list[UIElement]:
+        """Filters elements that lie within the window bounds.
         Elements retain their true physical desktop coordinates for accurate clicking.
         """
         wx, wy, ww, wh = window_bbox.x, window_bbox.y, window_bbox.width, window_bbox.height
-        filtered: List[UIElement] = []
+        filtered: list[UIElement] = []
 
         for elem in elements:
             bx, by, bw, bh = elem.bbox.x, elem.bbox.y, elem.bbox.width, elem.bbox.height

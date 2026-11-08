@@ -28,7 +28,9 @@ def main() -> int:
     from dobby.gemma.decide import GemmaDecider
     from dobby.gemma.gate import gate
 
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--model", default=CONFIG.gemma3_vision_model)
     ap.add_argument("--repeats", type=int, default=3)
     args = ap.parse_args()
@@ -38,15 +40,19 @@ def main() -> int:
         print(f"{args.model} is not installed at {client.base_url}", file=sys.stderr)
         return 2
     try:
-        version = client._transport("GET", f"{client.base_url}/api/version", None, 2.0).get("version")
+        version = client._transport("GET", f"{client.base_url}/api/version", None, 2.0).get(
+            "version"
+        )
     except Exception:
         version = "unknown"
     print(f"Ollama {version}, model {args.model}")
     client.warmup(args.model)
 
     decider = GemmaDecider(client, model=args.model)
-    state = ("Goal: save the open document.\nWindow: TextEdit, 'Untitled' with unsaved changes.\n"
-             "A dialog asks: Do you want to save changes?")
+    state = (
+        "Goal: save the open document.\nWindow: TextEdit, 'Untitled' with unsaved changes.\n"
+        "A dialog asks: Do you want to save changes?"
+    )
     options = ["Don't Save", "Cancel", "Save"]
 
     choice_ms, json_ms = [], []
@@ -56,16 +62,29 @@ def main() -> int:
         d = decider.choose(state, "Which button saves the document?", options)
         choice_ms.append((time.perf_counter() - t) * 1000)
         t = time.perf_counter()
-        client.chat_json(args.model, "Pick the button that saves the document.", state + "\nButtons: " + ", ".join(options),
-                         {"type": "object", "properties": {"button": {"type": "string", "enum": options}},
-                          "required": ["button"]}, max_tokens=40)
+        client.chat_json(
+            args.model,
+            "Pick the button that saves the document.",
+            state + "\nButtons: " + ", ".join(options),
+            {
+                "type": "object",
+                "properties": {"button": {"type": "string", "enum": options}},
+                "required": ["button"],
+            },
+            max_tokens=40,
+        )
         json_ms.append((time.perf_counter() - t) * 1000)
 
     print("decision:", d.as_dict())
     print("gate(click):", gate(d, "click").as_dict())
-    print(f"logprob choice p50 {statistics.median(choice_ms):.0f} ms, generated JSON p50 {statistics.median(json_ms):.0f} ms")
+    print(
+        f"logprob choice p50 {statistics.median(choice_ms):.0f} ms, generated JSON p50 {statistics.median(json_ms):.0f} ms"
+    )
     if not d.calibrated:
-        print("No logprobs in the reply: this Ollama is too old for logit-scored decisions.", file=sys.stderr)
+        print(
+            "No logprobs in the reply: this Ollama is too old for logit-scored decisions.",
+            file=sys.stderr,
+        )
         return 3
     return 0
 

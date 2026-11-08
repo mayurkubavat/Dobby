@@ -66,3 +66,44 @@ addopts = "-ra"
 markers = [
     "replay: replays recorded cassettes in tests/cassettes (pytest -m replay)",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["research", "learnings", "references"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # flake8-bugbear
+    "C4",       # comprehensions
+    "SIM",      # simplify
+    "PIE",
+    "RUF",
+    "D",        # pydocstyle (Google convention)
+]
+ignore = [
+    "E501",     # line length is the formatter's job
+    "D105",     # magic methods
+    "D107",     # __init__: document the class instead
+    "SIM105",   # contextlib.suppress is not clearer than try/except/pass
+    "SIM108",   # ternaries are not always clearer
+    "RUF001", "RUF002", "RUF003",  # typographic quotes, dashes and arrows are intentional in UI text
+]
+# Codes from linters ruff does not run here; keep their noqa comments.
+external = ["BLE001", "WPS433"]
+unfixable = [
+    "RUF100",   # review unused noqa by hand
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+"scripts/**" = ["D"]
+"examples/**" = ["D"]
+"apps/**" = ["D"]

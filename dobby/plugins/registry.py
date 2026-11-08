@@ -1,6 +1,5 @@
 """Plugin Registry for managing UI Application Plugins in Vision MCP."""
 
-from typing import Dict, List, Optional, Any
 from dobby.plugins.base import BaseUIAppPlugin
 from dobby.plugins.chrome import ChromeBrowserPlugin
 from dobby.plugins.vivado import VivadoPlugin
@@ -8,13 +7,12 @@ from dobby.types import PluginSummary
 
 
 class PluginRegistry:
-    """
-    Central registry for discovering, registering, and routing actions
+    """Central registry for discovering, registering, and routing actions
     to high-feature application plugins.
     """
 
     def __init__(self) -> None:
-        self._plugins: Dict[str, BaseUIAppPlugin] = {}
+        self._plugins: dict[str, BaseUIAppPlugin] = {}
         self._register_default_plugins()
 
     def _register_default_plugins(self) -> None:
@@ -26,18 +24,17 @@ class PluginRegistry:
         """Registers a new application plugin."""
         self._plugins[plugin.app_id.lower()] = plugin
 
-    def get(self, app_id: str) -> Optional[BaseUIAppPlugin]:
+    def get(self, app_id: str) -> BaseUIAppPlugin | None:
         """Retrieves a registered plugin by app_id."""
         return self._plugins.get(app_id.lower())
 
-    def detect(self, window_title: str, app_name: Optional[str] = None) -> Optional[BaseUIAppPlugin]:
-        """
-        Matches an application plugin against window title or process name.
-        
+    def detect(self, window_title: str, app_name: str | None = None) -> BaseUIAppPlugin | None:
+        """Matches an application plugin against window title or process name.
+
         Args:
             window_title: Title bar string of desktop window.
             app_name: Optional process binary name.
-            
+
         Returns:
             Matching BaseUIAppPlugin instance or None.
         """
@@ -46,7 +43,7 @@ class PluginRegistry:
                 return plugin
         return None
 
-    def list_all(self, active_window_title: Optional[str] = None) -> List[PluginSummary]:
+    def list_all(self, active_window_title: str | None = None) -> list[PluginSummary]:
         """Returns summaries of all registered plugins, marking which is currently active."""
         summaries = []
         for plugin in self._plugins.values():
@@ -59,4 +56,3 @@ class PluginRegistry:
 
 # Default global registry singleton
 PLUGIN_REGISTRY = PluginRegistry()
-

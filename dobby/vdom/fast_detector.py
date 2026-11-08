@@ -1,16 +1,16 @@
-"""
-High-Speed Neural UI Bounding Box Detector & Vectorized Post-Processing.
+"""High-Speed Neural UI Bounding Box Detector & Vectorized Post-Processing.
 
 Provides sub-20ms neural proposal generation using ONNX Runtime with CPU AVX-512 acceleration,
 letterboxing, anchor decoding, and vectorized Non-Maximum Suppression (NMS).
 Outputs standard UI classes for zero-token Virtual DOM (vDOM) proposal synthesis.
 """
 
+import logging
 import os
 import time
-import logging
 from enum import Enum
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import Any
+
 import numpy as np
 from PIL import Image
 
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class UIClass(str, Enum):
     """Standard UI element classes recognized by the neural fast detector."""
+
     PUSH_BUTTON = "push_button"
     ICON_BUTTON = "icon_button"
     TEXT_INPUT = "text_input"
@@ -27,7 +28,7 @@ class UIClass(str, Enum):
     CONTAINER_VIEWPORT = "container_viewport"
 
 
-UI_CLASS_NAMES: List[str] = [
+UI_CLASS_NAMES: list[str] = [
     UIClass.PUSH_BUTTON.value,
     UIClass.ICON_BUTTON.value,
     UIClass.TEXT_INPUT.value,
@@ -38,12 +39,11 @@ UI_CLASS_NAMES: List[str] = [
 
 
 def letterbox(
-    image: Union[Image.Image, np.ndarray],
-    target_size: Tuple[int, int] = (640, 640),
-    fill_color: Tuple[int, int, int] = (114, 114, 114),
-) -> Tuple[np.ndarray, float, Tuple[int, int]]:
-    """
-    Pads and scales an image to target_size maintaining aspect ratio.
+    image: Image.Image | np.ndarray,
+    target_size: tuple[int, int] = (640, 640),
+    fill_color: tuple[int, int, int] = (114, 114, 114),
+) -> tuple[np.ndarray, float, tuple[int, int]]:
+    """Pads and scales an image to target_size maintaining aspect ratio.
 
     Returns:
         tensor: np.ndarray [1, 3, target_h, target_w] float32 in [0.0, 1.0]
@@ -70,6 +70,7 @@ def letterbox(
 
     try:
         import cv2
+
         resized = cv2.resize(img_np, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
     except Exception:
         # Fallback to PIL resize if cv2 is not available
@@ -91,11 +92,10 @@ def letterbox(
 def unletterbox_boxes(
     boxes: np.ndarray,
     scale: float,
-    pad: Tuple[int, int],
-    orig_size: Tuple[int, int],
+    pad: tuple[int, int],
+    orig_size: tuple[int, int],
 ) -> np.ndarray:
-    """
-    Inverts letterbox transformation on bounding boxes.
+    """Inverts letterbox transformation on bounding boxes.
 
     Args:
         boxes: np.ndarray of shape [N, 4] with format [x1, y1, x2, y2]
@@ -127,8 +127,7 @@ def nms_vectorized(
     iou_threshold: float = 0.45,
     max_output_boxes: int = 300,
 ) -> np.ndarray:
-    """
-    Vectorized Non-Maximum Suppression (NMS) for axis-aligned bounding boxes.
+    """Vectorized Non-Maximum Suppression (NMS) for axis-aligned bounding boxes.
 
     Args:
         boxes: np.ndarray of shape [N, 4] with format [x1, y1, x2, y2]
@@ -150,7 +149,7 @@ def nms_vectorized(
     areas = np.maximum(0.0, x2 - x1) * np.maximum(0.0, y2 - y1)
     order = scores.argsort()[::-1]
 
-    keep: List[int] = []
+    keep: list[int] = []
     while order.size > 0 and len(keep) < max_output_boxes:
         i = int(order[0])
         keep.append(i)
@@ -178,16 +177,15 @@ def nms_vectorized(
 
 def postprocess_yolo_detections(
     predictions: np.ndarray,
-    orig_size: Tuple[int, int],
+    orig_size: tuple[int, int],
     scale: float,
-    pad: Tuple[int, int],
+    pad: tuple[int, int],
     conf_thresh: float = 0.25,
     iou_thresh: float = 0.45,
-    class_names: Optional[List[str]] = None,
-    offset: Tuple[int, int] = (0, 0),
-) -> List[Dict[str, Any]]:
-    """
-    Post-processes YOLO/ONNX detector output tensor into standardized proposals.
+    class_names: list[str] | None = None,
+    offset: tuple[int, int] = (0, 0),
+) -> list[dict[str, Any]]:
+    """Post-processes YOLO/ONNX detector output tensor into standardized proposals.
 
     Supports both [1, 4+C, N] and [1, N, 4+C] tensor formats.
     """
@@ -198,7 +196,9 @@ def postprocess_yolo_detections(
 
     # Normalize prediction dimensions to [N, 4 + C]
     if predictions.ndim == 3:
-        if predictions.shape[1] == 4 + num_classes or (predictions.shape[1] < predictions.shape[2] and predictions.shape[1] <= 30):
+        if predictions.shape[1] == 4 + num_classes or (
+            predictions.shape[1] < predictions.shape[2] and predictions.shape[1] <= 30
+        ):
             # Format: [1, 4+C, N] -> [N, 4+C]
             preds = predictions[0].transpose(1, 0)
         else:
@@ -217,7 +217,7 @@ def postprocess_yolo_detections(
     cy = preds[:, 1]
     w = preds[:, 2]
     h = preds[:, 3]
-    class_scores = preds[:, 4:4 + num_classes]
+    class_scores = preds[:, 4 : 4 + num_classes]
 
     # Convert logits to probabilities if necessary
     if np.min(class_scores) < 0.0 or np.max(class_scores) > 1.0:
@@ -269,7 +269,7 @@ def postprocess_yolo_detections(
     # Invert letterbox to physical screen coordinates
     unletterboxed = unletterbox_boxes(boxes_keep, scale, pad, orig_size)
 
-    proposals: List[Dict[str, Any]] = []
+    proposals: list[dict[str, Any]] = []
     ox, oy = offset
 
     for i in range(len(unletterboxed)):
@@ -282,36 +282,37 @@ def postprocess_yolo_detections(
         cid = int(class_ids_keep[i])
         class_name = class_names[cid] if cid < len(class_names) else UIClass.PUSH_BUTTON.value
 
-        proposals.append({
-            "bbox": {
-                "x": bx,
-                "y": by,
-                "width": bw,
-                "height": bh,
-            },
-            "confidence": round(float(scores_keep[i]), 4),
-            "class_name": class_name,
-            "text": "",
-            "source": "VISION_FAST",
-        })
+        proposals.append(
+            {
+                "bbox": {
+                    "x": bx,
+                    "y": by,
+                    "width": bw,
+                    "height": bh,
+                },
+                "confidence": round(float(scores_keep[i]), 4),
+                "class_name": class_name,
+                "text": "",
+                "source": "VISION_FAST",
+            }
+        )
 
     return proposals
 
 
 def build_default_ui_detector_model(
     output_path: str,
-    target_size: Tuple[int, int] = (640, 640),
+    target_size: tuple[int, int] = (640, 640),
     num_classes: int = 6,
 ) -> str:
-    """
-    Constructs and serializes a high-speed ONNX UI detector model
+    """Constructs and serializes a high-speed ONNX UI detector model
     compatible with ONNX Runtime 1.31.0 (ir_version <= 13, opset 17).
 
     The model contains convolutional feature extraction with edge/contrast kernels,
     anchor grid decoding, and sigmoid class probabilities.
     """
     import onnx
-    from onnx import helper, numpy_helper, TensorProto
+    from onnx import TensorProto, helper, numpy_helper
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
@@ -357,14 +358,16 @@ def build_default_ui_detector_model(
     b1 = np.zeros(16, dtype=np.float32)
     initializers.append(numpy_helper.from_array(w1, name="l1_w"))
     initializers.append(numpy_helper.from_array(b1, name="l1_b"))
-    nodes.append(helper.make_node(
-        "Conv",
-        inputs=["images", "l1_w", "l1_b"],
-        outputs=["l1_conv"],
-        kernel_shape=[3, 3],
-        strides=[2, 2],
-        pads=[1, 1, 1, 1],
-    ))
+    nodes.append(
+        helper.make_node(
+            "Conv",
+            inputs=["images", "l1_w", "l1_b"],
+            outputs=["l1_conv"],
+            kernel_shape=[3, 3],
+            strides=[2, 2],
+            pads=[1, 1, 1, 1],
+        )
+    )
     nodes.append(helper.make_node("Relu", inputs=["l1_conv"], outputs=["l1_out"]))
 
     # 2. Conv2: 16 -> 32
@@ -372,14 +375,16 @@ def build_default_ui_detector_model(
     b2 = np.zeros(32, dtype=np.float32)
     initializers.append(numpy_helper.from_array(w2, name="l2_w"))
     initializers.append(numpy_helper.from_array(b2, name="l2_b"))
-    nodes.append(helper.make_node(
-        "Conv",
-        inputs=["l1_out", "l2_w", "l2_b"],
-        outputs=["l2_conv"],
-        kernel_shape=[3, 3],
-        strides=[2, 2],
-        pads=[1, 1, 1, 1],
-    ))
+    nodes.append(
+        helper.make_node(
+            "Conv",
+            inputs=["l1_out", "l2_w", "l2_b"],
+            outputs=["l2_conv"],
+            kernel_shape=[3, 3],
+            strides=[2, 2],
+            pads=[1, 1, 1, 1],
+        )
+    )
     nodes.append(helper.make_node("Relu", inputs=["l2_conv"], outputs=["l2_out"]))
 
     # 3. Conv3: 32 -> 32
@@ -387,14 +392,16 @@ def build_default_ui_detector_model(
     b3 = np.zeros(32, dtype=np.float32)
     initializers.append(numpy_helper.from_array(w3, name="l3_w"))
     initializers.append(numpy_helper.from_array(b3, name="l3_b"))
-    nodes.append(helper.make_node(
-        "Conv",
-        inputs=["l2_out", "l3_w", "l3_b"],
-        outputs=["l3_conv"],
-        kernel_shape=[3, 3],
-        strides=[2, 2],
-        pads=[1, 1, 1, 1],
-    ))
+    nodes.append(
+        helper.make_node(
+            "Conv",
+            inputs=["l2_out", "l3_w", "l3_b"],
+            outputs=["l3_conv"],
+            kernel_shape=[3, 3],
+            strides=[2, 2],
+            pads=[1, 1, 1, 1],
+        )
+    )
     nodes.append(helper.make_node("Relu", inputs=["l3_conv"], outputs=["l3_out"]))
 
     # 4. Box Head: 32 -> 4 (dx, dy, dw, dh)
@@ -402,28 +409,34 @@ def build_default_ui_detector_model(
     b_box = np.zeros(4, dtype=np.float32)
     initializers.append(numpy_helper.from_array(w_box, name="wb"))
     initializers.append(numpy_helper.from_array(b_box, name="bb"))
-    nodes.append(helper.make_node(
-        "Conv",
-        inputs=["l3_out", "wb", "bb"],
-        outputs=["box_raw"],
-        kernel_shape=[1, 1],
-        strides=[1, 1],
-        pads=[0, 0, 0, 0],
-    ))
+    nodes.append(
+        helper.make_node(
+            "Conv",
+            inputs=["l3_out", "wb", "bb"],
+            outputs=["box_raw"],
+            kernel_shape=[1, 1],
+            strides=[1, 1],
+            pads=[0, 0, 0, 0],
+        )
+    )
 
     # 5. Class Head: 32 -> num_classes
     w_cls = (np.random.randn(num_classes, 32, 1, 1).astype(np.float32) * 0.2).astype(np.float32)
-    b_cls = np.full(num_classes, -4.2, dtype=np.float32)  # Focal loss prior (p=0.01) to suppress false positives on background
+    b_cls = np.full(
+        num_classes, -4.2, dtype=np.float32
+    )  # Focal loss prior (p=0.01) to suppress false positives on background
     initializers.append(numpy_helper.from_array(w_cls, name="wc"))
     initializers.append(numpy_helper.from_array(b_cls, name="bc"))
-    nodes.append(helper.make_node(
-        "Conv",
-        inputs=["l3_out", "wc", "bc"],
-        outputs=["cls_raw"],
-        kernel_shape=[1, 1],
-        strides=[1, 1],
-        pads=[0, 0, 0, 0],
-    ))
+    nodes.append(
+        helper.make_node(
+            "Conv",
+            inputs=["l3_out", "wc", "bc"],
+            outputs=["cls_raw"],
+            kernel_shape=[1, 1],
+            strides=[1, 1],
+            pads=[0, 0, 0, 0],
+        )
+    )
 
     # Anchor decoding operations
     initializers.append(numpy_helper.from_array(grid_x, name="grid_x"))
@@ -433,11 +446,17 @@ def build_default_ui_detector_model(
 
     split_spec = numpy_helper.from_array(np.array([1, 1, 1, 1], dtype=np.int64), name="split_spec")
     initializers.append(split_spec)
-    nodes.append(helper.make_node("Split", inputs=["box_raw", "split_spec"], outputs=["dx", "dy", "dw", "dh"], axis=1))
+    nodes.append(
+        helper.make_node(
+            "Split", inputs=["box_raw", "split_spec"], outputs=["dx", "dy", "dw", "dh"], axis=1
+        )
+    )
 
     nodes.append(helper.make_node("Sigmoid", inputs=["dx"], outputs=["sig_dx"]))
     nodes.append(helper.make_node("Sigmoid", inputs=["dy"], outputs=["sig_dy"]))
-    stride_c = numpy_helper.from_array(np.array([stride], dtype=np.float32).reshape(1, 1, 1, 1), name="stride_c")
+    stride_c = numpy_helper.from_array(
+        np.array([stride], dtype=np.float32).reshape(1, 1, 1, 1), name="stride_c"
+    )
     initializers.append(stride_c)
     nodes.append(helper.make_node("Mul", inputs=["sig_dx", "stride_c"], outputs=["scaled_dx"]))
     nodes.append(helper.make_node("Mul", inputs=["sig_dy", "stride_c"], outputs=["scaled_dy"]))
@@ -446,7 +465,9 @@ def build_default_ui_detector_model(
 
     nodes.append(helper.make_node("Sigmoid", inputs=["dw"], outputs=["sig_dw"]))
     nodes.append(helper.make_node("Sigmoid", inputs=["dh"], outputs=["sig_dh"]))
-    four_c = numpy_helper.from_array(np.array([4.0], dtype=np.float32).reshape(1, 1, 1, 1), name="four_c")
+    four_c = numpy_helper.from_array(
+        np.array([4.0], dtype=np.float32).reshape(1, 1, 1, 1), name="four_c"
+    )
     initializers.append(four_c)
     nodes.append(helper.make_node("Mul", inputs=["sig_dw", "four_c"], outputs=["w_factor"]))
     nodes.append(helper.make_node("Mul", inputs=["sig_dh", "four_c"], outputs=["h_factor"]))
@@ -457,18 +478,32 @@ def build_default_ui_detector_model(
     nodes.append(helper.make_node("Sigmoid", inputs=["cls_raw"], outputs=["cls_prob"]))
 
     # Concatenate [cx, cy, w, h, cls_prob] -> [1, 4 + num_classes, 80, 80]
-    nodes.append(helper.make_node("Concat", inputs=["cx", "cy", "w", "h", "cls_prob"], outputs=["concat_out"], axis=1))
+    nodes.append(
+        helper.make_node(
+            "Concat", inputs=["cx", "cy", "w", "h", "cls_prob"], outputs=["concat_out"], axis=1
+        )
+    )
 
     # Reshape to [1, 4 + num_classes, N_anchors]
     shape_arr = np.array([1, 4 + num_classes, N_anchors], dtype=np.int64)
     initializers.append(numpy_helper.from_array(shape_arr, name="shape_out"))
-    nodes.append(helper.make_node("Reshape", inputs=["concat_out", "shape_out"], outputs=["output0"]))
+    nodes.append(
+        helper.make_node("Reshape", inputs=["concat_out", "shape_out"], outputs=["output0"])
+    )
 
     graph = helper.make_graph(
         nodes,
         "FastUIDetector",
-        [helper.make_tensor_value_info("images", TensorProto.FLOAT, [1, 3, target_size[1], target_size[0]])],
-        [helper.make_tensor_value_info("output0", TensorProto.FLOAT, [1, 4 + num_classes, N_anchors])],
+        [
+            helper.make_tensor_value_info(
+                "images", TensorProto.FLOAT, [1, 3, target_size[1], target_size[0]]
+            )
+        ],
+        [
+            helper.make_tensor_value_info(
+                "output0", TensorProto.FLOAT, [1, 4 + num_classes, N_anchors]
+            )
+        ],
         initializer=initializers,
     )
 
@@ -484,7 +519,10 @@ def build_default_ui_detector_model(
 # that path is refused, so a tampered model never runs inside Dobby.
 BUNDLED_MODEL_SHA256 = "94f69599e33b083378991aeb430050edc4e0dae5e2164a6367edfa328eddf7f5"
 BUNDLED_MODEL_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "ui_detector_fast.onnx"))
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "models", "ui_detector_fast.onnx"
+    )
+)
 
 
 def bundled_model_ok(path: str) -> bool:
@@ -501,18 +539,17 @@ def bundled_model_ok(path: str) -> bool:
 
 
 class FastONNXUIDetector:
-    """
-    Sub-20ms neural UI bounding box detector using ONNX Runtime with CPU AVX-512 acceleration.
+    """Sub-20ms neural UI bounding box detector using ONNX Runtime with CPU AVX-512 acceleration.
     Produces zero-token visual element proposals for Virtual DOM synthesis.
     """
 
     def __init__(
         self,
-        model_path: Optional[str] = None,
+        model_path: str | None = None,
         conf_thresh: float = 0.25,
         iou_thresh: float = 0.45,
         num_threads: int = 4,
-        class_names: Optional[List[str]] = None,
+        class_names: list[str] | None = None,
     ) -> None:
         self.conf_thresh = conf_thresh
         self.iou_thresh = iou_thresh
@@ -521,7 +558,9 @@ class FastONNXUIDetector:
 
         if not model_path:
             pkg_dir = os.path.dirname(os.path.abspath(__file__))
-            self.model_path = os.path.abspath(os.path.join(pkg_dir, "..", "models", "ui_detector_fast.onnx"))
+            self.model_path = os.path.abspath(
+                os.path.join(pkg_dir, "..", "models", "ui_detector_fast.onnx")
+            )
         else:
             self.model_path = os.path.abspath(model_path)
             if not os.path.isabs(model_path) and not os.path.exists(self.model_path):
@@ -534,7 +573,7 @@ class FastONNXUIDetector:
         self._session = None
         self._input_name = "images"
         self._output_name = "output0"
-        self._target_size: Tuple[int, int] = (640, 640)
+        self._target_size: tuple[int, int] = (640, 640)
 
         self._init_session()
 
@@ -544,22 +583,32 @@ class FastONNXUIDetector:
             import onnxruntime as ort
 
             if os.path.exists(self.model_path) and not bundled_model_ok(self.model_path):
-                logger.error(f"Refusing to load '{self.model_path}': it does not match the model shipped with "
-                             "Dobby (SHA-256 differs). Reinstall Dobby to restore it.")
+                logger.error(
+                    f"Refusing to load '{self.model_path}': it does not match the model shipped with "
+                    "Dobby (SHA-256 differs). Reinstall Dobby to restore it."
+                )
                 self._session = None
                 return
 
             # Auto-generate default model if not present
             if not os.path.exists(self.model_path):
-                logger.info(f"Fast ONNX model not found at '{self.model_path}'. Generating default model...")
-                build_default_ui_detector_model(self.model_path, target_size=self._target_size, num_classes=len(self.class_names))
+                logger.info(
+                    f"Fast ONNX model not found at '{self.model_path}'. Generating default model..."
+                )
+                build_default_ui_detector_model(
+                    self.model_path,
+                    target_size=self._target_size,
+                    num_classes=len(self.class_names),
+                )
 
             sess_opts = ort.SessionOptions()
             sess_opts.intra_op_num_threads = self.num_threads
             sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
             providers = ["CPUExecutionProvider"]
-            self._session = ort.InferenceSession(self.model_path, sess_options=sess_opts, providers=providers)
+            self._session = ort.InferenceSession(
+                self.model_path, sess_options=sess_opts, providers=providers
+            )
 
             # Inspect input/output names and shapes
             inputs = self._session.get_inputs()
@@ -573,7 +622,9 @@ class FastONNXUIDetector:
             if outputs:
                 self._output_name = outputs[0].name
 
-            logger.info(f"Loaded Fast ONNX UI detector from '{self.model_path}' (target_size={self._target_size})")
+            logger.info(
+                f"Loaded Fast ONNX UI detector from '{self.model_path}' (target_size={self._target_size})"
+            )
 
         except Exception as e:
             logger.warning(f"Could not initialize Fast ONNX UI detector: {e}")
@@ -586,11 +637,10 @@ class FastONNXUIDetector:
     def detect(
         self,
         image: Image.Image,
-        offset: Tuple[int, int] = (0, 0),
-        conf_thresh: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        Runs letterboxing, ONNX forward pass, and vectorized NMS on the input image.
+        offset: tuple[int, int] = (0, 0),
+        conf_thresh: float | None = None,
+    ) -> list[dict[str, Any]]:
+        """Runs letterboxing, ONNX forward pass, and vectorized NMS on the input image.
 
         Args:
             image: PIL Image of the desktop screen or ROI
@@ -631,16 +681,17 @@ class FastONNXUIDetector:
         )
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        logger.debug(f"Fast ONNX detector generated {len(proposals)} proposals in {elapsed_ms:.2f}ms")
+        logger.debug(
+            f"Fast ONNX detector generated {len(proposals)} proposals in {elapsed_ms:.2f}ms"
+        )
         return proposals
 
     def benchmark(
         self,
         num_runs: int = 20,
-        image_size: Tuple[int, int] = (1920, 1080),
-    ) -> Dict[str, float]:
-        """
-        Benchmarks end-to-end detection pipeline latency on dummy image.
+        image_size: tuple[int, int] = (1920, 1080),
+    ) -> dict[str, float]:
+        """Benchmarks end-to-end detection pipeline latency on dummy image.
 
         Returns:
             Dictionary with breakdown: letterbox_ms, inference_ms, postprocess_ms, total_latency_ms, fps.

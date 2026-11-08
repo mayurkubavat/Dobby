@@ -2,7 +2,6 @@
 Tests for the local OCR lane (RapidOCR on Linux/Windows, Apple Vision on macOS).
 """
 
-import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -125,7 +124,11 @@ def test_assign_text_to_boxes():
         {"bbox": {"x": 0, "y": 0, "width": 100, "height": 40}, "text": ""},
         {"bbox": {"x": 200, "y": 0, "width": 100, "height": 40}, "text": "kept"},
     ]
-    lines = [OCRLine("Run", 10, 10, 30, 20, 0.9), OCRLine("Sim", 50, 10, 30, 20, 0.9), OCRLine("x", 210, 10, 10, 10, 0.9)]
+    lines = [
+        OCRLine("Run", 10, 10, 30, 20, 0.9),
+        OCRLine("Sim", 50, 10, 30, 20, 0.9),
+        OCRLine("x", 210, 10, 10, 10, 0.9),
+    ]
     assert assign_text_to_boxes(props, lines) == 1
     assert props[0]["text"] == "Run Sim" and props[0]["named_by"] == "ocr"
     assert props[1]["text"] == "kept"
@@ -160,7 +163,12 @@ def _controller(lines):
 
 
 def test_read_screen_text_offsets_and_filters():
-    ctrl = _controller([OCRLine("Status: Running", 10, 20, 150, 18, 0.95), OCRLine("Run Simulation", 10, 60, 160, 18, 0.9)])
+    ctrl = _controller(
+        [
+            OCRLine("Status: Running", 10, 20, 150, 18, 0.95),
+            OCRLine("Run Simulation", 10, 60, 160, 18, 0.9),
+        ]
+    )
     res = ctrl.read_screen_text(contains="running")
     assert res["available"] and res["engine"] == "fake" and res["count"] == 1
     line = res["lines"][0]
@@ -171,9 +179,13 @@ def test_read_screen_text_offsets_and_filters():
 
 def test_text_appeared_falls_back_to_ocr():
     ctrl = _controller([OCRLine("Simulation finished", 10, 20, 150, 18, 0.95)])
-    contract = PostConditionContract(assertions=[
-        PostConditionAssertion(assertion_type=StateAssertionType.TEXT_APPEARED, target_name_regex="finished")
-    ])
+    contract = PostConditionContract(
+        assertions=[
+            PostConditionAssertion(
+                assertion_type=StateAssertionType.TEXT_APPEARED, target_name_regex="finished"
+            )
+        ]
+    )
     ok, details = ctrl.verify_post_conditions(contract)
     assert ok, details
     assert "OCR" in details[0]
@@ -199,17 +211,29 @@ def test_read_screen_text_when_ocr_missing():
 def test_capture_vdom_uses_ocr_for_names_and_free_text():
     from dobby.vdom.fusion import VDOMFusionEngine
 
-    ctrl = _controller([OCRLine("Run", 12, 12, 30, 16, 0.9), OCRLine("clk_250m", 300, 100, 80, 16, 0.9)])
+    ctrl = _controller(
+        [OCRLine("Run", 12, 12, 30, 16, 0.9), OCRLine("clk_250m", 300, 100, 80, 16, 0.9)]
+    )
     win = ctrl.hal.get_active_window.return_value
     ctrl.window_clipper = MagicMock()
     ctrl.window_clipper.resolve_target_window.return_value = win
     ctrl.pipeline = MagicMock()
-    ctrl.pipeline.capture.return_value = (Image.new("RGB", (800, 600), "white"), 1.0, (800, 600), (0, 0))
+    ctrl.pipeline.capture.return_value = (
+        Image.new("RGB", (800, 600), "white"),
+        1.0,
+        (800, 600),
+        (0, 0),
+    )
     ctrl.atspi_inspector.inspect_desktop.return_value = []
     ctrl.vdom_fusion = VDOMFusionEngine()
     # detector box in screen coords around the "Run" text (window origin 100, 200)
     ctrl.neural_grounder.generate_proposals.return_value = [
-        {"bbox": {"x": 105, "y": 205, "width": 50, "height": 30}, "confidence": 0.8, "class_name": "push_button", "text": ""}
+        {
+            "bbox": {"x": 105, "y": 205, "width": 50, "height": 30},
+            "confidence": 0.8,
+            "class_name": "push_button",
+            "text": "",
+        }
     ]
     snap = ctrl.capture_vdom(label_with_gemma=False)
     names = sorted(n.name for n in snap.nodes.values() if n.name and n.name != "Vivado")

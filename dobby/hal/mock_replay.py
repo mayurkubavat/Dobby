@@ -11,7 +11,7 @@ import json
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from PIL import Image
 
@@ -25,7 +25,7 @@ class Transition:
 
     pre_frame_id: str
     action: str
-    args: Dict[str, Any]
+    args: dict[str, Any]
     post_frame_id: str
 
 
@@ -34,15 +34,15 @@ class ScreenFrameState:
     """A discrete recorded snapshot in a deterministic state cassette."""
 
     frame_id: str
-    ocr_boxes: List[Dict[str, Any]] = field(default_factory=list)
-    ax_tree: Dict[str, Any] = field(default_factory=dict)
-    ax_diff: Dict[str, Any] = field(default_factory=dict)
-    screen_size: Tuple[int, int] = (1920, 1080)
-    cursor_pos: Tuple[int, int] = (100, 100)
-    windows: List[WindowInfo] = field(default_factory=list)
-    active_window: Optional[WindowInfo] = None
+    ocr_boxes: list[dict[str, Any]] = field(default_factory=list)
+    ax_tree: dict[str, Any] = field(default_factory=dict)
+    ax_diff: dict[str, Any] = field(default_factory=dict)
+    screen_size: tuple[int, int] = (1920, 1080)
+    cursor_pos: tuple[int, int] = (100, 100)
+    windows: list[WindowInfo] = field(default_factory=list)
+    active_window: WindowInfo | None = None
     pixel_delta_from_prev: float = 0.0
-    image_path: Optional[str] = None
+    image_path: str | None = None
     phase: str = "QUIESCENT"
 
 
@@ -63,8 +63,7 @@ def _default_frame() -> ScreenFrameState:
 
 
 class MockReplayHAL:
-    """
-    Cassette-driven Desktop HAL.
+    """Cassette-driven Desktop HAL.
     Implements the capture, input, window, AX, and quiescence protocols.
     """
 
@@ -72,20 +71,20 @@ class MockReplayHAL:
 
     def __init__(
         self,
-        states: Optional[List[ScreenFrameState]] = None,
-        transitions: Optional[List[Transition]] = None,
-        topology: Optional[DisplayTopology] = None,
+        states: list[ScreenFrameState] | None = None,
+        transitions: list[Transition] | None = None,
+        topology: DisplayTopology | None = None,
     ) -> None:
         if states is None:
             states = [_default_frame()]
         if len(states) == 0:
             raise ValueError("cassette has no frames")
-        self.states: List[ScreenFrameState] = states
-        self.transitions: List[Transition] = list(transitions or [])
+        self.states: list[ScreenFrameState] = states
+        self.transitions: list[Transition] = list(transitions or [])
         self.topology = topology
         self.cursor: int = 0
         self._transition_i: int = 0
-        self.actions_dispatched: List[Tuple[str, Dict[str, Any]]] = []
+        self.actions_dispatched: list[tuple[str, dict[str, Any]]] = []
         self._auto_advance: bool = not self.transitions
 
     @property
@@ -109,7 +108,7 @@ class MockReplayHAL:
                 return
         raise CassetteMismatch(frame_id, [f.frame_id for f in self.states])
 
-    def _note(self, action: str, args: Dict[str, Any]) -> None:
+    def _note(self, action: str, args: dict[str, Any]) -> None:
         self.actions_dispatched.append((action, args))
         if self.transitions:
             if self._transition_i >= len(self.transitions):
@@ -129,10 +128,10 @@ class MockReplayHAL:
         if self._auto_advance:
             self.advance_frame()
 
-    def get_screen_size(self) -> Tuple[int, int]:
+    def get_screen_size(self) -> tuple[int, int]:
         return self.current_state.screen_size
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Image.Image:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
         path = self.current_state.image_path
         if path and Path(path).is_file():
             img = Image.open(path).convert("RGB")
@@ -144,7 +143,7 @@ class MockReplayHAL:
             return img.crop((x, y, x + rw, y + rh))
         return img
 
-    def get_cursor_position(self) -> Tuple[int, int]:
+    def get_cursor_position(self) -> tuple[int, int]:
         return self.current_state.cursor_pos
 
     def mouse_move(self, x: int, y: int) -> None:
@@ -179,13 +178,13 @@ class MockReplayHAL:
     def keyboard_press_key(self, key_name: str) -> None:
         self._note("keyboard_press_key", {"key_name": key_name})
 
-    def keyboard_hotkey(self, keys: List[str]) -> None:
+    def keyboard_hotkey(self, keys: list[str]) -> None:
         self._note("keyboard_hotkey", {"keys": list(keys)})
 
-    def list_windows(self) -> List[WindowInfo]:
+    def list_windows(self) -> list[WindowInfo]:
         return self.current_state.windows
 
-    def get_active_window(self) -> Optional[WindowInfo]:
+    def get_active_window(self) -> WindowInfo | None:
         return self.current_state.active_window
 
     def focus_window(self, window_id: str) -> bool:
@@ -202,15 +201,15 @@ class MockReplayHAL:
 
     def get_accessibility_tree(
         self,
-        app_filter: Optional[str] = None,
-        max_depth: Optional[int] = None,
+        app_filter: str | None = None,
+        max_depth: int | None = None,
         diff_only: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if diff_only:
             return self.current_state.ax_diff or {"changed": False, "nodes": []}
         return self.current_state.ax_tree or {"role": "AXApplication", "children": []}
 
-    def read_screen_text(self, contains: Optional[str] = None) -> Dict[str, Any]:
+    def read_screen_text(self, contains: str | None = None) -> dict[str, Any]:
         """Queries recorded OCR boxes in the active frame."""
         boxes = self.current_state.ocr_boxes
         if contains:
@@ -224,7 +223,7 @@ class MockReplayHAL:
     def consume_damage_area(self) -> int:
         return int(self.current_state.pixel_delta_from_prev)
 
-    def get_cursor_state(self) -> Tuple[str, int]:
+    def get_cursor_state(self) -> tuple[str, int]:
         return ("arrow", 0)
 
     def wait_for_quiescence(
@@ -233,7 +232,7 @@ class MockReplayHAL:
         initial_timeout_ms: int = 1500,
         max_total_timeout_ms: int = 15000,
         poll_interval_sec: float = 0.025,
-    ) -> Tuple[ExecutionPhase, float, int]:
+    ) -> tuple[ExecutionPhase, float, int]:
         """Returns the recorded phase and pixel delta. Does not sleep."""
         try:
             phase = ExecutionPhase(self.current_state.phase)
@@ -242,18 +241,20 @@ class MockReplayHAL:
         return (phase, 0.0, int(self.current_state.pixel_delta_from_prev))
 
     @classmethod
-    def load_cassette(cls, path_or_json: str | Path) -> "MockReplayHAL":
+    def load_cassette(cls, path_or_json: str | Path) -> MockReplayHAL:
         """Loads a state cassette from a directory, zip, JSON file, or JSON string."""
         if isinstance(path_or_json, Path) or (
-            isinstance(path_or_json, str) and (
-                path_or_json.endswith((".json", ".halpack")) or Path(path_or_json).exists()
-            )
+            isinstance(path_or_json, str)
+            and (path_or_json.endswith((".json", ".halpack")) or Path(path_or_json).exists())
         ):
             path = Path(path_or_json)
             if path.is_dir():
-                return cls._from_payload(json.loads((path / "index.json").read_text(encoding="utf-8")), path)
+                return cls._from_payload(
+                    json.loads((path / "index.json").read_text(encoding="utf-8")), path
+                )
             if zipfile.is_zipfile(path):
                 import tempfile
+
                 dest = Path(tempfile.mkdtemp(prefix="halpack-"))
                 with zipfile.ZipFile(path) as zf:
                     zf.extractall(dest)
@@ -267,9 +268,9 @@ class MockReplayHAL:
         return cls._from_payload(json.loads(content), base)
 
     @classmethod
-    def _from_payload(cls, data: Dict[str, Any], base: Path) -> "MockReplayHAL":
+    def _from_payload(cls, data: dict[str, Any], base: Path) -> MockReplayHAL:
         raw_frames = data.get("frames", [])
-        frames: List[ScreenFrameState] = []
+        frames: list[ScreenFrameState] = []
         if isinstance(raw_frames, dict):
             items = list(raw_frames.values())
         else:
@@ -319,14 +320,14 @@ class CassetteRecorder:
 
     def __init__(self, session: Any) -> None:
         self.session = session
-        self.frames: List[Dict[str, Any]] = []
-        self.transitions: List[Transition] = []
+        self.frames: list[dict[str, Any]] = []
+        self.transitions: list[Transition] = []
         self._seq = 0
 
     def _snapshot(self) -> str:
         frame_id = f"f{self._seq}"
         self._seq += 1
-        ax: Dict[str, Any] = {}
+        ax: dict[str, Any] = {}
         if hasattr(self.session, "get_accessibility_tree"):
             try:
                 ax = self.session.get_accessibility_tree(diff_only=False)
@@ -341,7 +342,7 @@ class CassetteRecorder:
         self.frames.append({"frame_id": frame_id, "ax_tree": ax, "screen_size": list(size)})
         return frame_id
 
-    def run(self, action: str, args: Dict[str, Any]) -> str:
+    def run(self, action: str, args: dict[str, Any]) -> str:
         pre = self._snapshot()
         method = getattr(self.session, action)
         method(**args)

@@ -1,5 +1,4 @@
-"""
-Local Gemma 3 Multimodal Sidecar Plugin for Phase 4 Grounding and Modal Triage.
+"""Local Gemma 3 Multimodal Sidecar Plugin for Phase 4 Grounding and Modal Triage.
 
 Integrates local Google Gemma 3 models served by Ollama (gemma3:4b by default for both
 vision sub-panes and text modal triage) with perceptual dHash caching and zero cloud
@@ -12,9 +11,10 @@ import json
 import logging
 import time
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple
-from PIL import Image
+from typing import Any
+
 import numpy as np
+from PIL import Image
 
 from dobby.config import CONFIG
 from dobby.gemma.client import GemmaClient, GemmaError, encode_image
@@ -31,8 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def compute_dhash(image: Image.Image) -> int:
-    """
-    Computes a 64-bit difference hash (dHash) for an image crop in < 0.6ms.
+    """Computes a 64-bit difference hash (dHash) for an image crop in < 0.6ms.
     Captures structural gradient morphology invariant to slight brightness/contrast shifts.
     """
     try:
@@ -53,8 +52,7 @@ def hamming_distance(h1: int, h2: int) -> int:
 
 
 class SemanticROICache:
-    """
-    Perceptual LRU cache for visual grounding proposals.
+    """Perceptual LRU cache for visual grounding proposals.
     Provides sub-millisecond retrieval on static or repeating EDA sub-panes.
     """
 
@@ -62,29 +60,31 @@ class SemanticROICache:
         self.capacity = capacity
         self.threshold = threshold
         # Key: cache_key -> (dhash, timestamp, List[Dict[str, Any]])
-        self._entries: OrderedDict[str, Tuple[int, float, List[Dict[str, Any]]]] = OrderedDict()
+        self._entries: OrderedDict[str, tuple[int, float, list[dict[str, Any]]]] = OrderedDict()
 
-    def get(self, cache_key: str, dhash: int) -> Optional[List[Dict[str, Any]]]:
-        """
-        Retrieves cached proposals if key matches and Hamming distance <= threshold.
-        """
+    def get(self, cache_key: str, dhash: int) -> list[dict[str, Any]] | None:
+        """Retrieves cached proposals if key matches and Hamming distance <= threshold."""
         if cache_key in self._entries:
             entry_dhash, _, proposals = self._entries[cache_key]
             if hamming_distance(dhash, entry_dhash) <= self.threshold:
                 self._entries.move_to_end(cache_key)
-                logger.debug(f"SemanticROICache hit for key '{cache_key}' (Hamming dist={hamming_distance(dhash, entry_dhash)})")
+                logger.debug(
+                    f"SemanticROICache hit for key '{cache_key}' (Hamming dist={hamming_distance(dhash, entry_dhash)})"
+                )
                 return proposals
 
         # Secondary search across all entries for identical perceptual match
         for k, (entry_dhash, _, proposals) in list(self._entries.items()):
             if hamming_distance(dhash, entry_dhash) <= self.threshold:
                 self._entries.move_to_end(k)
-                logger.debug(f"SemanticROICache perceptual match for key '{k}' (Hamming dist={hamming_distance(dhash, entry_dhash)})")
+                logger.debug(
+                    f"SemanticROICache perceptual match for key '{k}' (Hamming dist={hamming_distance(dhash, entry_dhash)})"
+                )
                 return proposals
 
         return None
 
-    def put(self, cache_key: str, dhash: int, proposals: List[Dict[str, Any]]) -> None:
+    def put(self, cache_key: str, dhash: int, proposals: list[dict[str, Any]]) -> None:
         """Stores proposals in the LRU cache."""
         if cache_key in self._entries:
             self._entries.move_to_end(cache_key)
@@ -99,7 +99,7 @@ class SemanticROICache:
         return len(self._entries)
 
 
-_GROUND_SCHEMA: Dict[str, Any] = {
+_GROUND_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "elements": {
@@ -136,7 +136,7 @@ _GROUND_SCHEMA: Dict[str, Any] = {
 
 _MODAL_TIERS = [t.value for t in ModalRiskTier]
 
-_MODAL_SCHEMA: Dict[str, Any] = {
+_MODAL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "risk_tier": {"type": "string", "enum": _MODAL_TIERS},
@@ -146,8 +146,6 @@ _MODAL_SCHEMA: Dict[str, Any] = {
     },
     "required": ["risk_tier", "suggested_button", "confidence", "reason"],
 }
-
-
 
 
 def _list_prompts():
@@ -172,7 +170,7 @@ def _fit_image(image: Image.Image, max_side: int) -> Image.Image:
     return image.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
 
 
-def _escalate(reason: str) -> Dict[str, Any]:
+def _escalate(reason: str) -> dict[str, Any]:
     """Fail-closed modal verdict: never auto-click, hand the choice to the planner."""
     return {
         "risk_tier": ModalRiskTier.WORKFLOW_BRANCHING.value,
@@ -184,8 +182,7 @@ def _escalate(reason: str) -> Dict[str, Any]:
 
 
 class Gemma3Grounder:
-    """
-    On-demand local Gemma 3 sidecar (via Ollama) for sub-pane grounding and
+    """On-demand local Gemma 3 sidecar (via Ollama) for sub-pane grounding and
     modal triage. All calls go through :class:`GemmaClient`, which constrains
     replies to a JSON schema and records call counts and latency.
     """
@@ -193,12 +190,12 @@ class Gemma3Grounder:
     def __init__(
         self,
         endpoint: str = CONFIG.gemma3_endpoint,
-        vision_model: Optional[str] = None,
-        text_model: Optional[str] = None,
+        vision_model: str | None = None,
+        text_model: str | None = None,
         dhash_threshold: int = CONFIG.gemma3_dhash_threshold,
         cache_capacity: int = CONFIG.gemma3_cache_capacity,
         timeout: float = CONFIG.gemma3_timeout_seconds,
-        client: Optional[GemmaClient] = None,
+        client: GemmaClient | None = None,
     ) -> None:
         self.client = client or GemmaClient(
             base_url=endpoint,
@@ -223,7 +220,7 @@ class Gemma3Grounder:
         return self._vision_model or model_for("vision")
 
     @vision_model.setter
-    def vision_model(self, value: Optional[str]) -> None:
+    def vision_model(self, value: str | None) -> None:
         self._vision_model = value
 
     @property
@@ -233,14 +230,14 @@ class Gemma3Grounder:
         return self._text_model or model_for("triage")
 
     @text_model.setter
-    def text_model(self, value: Optional[str]) -> None:
+    def text_model(self, value: str | None) -> None:
         self._text_model = value
 
     def is_available(self) -> bool:
         """True when Ollama is reachable and both configured models are installed (exact names)."""
         return self.client.has_models({self.vision_model, self.text_model})
 
-    def diagnostics(self) -> Dict[str, Any]:
+    def diagnostics(self) -> dict[str, Any]:
         installed = self.client.installed_models()
         return {
             "vision_model": self.vision_model,
@@ -258,12 +255,11 @@ class Gemma3Grounder:
     def ground_roi(
         self,
         image: Image.Image,
-        offset: Tuple[int, int] = (0, 0),
+        offset: tuple[int, int] = (0, 0),
         anchor_id: str = "default",
         task_intent: str = "ground_ui",
-    ) -> List[Dict[str, Any]]:
-        """
-        Deprecated: asks Gemma to regress box coordinates, which Gemma 3 does
+    ) -> list[dict[str, Any]]:
+        """Deprecated: asks Gemma to regress box coordinates, which Gemma 3 does
         poorly. Prefer ``self.marks.label_marks`` / ``find_mark`` on detector
         boxes (see LocalNeuralGrounder.ground_subpane). Kept for compatibility.
 
@@ -300,7 +296,9 @@ class Gemma3Grounder:
         from dobby.gemma.prompts import get_prompt
 
         system_prompt = get_prompt("ground_roi").system
-        user_prompt = f"Ground the interactive targets in this '{anchor_id}' crop for '{task_intent}'."
+        user_prompt = (
+            f"Ground the interactive targets in this '{anchor_id}' crop for '{task_intent}'."
+        )
 
         try:
             data = self.client.chat_json(
@@ -315,8 +313,8 @@ class Gemma3Grounder:
             logger.warning(f"Gemma 3 grounding failed: {e}")
             return []
 
-        proposals: List[Dict[str, Any]] = []
-        raw_items_for_cache: List[Dict[str, Any]] = []
+        proposals: list[dict[str, Any]] = []
+        raw_items_for_cache: list[dict[str, Any]] = []
         for el in data.get("elements", []) or []:
             box_2d = el.get("box_2d") if isinstance(el, dict) else None
             if not box_2d or len(box_2d) != 4:
@@ -341,34 +339,39 @@ class Gemma3Grounder:
             label = el.get("label", "")
             conf = max(0.0, min(1.0, conf))
 
-            raw_items_for_cache.append({
-                "rel_box": {"x": rel_x, "y": rel_y, "width": rel_w, "height": rel_h},
-                "class_name": role,
-                "text": label,
-                "confidence": conf,
-            })
-            proposals.append({
-                "bbox": {"x": ox + rel_x, "y": oy + rel_y, "width": rel_w, "height": rel_h},
-                "confidence": conf,
-                "class_name": role,
-                "text": label,
-                "source": GroundingSource.VISION_ONLY.value,
-            })
+            raw_items_for_cache.append(
+                {
+                    "rel_box": {"x": rel_x, "y": rel_y, "width": rel_w, "height": rel_h},
+                    "class_name": role,
+                    "text": label,
+                    "confidence": conf,
+                }
+            )
+            proposals.append(
+                {
+                    "bbox": {"x": ox + rel_x, "y": oy + rel_y, "width": rel_w, "height": rel_h},
+                    "confidence": conf,
+                    "class_name": role,
+                    "text": label,
+                    "source": GroundingSource.VISION_ONLY.value,
+                }
+            )
 
         if raw_items_for_cache:
             self.cache.put(cache_key, img_dhash, raw_items_for_cache)
-            logger.info(f"Gemma 3 grounded {len(proposals)} elements in '{anchor_id}' (dHash {hex(img_dhash)})")
+            logger.info(
+                f"Gemma 3 grounded {len(proposals)} elements in '{anchor_id}' (dHash {hex(img_dhash)})"
+            )
         return proposals
 
     def classify_modal(
         self,
         modal_text: str,
-        modal_image: Optional[Image.Image] = None,
-        button_labels: Optional[List[str]] = None,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
-        """
-        Classifies a modal dialog into the same tiers as ``ModalRiskTier``.
+        modal_image: Image.Image | None = None,
+        button_labels: list[str] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Classifies a modal dialog into the same tiers as ``ModalRiskTier``.
 
         Returns ``{risk_tier, suggested_button, confidence, reason, source}``.
         Fails closed: on any error, unknown tier, or a suggested button that is
@@ -416,7 +419,10 @@ class Gemma3Grounder:
         if tier not in safe_tiers:
             suggested = None
         elif suggested is not None and button_labels is not None:
-            match = next((b for b in button_labels if b.strip().lower() == str(suggested).strip().lower()), None)
+            match = next(
+                (b for b in button_labels if b.strip().lower() == str(suggested).strip().lower()),
+                None,
+            )
             suggested = match
         if tier in safe_tiers and suggested is None:
             # A "safe" verdict with no usable button cannot be acted on: escalate.
@@ -434,12 +440,11 @@ class Gemma3Grounder:
         self,
         image: Image.Image,
         question: str,
-        timeout: Optional[float] = None,
-        ocr_lines: Optional[List[str]] = None,
-        verify_lines: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Answers a yes/no question about a screen crop (prompt ``yes_no``).
+        timeout: float | None = None,
+        ocr_lines: list[str] | None = None,
+        verify_lines: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Answers a yes/no question about a screen crop (prompt ``yes_no``).
 
         Returns ``{answer, confidence, evidence, evidence_type, evidence_verified,
         prompt, source}``. ``answer`` is None when Gemma said unsure or could not
@@ -453,10 +458,22 @@ class Gemma3Grounder:
         spec = get_prompt("yes_no")
         base = {"prompt": spec.tag, "evidence_type": "none", "evidence_verified": None}
         if image.size[0] < 4 or image.size[1] < 4:
-            return {**base, "answer": None, "confidence": 0.0, "evidence": "crop too small", "source": "fallback"}
+            return {
+                **base,
+                "answer": None,
+                "confidence": 0.0,
+                "evidence": "crop too small",
+                "source": "fallback",
+            }
         if _is_blank(image):
             # Nothing on screen to judge: gemma3:4b answers a confident "no" here (eval_prompts blank.png).
-            return {**base, "answer": None, "confidence": 0.0, "evidence": "blank crop", "source": "blank_crop"}
+            return {
+                **base,
+                "answer": None,
+                "confidence": 0.0,
+                "evidence": "blank crop",
+                "source": "blank_crop",
+            }
         crop = _fit_image(image, CONFIG.gemma3_visual_max_side)
         if CONFIG.gemma3_yes_no_logprobs:
             scored = self._yes_no_logprob(crop, question, ocr_lines, timeout)
@@ -473,7 +490,13 @@ class Gemma3Grounder:
                 max_tokens=spec.max_tokens,
             )
         except GemmaError as e:
-            return {**base, "answer": None, "confidence": 0.0, "evidence": f"Gemma unavailable: {e}", "source": "fallback"}
+            return {
+                **base,
+                "answer": None,
+                "confidence": 0.0,
+                "evidence": f"Gemma unavailable: {e}",
+                "source": "fallback",
+            }
         raw = data.get("answer")
         answer = parse_answer(raw)
         try:
@@ -506,9 +529,8 @@ class Gemma3Grounder:
                 result["confidence"] = min(confidence, CONFIG.gemma3_unverified_text_cap)
         return result
 
-    def decider(self, timeout: Optional[float] = None, role: str = "vision"):
-        """
-        A :class:`~dobby.gemma.decide.GemmaDecider` for a model role: "text" (screen-state
+    def decider(self, timeout: float | None = None, role: str = "vision"):
+        """A :class:`~dobby.gemma.decide.GemmaDecider` for a model role: "text" (screen-state
         choices), "vision" (crop checks, the default) or "visual_pick" (Set-of-Marks).
         """
         from dobby.gemma.decide import GemmaDecider
@@ -521,11 +543,10 @@ class Gemma3Grounder:
         self,
         crop: Image.Image,
         question: str,
-        ocr_lines: Optional[List[str]],
-        timeout: Optional[float],
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Yes/no from Gemma's token probabilities (prompt ``yes_no_logprob``).
+        ocr_lines: list[str] | None,
+        timeout: float | None,
+    ) -> dict[str, Any] | None:
+        """Yes/no from Gemma's token probabilities (prompt ``yes_no_logprob``).
 
         Returns None when this Ollama gives no logprobs or Gemma is unreachable,
         so :meth:`ask_yes_no` falls back to the generated JSON answer.
@@ -566,16 +587,20 @@ class Gemma3Grounder:
     def evaluate_step(
         self,
         action: str,
-        args: Optional[Dict[str, Any]] = None,
-        expected: Optional[Dict[str, Any]] = None,
-        ax_diff: Optional[Dict[str, Any]] = None,
-        image: Optional[Image.Image] = None,
-    ) -> Dict[str, Any]:
+        args: dict[str, Any] | None = None,
+        expected: dict[str, Any] | None = None,
+        ax_diff: dict[str, Any] | None = None,
+        image: Image.Image | None = None,
+    ) -> dict[str, Any]:
         """Tier-1 check. Confidence below 0.82 is not a pass."""
         expected = expected or {}
         question = expected.get("visual_question") or f"Did the action '{action}' succeed?"
         if image is None:
-            return {"verified": False, "confidence": 0.0, "reason": "no crop for local verification"}
+            return {
+                "verified": False,
+                "confidence": 0.0,
+                "reason": "no crop for local verification",
+            }
         result = self.ask_yes_no(image, str(question))
         confidence = float(result.get("confidence") or 0.0)
         verified = result.get("answer") is True and confidence >= 0.82
@@ -603,11 +628,10 @@ class Gemma3Grounder:
     def fuse_with_vdom(
         self,
         vdom_snapshot: VirtualDOMSnapshot,
-        proposals: List[Dict[str, Any]],
-        anchor_id: Optional[str] = None,
+        proposals: list[dict[str, Any]],
+        anchor_id: str | None = None,
     ) -> VirtualDOMSnapshot:
-        """
-        Integrates Gemma 3 visual proposals into a VirtualDOMSnapshot.
+        """Integrates Gemma 3 visual proposals into a VirtualDOMSnapshot.
         Injects nodes with source=GroundingSource.VISION_ONLY into the snapshot nodes dictionary.
         """
         next_idx = len(vdom_snapshot.nodes) + 1
@@ -631,7 +655,7 @@ class Gemma3Grounder:
                 role = UIRole.PUSH_BUTTON
 
             node_id = f"gemma3_{next_idx}"
-            attrs: Dict[str, str] = {}
+            attrs: dict[str, str] = {}
             if anchor_id:
                 attrs["anchor_id"] = anchor_id
 

@@ -3,36 +3,31 @@ Unit and integration tests for Phase 2: Semantic Modal Dialog Triage & Policy Ro
 Tests SemanticModalRouter, ObstructionInterceptor, risk classification tiers, and resolve_modal_dialog.
 """
 
-import pytest
-from unittest.mock import MagicMock
-
 from dobby.agent_loop.obstruction import (
-    SemanticModalRouter,
     ObstructionInterceptor,
+    SemanticModalRouter,
 )
-from dobby.types import (
-    BoundingBox,
-    UIElement,
-    WindowInfo,
-    ModalRiskTier,
-    ModalButtonOption,
-    ModalEscalationPayload,
-    ModalTriageResult,
-)
+from dobby.hal.base import IDesktopHAL
 from dobby.server import (
     dismiss_obstructions,
     resolve_modal_dialog,
 )
-from dobby.hal.base import IDesktopHAL
+from dobby.types import (
+    BoundingBox,
+    ModalButtonOption,
+    ModalRiskTier,
+)
 
 
 class MockHAL(IDesktopHAL):
     """Mock Desktop HAL for deterministic unit testing."""
+
     def get_screen_size(self):
         return (1920, 1080)
 
     def capture_screen(self, region=None):
         from PIL import Image
+
         return Image.new("RGB", (100, 100), color="white")
 
     def get_cursor_position(self):
@@ -206,7 +201,13 @@ def test_interceptor_benign_auto_dismissal():
     interceptor.inspect_active_dialog = lambda: (
         "Tip of the Day",
         "Tip text",
-        [ModalButtonOption(button_id="btn_close", label="Close", bbox=BoundingBox(x=200, y=300, width=100, height=40))],
+        [
+            ModalButtonOption(
+                button_id="btn_close",
+                label="Close",
+                bbox=BoundingBox(x=200, y=300, width=100, height=40),
+            )
+        ],
     )
 
     result = interceptor.triage_and_resolve()
@@ -227,7 +228,11 @@ def test_interceptor_informative_auto_acknowledgment():
     interceptor.inspect_active_dialog = lambda: (
         "Synthesis Completed Successfully",
         "Design meets timing with 0 errors.",
-        [ModalButtonOption(button_id="btn_ok", label="OK", bbox=BoundingBox(x=400, y=400, width=80, height=30))],
+        [
+            ModalButtonOption(
+                button_id="btn_ok", label="OK", bbox=BoundingBox(x=400, y=400, width=80, height=30)
+            )
+        ],
     )
 
     result = interceptor.triage_and_resolve()
@@ -250,8 +255,16 @@ def test_interceptor_destructive_blocks_and_resolves():
         "Confirm Delete Netlist",
         "Are you sure you want to delete synthesized netlist?",
         [
-            ModalButtonOption(button_id="btn_del", label="Delete", bbox=BoundingBox(x=100, y=100, width=80, height=30)),
-            ModalButtonOption(button_id="btn_cancel", label="Cancel", bbox=BoundingBox(x=200, y=100, width=80, height=30)),
+            ModalButtonOption(
+                button_id="btn_del",
+                label="Delete",
+                bbox=BoundingBox(x=100, y=100, width=80, height=30),
+            ),
+            ModalButtonOption(
+                button_id="btn_cancel",
+                label="Cancel",
+                bbox=BoundingBox(x=200, y=100, width=80, height=30),
+            ),
         ],
     )
 

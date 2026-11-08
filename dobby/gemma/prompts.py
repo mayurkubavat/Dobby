@@ -21,9 +21,10 @@ A local override can replace any system prompt without editing code: put
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 from dobby.config import CONFIG
 
@@ -33,7 +34,7 @@ class PromptSpec:
     id: str
     version: int
     system: str
-    schema: Dict[str, Any]
+    schema: dict[str, Any]
     max_tokens: int
     local: bool = False
 
@@ -44,7 +45,7 @@ class PromptSpec:
 
 # --------------------------------------------------------------------- yes/no
 
-YES_NO_SCHEMA: Dict[str, Any] = {
+YES_NO_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "answer": {"type": "string", "enum": ["yes", "no", "unsure"]},
@@ -78,7 +79,9 @@ YES_NO = PromptSpec(
 )
 
 
-def yes_no_user(question: str, ocr_lines: Optional[Iterable[str]] = None, max_chars: int = 1200) -> str:
+def yes_no_user(
+    question: str, ocr_lines: Iterable[str] | None = None, max_chars: int = 1200
+) -> str:
     """User message: the question, plus OCR text of the crop when available."""
     text = f"Question: {question.strip()}"
     lines = [ln.strip() for ln in (ocr_lines or []) if ln and ln.strip()]
@@ -214,13 +217,24 @@ DECIDE_CHOICE = PromptSpec(
     max_tokens=1,
 )
 
-PROMPTS: Dict[str, PromptSpec] = {
-    p.id: p for p in (YES_NO, MODAL_TRIAGE, MARK_LABEL, MARK_FIND, GROUND_ROI, COMPRESS, ADK_VERIFIER, ADK_TRIAGE,
-              YES_NO_LOGPROB, DECIDE_CHOICE)
+PROMPTS: dict[str, PromptSpec] = {
+    p.id: p
+    for p in (
+        YES_NO,
+        MODAL_TRIAGE,
+        MARK_LABEL,
+        MARK_FIND,
+        GROUND_ROI,
+        COMPRESS,
+        ADK_VERIFIER,
+        ADK_TRIAGE,
+        YES_NO_LOGPROB,
+        DECIDE_CHOICE,
+    )
 }
 
 
-def get_prompt(prompt_id: str, prompt_dir: Optional[str] = None) -> PromptSpec:
+def get_prompt(prompt_id: str, prompt_dir: str | None = None) -> PromptSpec:
     """The registered prompt, with its system text replaced by a local override if present."""
     spec = PROMPTS[prompt_id]
     folder = prompt_dir if prompt_dir is not None else CONFIG.gemma3_prompt_dir
@@ -236,11 +250,13 @@ def get_prompt(prompt_id: str, prompt_dir: Optional[str] = None) -> PromptSpec:
     return spec
 
 
-def list_prompts() -> List[Dict[str, Any]]:
+def list_prompts() -> list[dict[str, Any]]:
     out = []
     for pid in PROMPTS:
         spec = get_prompt(pid)
-        out.append({"id": pid, "tag": spec.tag, "max_tokens": spec.max_tokens, "system": spec.system})
+        out.append(
+            {"id": pid, "tag": spec.tag, "max_tokens": spec.max_tokens, "system": spec.system}
+        )
     return out
 
 
@@ -249,13 +265,12 @@ def list_prompts() -> List[Dict[str, Any]]:
 _WORD = re.compile(r"[a-z0-9]+")
 
 
-def _words(text: str) -> List[str]:
+def _words(text: str) -> list[str]:
     return _WORD.findall(text.lower())
 
 
 def evidence_in_ocr(evidence: str, ocr_lines: Iterable[str], min_overlap: float = 0.75) -> bool:
-    """
-    True when the quoted evidence is visible in the OCR text: either a direct
+    """True when the quoted evidence is visible in the OCR text: either a direct
     (normalized) substring of one line, or at least ``min_overlap`` of its words
     appear in the crop's OCR words. Quotes and punctuation are ignored.
     """
@@ -274,7 +289,7 @@ def evidence_in_ocr(evidence: str, ocr_lines: Iterable[str], min_overlap: float 
     return hits / len(ev_words) >= min_overlap
 
 
-def parse_answer(raw: Any) -> Optional[bool]:
+def parse_answer(raw: Any) -> bool | None:
     """'yes'/'no'/'unsure' (prompt v2) or a bool (v1 replies) -> True/False/None."""
     if isinstance(raw, bool):
         return raw

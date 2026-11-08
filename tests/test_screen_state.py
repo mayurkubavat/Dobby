@@ -3,8 +3,6 @@
 import math
 from types import SimpleNamespace
 
-import pytest
-
 from dobby.gemma.client import GemmaClient
 from dobby.gemma.decide import GemmaDecider
 from dobby.perception.ocr import OCRLine
@@ -13,13 +11,23 @@ from dobby.screen_state.observe import act_on_element, decide_next_element, obse
 from dobby.screen_state.state import coarse_position
 from dobby.types import BoundingBox, WindowInfo
 
-WIN = WindowInfo(window_id="1", title="Untitled", bbox=BoundingBox(x=0, y=0, width=900, height=600),
-                 is_active=True, app_name="TextEdit")
+WIN = WindowInfo(
+    window_id="1",
+    title="Untitled",
+    bbox=BoundingBox(x=0, y=0, width=900, height=600),
+    is_active=True,
+    app_name="TextEdit",
+)
 
 
 def node(role, name, x, y, w=80, h=24, states=("enabled",), interactable=True):
-    return {"role": role, "name": name, "bbox": {"x": x, "y": y, "width": w, "height": h},
-            "states": list(states), "interactable": interactable}
+    return {
+        "role": role,
+        "name": name,
+        "bbox": {"x": x, "y": y, "width": w, "height": h},
+        "states": list(states),
+        "interactable": interactable,
+    }
 
 
 # ------------------------------------------------------------------- build
@@ -27,8 +35,13 @@ def node(role, name, x, y, w=80, h=24, states=("enabled",), interactable=True):
 
 def test_build_state_numbers_orders_and_positions():
     s = build_state(
-        [node("push button", "Save", 780, 550), node("push button", "Cancel", 680, 550), node("menu item", "File", 10, 5)],
-        window=WIN, generation=3,
+        [
+            node("push button", "Save", 780, 550),
+            node("push button", "Cancel", 680, 550),
+            node("menu item", "File", 10, 5),
+        ],
+        window=WIN,
+        generation=3,
     )
     assert [e.label for e in s.elements] == ["File", "Cancel", "Save"]
     assert [e.eid for e in s.elements] == ["e1", "e2", "e3"]
@@ -37,7 +50,10 @@ def test_build_state_numbers_orders_and_positions():
 
 
 def test_empty_ax_label_is_filled_from_ocr_and_ocr_only_text_becomes_element():
-    ocr = [OCRLine("Message", 110, 305, 60, 14, 0.95), OCRLine("Synthesis Completed", 300, 100, 150, 16, 0.9)]
+    ocr = [
+        OCRLine("Message", 110, 305, 60, 14, 0.95),
+        OCRLine("Synthesis Completed", 300, 100, 150, 16, 0.9),
+    ]
     s = build_state([node("entry", "", 100, 300, 400, 30)], ocr, window=WIN)
     entry = next(e for e in s.elements if e.role == "entry")
     assert entry.label == "Message" and entry.source == "ax+ocr"
@@ -47,7 +63,9 @@ def test_empty_ax_label_is_filled_from_ocr_and_ocr_only_text_becomes_element():
 
 
 def test_low_confidence_ocr_dropped_and_overflow_goes_to_text():
-    ocr = [OCRLine(f"line {i}", 10, 40 + 20 * i, 50, 12, 0.9) for i in range(5)] + [OCRLine("noise", 500, 500, 40, 10, 0.1)]
+    ocr = [OCRLine(f"line {i}", 10, 40 + 20 * i, 50, 12, 0.9) for i in range(5)] + [
+        OCRLine("noise", 500, 500, 40, 10, 0.1)
+    ]
     s = build_state([], ocr, window=WIN, max_ocr_elements=2)
     assert len(s.elements) == 2 and s.text == ["line 2", "line 3", "line 4"]
 
@@ -55,19 +73,37 @@ def test_low_confidence_ocr_dropped_and_overflow_goes_to_text():
 def test_type_offered_only_for_focused_editable_non_secure():
     plain = build_state([node("push button", "OK", 10, 10)], window=WIN)
     assert "type" not in plain.operations
-    focused = build_state([node("entry", "Name", 10, 10, states=("focused", "enabled"))], window=WIN)
+    focused = build_state(
+        [node("entry", "Name", 10, 10, states=("focused", "enabled"))], window=WIN
+    )
     assert "type" in focused.operations and not focused.secure_input
-    pw = build_state([node("password text", "Password", 10, 10, states=("focused", "enabled"))], window=WIN)
+    pw = build_state(
+        [node("password text", "Password", 10, 10, states=("focused", "enabled"))], window=WIN
+    )
     assert "type" not in pw.operations and pw.secure_input
-    labelled = build_state([node("entry", "API key", 10, 10, states=("focused", "enabled"))], window=WIN)
+    labelled = build_state(
+        [node("entry", "API key", 10, 10, states=("focused", "enabled"))], window=WIN
+    )
     assert labelled.secure_input
-    scroll = build_state([node("scroll pane", "", 0, 0, 900, 600, interactable=False), node("push button", "OK", 10, 10)], window=WIN)
+    scroll = build_state(
+        [
+            node("scroll pane", "", 0, 0, 900, 600, interactable=False),
+            node("push button", "OK", 10, 10),
+        ],
+        window=WIN,
+    )
     assert "scroll" in scroll.operations
 
 
 def test_to_text_is_compact_and_marks_state():
-    s = build_state([node("push button", "Save", 780, 550, states=("disabled",)),
-                     node("entry", "Name", 10, 100, states=("focused", "enabled"))], window=WIN, generation=1)
+    s = build_state(
+        [
+            node("push button", "Save", 780, 550, states=("disabled",)),
+            node("entry", "Name", 10, 100, states=("focused", "enabled")),
+        ],
+        window=WIN,
+        generation=1,
+    )
     t = s.to_text()
     assert 'Window: TextEdit - "Untitled"' in t
     assert "Focused: e1 entry" in t
@@ -86,7 +122,9 @@ def test_coarse_position():
 
 def test_rebind_follows_moved_element_and_refuses_vanished():
     old = build_state([node("push button", "Save", 780, 550)], window=WIN).elements[0]
-    moved = build_state([node("push button", "Save", 760, 540), node("push button", "Save", 100, 100)], window=WIN)
+    moved = build_state(
+        [node("push button", "Save", 760, 540), node("push button", "Save", 100, 100)], window=WIN
+    )
     got = rebind(old, moved)
     assert got is not None and (got.x, got.y) == (760, 540)  # nearest of the two Saves
     gone = build_state([node("push button", "Cancel", 780, 550)], window=WIN)
@@ -151,21 +189,32 @@ class FakeController:
     def execute_with_verification(self, action_name, action_func, verify_delta=True, **kw):
         self.actions.append(action_name)
         action_func()
-        return SimpleNamespace(model_dump=lambda: {"success": True, "delta_detected": True, "change_ratio": 0.2, "message": ""})
+        return SimpleNamespace(
+            model_dump=lambda: {
+                "success": True,
+                "delta_detected": True,
+                "change_ratio": 0.2,
+                "message": "",
+            }
+        )
 
 
 def test_observe_clips_to_window():
-    ctl = FakeController([[node("push button", "OK", 10, 10), node("push button", "Off", 2000, 2000)]])
+    ctl = FakeController(
+        [[node("push button", "OK", 10, 10), node("push button", "Off", 2000, 2000)]]
+    )
     s = observe(ctl, StateTracker())
     assert [e.label for e in s.elements] == ["OK"]
 
 
 def test_act_rebinds_then_clicks_and_reports_change():
-    ctl = FakeController([
-        [node("push button", "Save", 780, 550)],                       # observation the caller saw
-        [node("push button", "Save", 770, 548)],                       # fresh frame before acting (moved)
-        [node("label", "Saved", 300, 300, interactable=True)],         # after
-    ])
+    ctl = FakeController(
+        [
+            [node("push button", "Save", 780, 550)],  # observation the caller saw
+            [node("push button", "Save", 770, 548)],  # fresh frame before acting (moved)
+            [node("label", "Saved", 300, 300, interactable=True)],  # after
+        ]
+    )
     t = StateTracker()
     s = observe(ctl, t)
     res = act_on_element(ctl, t, s.elements[0].eid, s.generation)
@@ -175,7 +224,9 @@ def test_act_rebinds_then_clicks_and_reports_change():
 
 def test_act_refuses_stale_disabled_and_secure():
     t = StateTracker()
-    ctl = FakeController([[node("push button", "Save", 780, 550)], [node("push button", "Cancel", 780, 550)]])
+    ctl = FakeController(
+        [[node("push button", "Save", 780, 550)], [node("push button", "Cancel", 780, 550)]]
+    )
     s = observe(ctl, t)
     res = act_on_element(ctl, t, "e1", s.generation)
     assert not res["ok"] and "gone or moved" in res["reason"] and ctl.hal.clicks == []
@@ -213,14 +264,28 @@ class FakeLogprobOllama:
             return {"models": [{"name": "gemma3:4b"}]}
         self.bodies.append(body)
         top = self.yes_no if "Statement:" in body["messages"][1]["content"] else self.top
-        return {"message": {"content": top[0][0]},
-                "logprobs": [{"token": top[0][0], "logprob": top[0][1],
-                              "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top]}]}
+        return {
+            "message": {"content": top[0][0]},
+            "logprobs": [
+                {
+                    "token": top[0][0],
+                    "logprob": top[0][1],
+                    "top_logprobs": [{"token": t, "logprob": lp} for t, lp in top],
+                }
+            ],
+        }
 
 
 def test_decide_next_element_maps_choice_to_eid_and_gates():
-    ctl = FakeController([[node("push button", "Cancel", 680, 550), node("push button", "Save", 780, 550),
-                           node("menu item", "File", 10, 5)]])
+    ctl = FakeController(
+        [
+            [
+                node("push button", "Cancel", 680, 550),
+                node("push button", "Save", 780, 550),
+                node("menu item", "File", 10, 5),
+            ]
+        ]
+    )
     fake = FakeLogprobOllama([("A", math.log(0.9)), ("B", math.log(0.1))])
     decider = GemmaDecider(GemmaClient(transport=fake))
     out = decide_next_element(ctl, StateTracker(), decider, "save the document", verb="click", k=2)
@@ -235,11 +300,23 @@ def test_decide_next_element_maps_choice_to_eid_and_gates():
 
 def test_confirmation_no_downgrades_act_to_escalate():
     ctl = FakeController([[node("label", "FILES", 20, 80), node("push button", "Save", 780, 550)]])
-    fake = FakeLogprobOllama([("A", math.log(0.99)), ("B", math.log(0.01))],
-                             yes_no=(("no", math.log(0.9)), ("yes", math.log(0.1))))
-    out = decide_next_element(ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "open the File menu")
-    assert out["gate"]["verdict"] == "escalate" and "confirmation disagrees" in out["gate"]["reason"]
-    out2 = decide_next_element(ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "open the File menu", confirm=False)
+    fake = FakeLogprobOllama(
+        [("A", math.log(0.99)), ("B", math.log(0.01))],
+        yes_no=(("no", math.log(0.9)), ("yes", math.log(0.1))),
+    )
+    out = decide_next_element(
+        ctl, StateTracker(), GemmaDecider(GemmaClient(transport=fake)), "open the File menu"
+    )
+    assert (
+        out["gate"]["verdict"] == "escalate" and "confirmation disagrees" in out["gate"]["reason"]
+    )
+    out2 = decide_next_element(
+        ctl,
+        StateTracker(),
+        GemmaDecider(GemmaClient(transport=fake)),
+        "open the File menu",
+        confirm=False,
+    )
     assert out2["gate"]["verdict"] == "act" and out2["confirmation"] is None
 
 
@@ -250,10 +327,23 @@ def test_menu_bar_items_survive_window_clipping(monkeypatch):
     # macOS behaviour: the app's menu bar sits at the top of the screen, outside its window.
     monkeypatch.setattr(obs_mod, "MENU_BAR_HEIGHT", 40)
     monkeypatch.setattr(state_mod, "MENU_BAR_HEIGHT", 40)
-    win = WindowInfo(window_id="1", title="Notes", bbox=BoundingBox(x=0, y=30, width=900, height=600),
-                     is_active=True, app_name="Notes")
-    ctl = FakeController([[node("menu item", "File", 60, 2, 40, 22), node("push button", "OK", 10, 100),
-                           node("push button", "Far", 2000, 2), node("label", "Clock", 1200, 2, 60, 22)]])
+    win = WindowInfo(
+        window_id="1",
+        title="Notes",
+        bbox=BoundingBox(x=0, y=30, width=900, height=600),
+        is_active=True,
+        app_name="Notes",
+    )
+    ctl = FakeController(
+        [
+            [
+                node("menu item", "File", 60, 2, 40, 22),
+                node("push button", "OK", 10, 100),
+                node("push button", "Far", 2000, 2),
+                node("label", "Clock", 1200, 2, 60, 22),
+            ]
+        ]
+    )
     ctl.hal.get_active_window = lambda: win
     s = observe(ctl, StateTracker())
     labels = {e.label: e for e in s.elements}
@@ -267,10 +357,22 @@ def test_no_screen_top_menu_band_off_macos(monkeypatch):
     # Linux/Windows: menus live inside the window, so nothing above it is kept.
     monkeypatch.setattr(obs_mod, "MENU_BAR_HEIGHT", 0)
     monkeypatch.setattr(state_mod, "MENU_BAR_HEIGHT", 0)
-    win = WindowInfo(window_id="1", title="gedit", bbox=BoundingBox(x=0, y=30, width=900, height=600),
-                     is_active=True, app_name="gedit")
-    ctl = FakeController([[node("menu item", "Activities", 60, 2, 40, 22), node("menu", "File", 10, 40, 40, 22),
-                           node("push button", "OK", 10, 100)]])
+    win = WindowInfo(
+        window_id="1",
+        title="gedit",
+        bbox=BoundingBox(x=0, y=30, width=900, height=600),
+        is_active=True,
+        app_name="gedit",
+    )
+    ctl = FakeController(
+        [
+            [
+                node("menu item", "Activities", 60, 2, 40, 22),
+                node("menu", "File", 10, 40, 40, 22),
+                node("push button", "OK", 10, 100),
+            ]
+        ]
+    )
     ctl.hal.get_active_window = lambda: win
     s = observe(ctl, StateTracker())
     labels = {e.label: e for e in s.elements}

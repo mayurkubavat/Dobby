@@ -1,16 +1,14 @@
 """Unit and integration tests for Phase 2: UI Plugin Framework & Chrome Browser Plugin."""
 
-import pytest
 from unittest.mock import MagicMock
+
 from PIL import Image
 
-from dobby.types import BoundingBox, SubPaneROI, FeatureDescriptor, WindowInfo
-from dobby.plugins.base import BaseUIAppPlugin
+from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.plugins.chrome import ChromeBrowserPlugin
 from dobby.plugins.registry import PluginRegistry
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.hal.base import IDesktopHAL
 from dobby.server import mcp_server
+from dobby.types import BoundingBox, SubPaneROI, WindowInfo
 
 
 def test_sub_pane_roi_computation():
@@ -132,7 +130,9 @@ def test_chrome_feature_execution_with_mock_hal(mock_hal):
 
     # Setup controller with mock hal
     controller = FeedbackLoopController(mock_hal)
-    controller.pipeline.capture = MagicMock(return_value=(Image.new("RGB", (100, 100)), 1.0, (100, 100), (0, 0)))
+    controller.pipeline.capture = MagicMock(
+        return_value=(Image.new("RGB", (100, 100)), 1.0, (100, 100), (0, 0))
+    )
     controller.pipeline.compute_image_delta = MagicMock(return_value=0.05)
 
     # 1. Execute new_tab
@@ -174,12 +174,14 @@ def test_chrome_feature_execution_with_mock_hal(mock_hal):
 def test_controller_capture_pane(mock_hal):
     """Tests capture_pane sub-pane perception in FeedbackLoopController."""
     controller = FeedbackLoopController(mock_hal)
-    mock_hal.get_active_window = MagicMock(return_value=WindowInfo(
-        window_id="0x6400003",
-        title="Google Gemini - Google Chrome",
-        bbox=BoundingBox(x=0, y=34, width=3024, height=1830),
-        is_active=True,
-    ))
+    mock_hal.get_active_window = MagicMock(
+        return_value=WindowInfo(
+            window_id="0x6400003",
+            title="Google Gemini - Google Chrome",
+            bbox=BoundingBox(x=0, y=34, width=3024, height=1830),
+            is_active=True,
+        )
+    )
 
     # Mock capture pipeline
     dummy_img = Image.new("RGB", (500, 44), color=(255, 255, 255))
@@ -207,4 +209,6 @@ def test_phase2_mcp_server_tools_registered():
         "capture_pane",
     ]
     for tool_name in expected_phase2_tools:
-        assert tool_name in registered, f"Expected Phase 2 tool {tool_name} to be registered on mcp_server"
+        assert tool_name in registered, (
+            f"Expected Phase 2 tool {tool_name} to be registered on mcp_server"
+        )

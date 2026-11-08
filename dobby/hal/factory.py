@@ -76,8 +76,8 @@ def _quiescence_for(kind: str, backend: Any) -> Any:
     if kind == "replay" or hasattr(backend, "transitions"):
         return backend
     if kind == "linux":
-        from dobby.hal.quiescence import X11QuiescenceMonitor
         from dobby.config import CONFIG
+        from dobby.hal.quiescence import X11QuiescenceMonitor
 
         return X11QuiescenceMonitor(min_damage_area=CONFIG.min_damage_area)
     from dobby.hal.quiescence import SleepQuiescenceMonitor

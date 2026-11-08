@@ -1,13 +1,12 @@
 """Unit tests for Computer Vision (CV) interactable region detector."""
 
-import numpy as np
-from PIL import Image
 import cv2
+import numpy as np
 import pytest
+from PIL import Image
 
-from dobby.perception.cv_detector import CVDetector
-from dobby.types import UIElement
 import dobby.server as server
+from dobby.perception.cv_detector import CVDetector
 
 
 def test_cv_detector_synthetic_ui():
@@ -33,7 +32,7 @@ def test_cv_detector_synthetic_ui():
     elements = detector.detect(pil_img, scale_factor=1.0)
 
     assert len(elements) >= 3
-    
+
     # Check that bounding boxes roughly encompass our synthetic elements
     centers = [el.bbox.center for el in elements]
 

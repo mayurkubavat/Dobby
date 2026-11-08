@@ -2,28 +2,26 @@
 Unit tests for Phase 4 (Unified vDOM & Neural Sidecar) and Phase 5 (Dynamic Anchor-Relative Sub-Pane Resolution).
 """
 
-import pytest
 from PIL import Image
 
+from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.types import (
-    BoundingBox,
-    VDOMNode,
-    VirtualDOMSnapshot,
-    GroundingSource,
-    UIRole,
     AnchorEdge,
     BoundaryConstraint,
+    BoundingBox,
+    GroundingSource,
     SubPaneLayoutSpec,
     SubPaneROI,
+    UIRole,
+    VDOMNode,
+    VirtualDOMSnapshot,
     WindowInfo,
 )
 from dobby.vdom import (
+    SubPaneLayoutSolver,
     VDOMFusionEngine,
     VDOMQueryEngine,
-    LocalNeuralGrounder,
-    SubPaneLayoutSolver,
 )
-from dobby.agent_loop.controller import FeedbackLoopController
 
 
 class MockHAL:
@@ -323,7 +321,9 @@ def test_subpane_layout_solver():
             anchor_selector="non_existent_anchor",
             edge=AnchorEdge.BOTTOM,
         ),
-        fallback_roi=SubPaneROI(name="fallback", offset_x=100, offset_y=100, fixed_width=400, fixed_height=300),
+        fallback_roi=SubPaneROI(
+            name="fallback", offset_x=100, offset_y=100, fixed_width=400, fixed_height=300
+        ),
     )
     fb_box = solver.resolve_subpane(missing_spec, engine, win_bbox)
     assert fb_box.width > 0

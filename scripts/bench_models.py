@@ -31,9 +31,17 @@ from dobby.model_bench import bench_model, markdown  # noqa: E402
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--models", help="comma-separated Ollama tags (default: the models the roles use now)")
-    ap.add_argument("--installed", action="store_true", help="add every known candidate that is already installed")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--models", help="comma-separated Ollama tags (default: the models the roles use now)"
+    )
+    ap.add_argument(
+        "--installed",
+        action="store_true",
+        help="add every known candidate that is already installed",
+    )
     ap.add_argument("--tasks", default="check,pick_text,pick_visual")
     ap.add_argument("--endpoint", default=CONFIG.gemma3_endpoint)
     ap.add_argument("--timeout", type=float, default=90.0)
@@ -56,7 +64,11 @@ def main() -> int:
     for m in models:
         prof = profile(m)
         print(f"... {m}", file=sys.stderr, flush=True)
-        results.append(bench_model(client, m, tasks, vision=prof.vision if prof else None, timeout=args.timeout))
+        results.append(
+            bench_model(
+                client, m, tasks, vision=prof.vision if prof else None, timeout=args.timeout
+            )
+        )
     print(markdown(results))
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=2))

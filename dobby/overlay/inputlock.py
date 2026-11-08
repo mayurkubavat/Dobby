@@ -25,10 +25,10 @@ Ways out, always:
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping, Optional, Tuple
+from collections.abc import Iterable, Mapping
 
-Rect = Tuple[float, float, float, float]
-Point = Tuple[float, float]
+Rect = tuple[float, float, float, float]
+Point = tuple[float, float]
 
 MODES = ("off", "window")
 INSIST_CLICKS = 3
@@ -44,15 +44,23 @@ def lock_mode(env: Mapping[str, str]) -> str:
     return "window" if raw in _TRUE else "off"
 
 
-def _inside(rect: Optional[Rect], pt: Point) -> bool:
+def _inside(rect: Rect | None, pt: Point) -> bool:
     if rect is None:
         return False
     x, y, w, h = rect
     return w > 0 and h > 0 and x <= pt[0] < x + w and y <= pt[1] < y + h
 
 
-def armed(*, mode: str, working: bool, paused: bool, takeover: bool, confirming: bool,
-          has_target: bool, screen_reader: bool = False) -> bool:
+def armed(
+    *,
+    mode: str,
+    working: bool,
+    paused: bool,
+    takeover: bool,
+    confirming: bool,
+    has_target: bool,
+    screen_reader: bool = False,
+) -> bool:
     """Is the lock on right now?
 
     Only while Dobby is actually working on a known window. Never while it
@@ -66,8 +74,15 @@ def armed(*, mode: str, working: bool, paused: bool, takeover: bool, confirming:
     return working
 
 
-def blocks(kind: str, pt: Optional[Point], *, target: Optional[Rect], above: Iterable[Rect] = (),
-           own: Iterable[Rect] = (), target_front: bool = False) -> bool:
+def blocks(
+    kind: str,
+    pt: Point | None,
+    *,
+    target: Rect | None,
+    above: Iterable[Rect] = (),
+    own: Iterable[Rect] = (),
+    target_front: bool = False,
+) -> bool:
     """Should this real input from the person be swallowed (lock armed)?
 
     ``kind`` is "move", "click", "drag", "scroll" or "key". ``target`` is the
@@ -96,13 +111,14 @@ class Insist:
     :data:`HOLD_SECS` (checked on the release, or from the helper's timer).
     """
 
-    def __init__(self, clicks: int = INSIST_CLICKS, secs: float = INSIST_SECS,
-                 hold_secs: float = HOLD_SECS) -> None:
+    def __init__(
+        self, clicks: int = INSIST_CLICKS, secs: float = INSIST_SECS, hold_secs: float = HOLD_SECS
+    ) -> None:
         self.clicks = max(1, int(clicks))
         self.secs = float(secs)
         self.hold_secs = float(hold_secs)
         self.times: list = []
-        self.down_at: Optional[float] = None
+        self.down_at: float | None = None
 
     def press(self, now: float) -> bool:
         self.times = [t for t in self.times if now - t <= self.secs] + [now]
@@ -128,7 +144,7 @@ class Insist:
         self.down_at = None
 
 
-def frontmost_owner(windows: Iterable[Mapping[str, object]], skip_pid: int = 0) -> Optional[int]:
+def frontmost_owner(windows: Iterable[Mapping[str, object]], skip_pid: int = 0) -> int | None:
     """PID owning the frontmost normal window in a Quartz window list (front to back)."""
     for info in windows:
         if info.get("kCGWindowLayer", 0) != 0:

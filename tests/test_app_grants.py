@@ -9,7 +9,16 @@ from dobby import handoff
 from dobby.overlay import protocol as p
 from dobby.overlay import style
 from dobby.overlay.client import NullOverlay, OverlayBlocked, OverlayDenied
-from dobby.overlay.grants import CLICK, FULL, READ, AppBlocked, AppGrants, access_detail, allows, normalize
+from dobby.overlay.grants import (
+    CLICK,
+    FULL,
+    READ,
+    AppBlocked,
+    AppGrants,
+    access_detail,
+    allows,
+    normalize,
+)
 from dobby.overlay.hal import OverlayHAL, consequential_label
 
 
@@ -85,7 +94,9 @@ def test_file_changes_are_picked_up(tmp_path):
 
 
 def test_off_switch_and_unknown_apps(tmp_path):
-    AppGrants(path=tmp_path / "x", env={"DOBBY_APP_GRANTS": "off"}).check("Mail", "type", lambda a, d: False)
+    AppGrants(path=tmp_path / "x", env={"DOBBY_APP_GRANTS": "off"}).check(
+        "Mail", "type", lambda a, d: False
+    )
     AppGrants(path=tmp_path / "x", env={}).check(None, "type", lambda a, d: False)
 
 
@@ -96,33 +107,55 @@ def test_terminal_prompt_warns_that_typing_runs_commands():
 
 # ------------------------------------------------------------------ labels
 def test_action_text_names_the_element_and_app():
-    assert style.action_text("Click", "Run Synthesis", "vivado") == "Click ‘Run Synthesis’ in Vivado"
+    assert (
+        style.action_text("Click", "Run Synthesis", "vivado") == "Click ‘Run Synthesis’ in Vivado"
+    )
     assert style.action_text("Click", None, None) == "Click"
     assert style.app_label("com.apple.mail") == "Mail"
     assert style.app_label("Google Chrome") == "Google Chrome"
 
 
-@pytest.mark.parametrize("role,name,risky", [
-    ("button", "Send", True), ("push button", "Delete file", True), ("menu item", "Move to Trash", True),
-    ("button", "Pay now", True), ("link", "Sign out", True), ("button", "Sender", False),
-    ("button", "Run Synthesis", False), ("text", "Delete", False), ("button", "", False),
-])
+@pytest.mark.parametrize(
+    "role,name,risky",
+    [
+        ("button", "Send", True),
+        ("push button", "Delete file", True),
+        ("menu item", "Move to Trash", True),
+        ("button", "Pay now", True),
+        ("link", "Sign out", True),
+        ("button", "Sender", False),
+        ("button", "Run Synthesis", False),
+        ("text", "Delete", False),
+        ("button", "", False),
+    ],
+)
 def test_consequential_labels(role, name, risky):
     assert (consequential_label(role, name) is not None) is risky
 
 
 # ------------------------------------------------------------------ protocol
 def test_confirm_carries_detail_labels_and_kind():
-    p.validate({"op": "confirm", "text": "Let Dobby use Vivado?", "detail": "…", "allow": "Allow",
-                "deny": "Don’t Allow", "kind": "access"})
+    p.validate(
+        {
+            "op": "confirm",
+            "text": "Let Dobby use Vivado?",
+            "detail": "…",
+            "allow": "Allow",
+            "deny": "Don’t Allow",
+            "kind": "access",
+        }
+    )
     with pytest.raises(p.ProtocolError):
         p.validate({"op": "confirm", "text": "x", "kind": "maybe"})
-    p.validate({"op": "cursor.move", "x": 1, "y": 2, "verb": "Click", "probe": True, "app": "Vivado"})
+    p.validate(
+        {"op": "cursor.move", "x": 1, "y": 2, "verb": "Click", "probe": True, "app": "Vivado"}
+    )
 
 
 def test_access_prompt_is_calm_not_red():
-    spec = style.confirm_spec("Let Dobby use Vivado?", allow="Allow", deny="Don’t Allow", kind="access",
-                              detail="why")
+    spec = style.confirm_spec(
+        "Let Dobby use Vivado?", allow="Allow", deny="Don’t Allow", kind="access", detail="why"
+    )
     assert spec.color == "ok" and spec.tip == "why"
     assert [b.title for b in spec.buttons] == ["Allow", "Don’t Allow"]
     assert style.confirm_spec("Quit?").color == "danger"
@@ -157,8 +190,10 @@ class Desk:
 
     def list_windows(self):
         box = lambda x: SimpleNamespace(x=x, y=0, width=100, height=100)  # noqa: E731
-        return [SimpleNamespace(title="Vivado", app_name="vivado", bbox=box(0)),
-                SimpleNamespace(title="Inbox", app_name="Mail", bbox=box(100))]
+        return [
+            SimpleNamespace(title="Vivado", app_name="vivado", bbox=box(0)),
+            SimpleNamespace(title="Inbox", app_name="Mail", bbox=box(100)),
+        ]
 
     def get_active_window(self):
         return SimpleNamespace(window_id="1", app_name="vivado")
@@ -306,8 +341,7 @@ def test_wrap_hal_turns_prompts_on_only_in_secure(monkeypatch):
 
 
 def test_one_shared_dobby_serves_turbo_and_secure_clients(tmp_path):
-    from dobby.mode import session_mode
-    from dobby.mode import is_secure
+    from dobby.mode import is_secure, session_mode
 
     hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}  # noqa: E731
 
@@ -317,8 +351,9 @@ def test_one_shared_dobby_serves_turbo_and_secure_clients(tmp_path):
             return True
 
     ov, desk = Turbo(answers=[False]), Desk()
-    hal = OverlayHAL(desk, ov, hit_test=hit, grants=AppGrants(path=tmp_path / "a.json", env={}),
-                     policy=is_secure)
+    hal = OverlayHAL(
+        desk, ov, hit_test=hit, grants=AppGrants(path=tmp_path / "a.json", env={}), policy=is_secure
+    )
     with session_mode("turbo"):
         hal.mouse_click(10, 10)  # no questions
     assert desk.done == [("click", 10, 10)]

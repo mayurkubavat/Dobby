@@ -16,14 +16,15 @@ trail marks, and Dobby dots only while two or more Dobbys are busy.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from dobby.personality import Voice
 
-Rect = Tuple[float, float, float, float]  # x, y, w, h (global, top-left origin)
-Point = Tuple[float, float]
+Rect = tuple[float, float, float, float]  # x, y, w, h (global, top-left origin)
+Point = tuple[float, float]
 
 STYLES = ("modern", "classic")
 
@@ -31,7 +32,7 @@ STYLES = ("modern", "classic")
 # single Dobby looks as before. No amber or red: those mean caution/danger.
 # Palette "Elf Violet, tuned" (chosen 2026-11-04). Brown replaces a second
 # purple so no two Dobbys look alike.
-AGENT_PALETTE: Tuple[str, ...] = ("#7C5CFF", "#14B8A6", "#EC4899", "#3B82F6", "#84CC16", "#B07A4F")
+AGENT_PALETTE: tuple[str, ...] = ("#7C5CFF", "#14B8A6", "#EC4899", "#3B82F6", "#84CC16", "#B07A4F")
 
 # Filled buttons (Take over, Allow) and the pointer tag: white text on
 # #7C5CFF is only 4.3:1, so fills use the deeper #5B3FE0.
@@ -39,31 +40,45 @@ FILL_COLOR = "#5B3FE0"
 FILL_TITLES = frozenset({"Take over", "Allow"})
 
 # The bar follows the desktop's light or dark theme.
-BAR_THEMES: Dict[str, Dict[str, object]] = {
-    "light": {"bg": (251, 250, 255), "bg_alpha": 0.94, "text": "#1E1A2E", "dim": "#4A4560",
-              "border": (124, 92, 255, 0.28), "accent": "#7C5CFF", "hover": (0, 0, 0, 0.07),
-              "button": "#ECE8FA"},
-    "dark": {"bg": (27, 24, 38), "bg_alpha": 0.92, "text": "#F3F0FF", "dim": "#C9C3E0",
-             "border": (155, 130, 255, 0.35), "accent": "#9B82FF", "hover": (255, 255, 255, 0.16),
-             "button": "#3A3550"},
+BAR_THEMES: dict[str, dict[str, object]] = {
+    "light": {
+        "bg": (251, 250, 255),
+        "bg_alpha": 0.94,
+        "text": "#1E1A2E",
+        "dim": "#4A4560",
+        "border": (124, 92, 255, 0.28),
+        "accent": "#7C5CFF",
+        "hover": (0, 0, 0, 0.07),
+        "button": "#ECE8FA",
+    },
+    "dark": {
+        "bg": (27, 24, 38),
+        "bg_alpha": 0.92,
+        "text": "#F3F0FF",
+        "dim": "#C9C3E0",
+        "border": (155, 130, 255, 0.35),
+        "accent": "#9B82FF",
+        "hover": (255, 255, 255, 0.16),
+        "button": "#3A3550",
+    },
 }
 
 
-def bar_theme(dark: bool) -> Dict[str, object]:
+def bar_theme(dark: bool) -> dict[str, object]:
     return BAR_THEMES["dark" if dark else "light"]
 
 
-def hex_rgb01(value: str) -> Tuple[float, float, float]:
+def hex_rgb01(value: str) -> tuple[float, float, float]:
     v = value.lstrip("#")
-    return tuple(int(v[i:i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
+    return tuple(int(v[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
 
 
-def is_filled(button: "Button") -> bool:
+def is_filled(button: Button) -> bool:
     """Take over and Allow are filled #5B3FE0 buttons with white text."""
     return button.role == "accent" or button.title in FILL_TITLES
 
 
-def normalize_style(value: Optional[str]) -> str:
+def normalize_style(value: str | None) -> str:
     value = (value or "").strip().lower()
     return value if value in STYLES else "modern"
 
@@ -79,15 +94,18 @@ def pick_agent_color(taken: Iterable[str], palette: Sequence[str] = AGENT_PALETT
     return min(palette, key=lambda c: (used.count(c.upper()), palette.index(c)))
 
 
-def agent_colors(agents: Iterable[Mapping[str, object]],
-                 palette: Sequence[str] = AGENT_PALETTE) -> Dict[int, str]:
-    """pid -> colour for each running Dobby.
+def agent_colors(
+    agents: Iterable[Mapping[str, object]], palette: Sequence[str] = AGENT_PALETTE
+) -> dict[int, str]:
+    """Pid -> colour for each running Dobby.
 
     A colour stored in the agent's registry record wins; older records
     without one get palette colours by start order, skipping stored ones.
     """
-    agents = sorted(agents, key=lambda a: (float(a.get("started", 0) or 0), int(a.get("pid", 0) or 0)))
-    out: Dict[int, str] = {}
+    agents = sorted(
+        agents, key=lambda a: (float(a.get("started", 0) or 0), int(a.get("pid", 0) or 0))
+    )
+    out: dict[int, str] = {}
     for a in agents:
         stored = a.get("color")
         if isinstance(stored, str) and stored.startswith("#"):
@@ -99,7 +117,9 @@ def agent_colors(agents: Iterable[Mapping[str, object]],
     return out
 
 
-def tag_label(base: str, own_name: Optional[str], agent_count: int, default_label: str = "Dobby") -> str:
+def tag_label(
+    base: str, own_name: str | None, agent_count: int, default_label: str = "Dobby"
+) -> str:
     """Name on the pointer tag. With two or more Dobbys, say which one this is."""
     if agent_count < 2 or base != default_label or not own_name:
         return base
@@ -125,8 +145,16 @@ def _short(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def working_text(step: str, steps: int, elapsed: float, turbo: bool = False, limit: int = 38,
-                 label: Optional[str] = None, thinking: bool = False, lead: Optional[str] = None) -> str:
+def working_text(
+    step: str,
+    steps: int,
+    elapsed: float,
+    turbo: bool = False,
+    limit: int = 38,
+    label: str | None = None,
+    thinking: bool = False,
+    lead: str | None = None,
+) -> str:
     """What the bar says while Dobby works: "Click ‘Send’ · step 7 · 0:42".
 
     With ``label`` (narration) it starts with a sentence:
@@ -151,7 +179,7 @@ def working_text(step: str, steps: int, elapsed: float, turbo: bool = False, lim
 class Button:
     key: str  # "primary" | "secondary" | "hide" | "menu"
     title: str  # text title, used when there is no icon (or no SF Symbols)
-    icon: Optional[str] = None  # SF Symbol name
+    icon: str | None = None  # SF Symbol name
     tip: str = ""
     role: str = "normal"  # "normal" | "danger" (stop, deny) | "accent" (allow)
 
@@ -160,12 +188,12 @@ class Button:
 class BarSpec:
     mode: str
     text: str
-    buttons: Tuple[Button, ...] = field(default_factory=tuple)
+    buttons: tuple[Button, ...] = field(default_factory=tuple)
     color: str = "ok"  # colour key, as in menu.bar_view
     dot_alpha: float = 1.0
     compact: bool = False
     shimmer: bool = False  # soft light sweeping over the bar (Dobby thinking)
-    tip: Optional[str] = None
+    tip: str | None = None
 
 
 _ICONS = {
@@ -187,9 +215,20 @@ def _action_button(key: str, title: str, style: str) -> Button:
     return Button(key, title, icon, tip, role)
 
 
-def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = False, label: str = "Dobby",
-             step: str = "", steps: int = 0, elapsed: float = 0.0, turbo: bool = False,
-             thinking: bool = False, narrate: bool = True, voice: Optional["Voice"] = None) -> Optional[BarSpec]:
+def bar_spec(
+    view: tuple | None,
+    *,
+    style: str = "modern",
+    hovered: bool = False,
+    label: str = "Dobby",
+    step: str = "",
+    steps: int = 0,
+    elapsed: float = 0.0,
+    turbo: bool = False,
+    thinking: bool = False,
+    narrate: bool = True,
+    voice: Voice | None = None,
+) -> BarSpec | None:
     """Turn ``menu.bar_view``'s answer into what the bar draws.
 
     Modern: the sleeping bar is a small capsule (dot + name) that grows on
@@ -208,8 +247,12 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
     mode, text, primary, secondary, color, dot_alpha = view
     talk = voice is not None and voice.on
     if style == "classic":
-        buttons = (_action_button("primary", primary, style), _action_button("secondary", secondary, style),
-                   Button("hide", "–", None, _HIDE.tip), Button("menu", "▾", "chevron.down", _MENU.tip))
+        buttons = (
+            _action_button("primary", primary, style),
+            _action_button("secondary", secondary, style),
+            Button("hide", "–", None, _HIDE.tip),
+            Button("menu", "▾", "chevron.down", _MENU.tip),
+        )
         return BarSpec(mode, text, buttons, color, dot_alpha)
     if mode == "ready":
         # An AI waiting in wait_for_wake: the bar already says "click to wake".
@@ -223,14 +266,25 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
                 elif narrate:
                     name = voice.line("sleeping", name, label, rotate=False)
             short = f"{name} · click to wake" if waiting else name
-            return BarSpec(mode, short, (), color, 1.0 if waiting else dot_alpha, compact=True,
-                           tip="Click to wake Dobby")
-        sleeping = text.replace("Dobby is sleeping", f"{label} is sleeping") if label != "Dobby" else text
+            return BarSpec(
+                mode,
+                short,
+                (),
+                color,
+                1.0 if waiting else dot_alpha,
+                compact=True,
+                tip="Click to wake Dobby",
+            )
+        sleeping = (
+            text.replace("Dobby is sleeping", f"{label} is sleeping") if label != "Dobby" else text
+        )
         if not waiting:
             sleeping += " · click to wake"
         return BarSpec(mode, sleeping, (_HIDE, _MENU), color, dot_alpha, tip="Click to wake Dobby")
     if mode == "awake":
-        return BarSpec(mode, text, (_HIDE, _MENU), color, dot_alpha, tip="Click to put Dobby to sleep")
+        return BarSpec(
+            mode, text, (_HIDE, _MENU), color, dot_alpha, tip="Click to put Dobby to sleep"
+        )
     if mode == "working":
         lead = None
         if talk:
@@ -240,15 +294,25 @@ def bar_spec(view: Optional[tuple], *, style: str = "modern", hovered: bool = Fa
             elif lead is None:
                 lead = voice.line("working", f"{label} is working" if narrate else "Working", label)
         if narrate:
-            live = working_text(step, steps, elapsed, turbo, limit=32, label=label, thinking=thinking, lead=lead)
+            live = working_text(
+                step, steps, elapsed, turbo, limit=32, label=label, thinking=thinking, lead=lead
+            )
         else:
             live = working_text(step, steps, elapsed, turbo, lead=lead)
-        buttons = (_action_button("primary", primary, style), _action_button("secondary", secondary, style),
-                   _HIDE, _MENU)
+        buttons = (
+            _action_button("primary", primary, style),
+            _action_button("secondary", secondary, style),
+            _HIDE,
+            _MENU,
+        )
         return BarSpec(mode, live, buttons, color, dot_alpha, shimmer=thinking)
     if mode in ("paused", "takeover"):
-        buttons = (_action_button("primary", primary, style), _action_button("secondary", secondary, style),
-                   _HIDE, _MENU)
+        buttons = (
+            _action_button("primary", primary, style),
+            _action_button("secondary", secondary, style),
+            _HIDE,
+            _MENU,
+        )
         return BarSpec(mode, text, buttons, color, dot_alpha)
     # stopped (OK / Hide) and anything else: plain text buttons
     buttons = (Button("primary", primary), Button("secondary", secondary))
@@ -260,7 +324,7 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def app_label(app: Optional[str]) -> str:
+def app_label(app: str | None) -> str:
     """A short display name for an app: "Vivado", not "vivado.bin" or "com.apple.Mail"."""
     name = " ".join(str(app or "").split())
     if not name:
@@ -276,7 +340,7 @@ def app_label(app: Optional[str]) -> str:
     return _clip(name, 18)
 
 
-def action_text(verb: str, name: Optional[str] = None, app: Optional[str] = None) -> str:
+def action_text(verb: str, name: str | None = None, app: str | None = None) -> str:
     """What Dobby does, and to what: "Click ‘Run Synthesis’ in Vivado".
 
     The element's name comes from the accessibility hit test, the app from
@@ -287,17 +351,26 @@ def action_text(verb: str, name: Optional[str] = None, app: Optional[str] = None
     return f"{text} in {where}" if where else text
 
 
-def confirm_spec(text: str, allow: str = "Allow", deny: str = "Deny", kind: str = "danger",
-                 detail: str = "") -> BarSpec:
+def confirm_spec(
+    text: str, allow: str = "Allow", deny: str = "Deny", kind: str = "danger", detail: str = ""
+) -> BarSpec:
     """An Allow/Deny prompt: words, not icons, and no way to hide it.
 
     ``kind`` "danger" is a risky step (red); "access" asks whether Dobby may
     use an app at all, so it uses Dobby's own colour, not alarm red.
     ``detail`` is the longer explanation, shown as the bar's tooltip.
     """
-    return BarSpec("confirm", text, (Button("primary", allow or "Allow", None, "", "accent"),
-                                     Button("secondary", deny or "Deny", None, "", "danger")),
-                   "ok" if kind == "access" else "danger", 1.0, tip=detail or None)
+    return BarSpec(
+        "confirm",
+        text,
+        (
+            Button("primary", allow or "Allow", None, "", "accent"),
+            Button("secondary", deny or "Deny", None, "", "danger"),
+        ),
+        "ok" if kind == "access" else "danger",
+        1.0,
+        tip=detail or None,
+    )
 
 
 def agent_busy(agent: Mapping[str, object]) -> bool:
@@ -305,8 +378,12 @@ def agent_busy(agent: Mapping[str, object]) -> bool:
     return bool(agent.get("holding") or agent.get("waiting") or agent.get("paused"))
 
 
-def agent_dots(agents: Iterable[Mapping[str, object]], colors: Mapping[int, str], own_pid: int,
-               busy_only: bool = False) -> List[Tuple[int, str, bool, bool]]:
+def agent_dots(
+    agents: Iterable[Mapping[str, object]],
+    colors: Mapping[int, str],
+    own_pid: int,
+    busy_only: bool = False,
+) -> list[tuple[int, str, bool, bool]]:
     """(pid, colour, holding control, is this bar's Dobby) for the bar's Dobby dots.
 
     Empty with fewer than two Dobbys: one Dobby needs no picker.
@@ -320,7 +397,9 @@ def agent_dots(agents: Iterable[Mapping[str, object]], colors: Mapping[int, str]
     if len(agents) < 2:
         return []
     out = []
-    for a in sorted(agents, key=lambda a: (float(a.get("started", 0) or 0), int(a.get("pid", 0) or 0))):
+    for a in sorted(
+        agents, key=lambda a: (float(a.get("started", 0) or 0), int(a.get("pid", 0) or 0))
+    ):
         pid = int(a.get("pid", 0) or 0)
         out.append((pid, colors.get(pid, AGENT_PALETTE[0]), bool(a.get("holding")), pid == own_pid))
     return out
@@ -332,7 +411,7 @@ def dots_caption(dots: Sequence[object]) -> str:
 
 
 # ------------------------------------------------------------- pointer tag
-def intent_secs(ms: Optional[float], default_ms: float, narrate: bool) -> Optional[float]:
+def intent_secs(ms: float | None, default_ms: float, narrate: bool) -> float | None:
     """How long the tag shows an action. None: until the next action or until Dobby is idle.
 
     An explicit ``ms`` (a tool's ``step()``, a clear) always wins.
@@ -353,7 +432,7 @@ def tag_detail(intent: str, state: str, narrate: bool) -> str:
 
 # --------------------------------------------------------------------- glow
 def glow_state(*, paused: bool, takeover: bool, working: bool, thinking: bool, risk: str) -> str:
-    """"risk" | "halted" | "thinking" | "acting" | "idle"."""
+    """ "risk" | "halted" | "thinking" | "acting" | "idle"."""
     if risk == "danger":
         return "risk"
     if paused or takeover:
@@ -381,7 +460,9 @@ def glow_opacity(state: str, dim: bool) -> float:
     return 0.3 if dim else 1.0
 
 
-def corner_radius(rect: Rect, screens: Iterable[Rect], os_major: int, configured: object = "auto") -> float:
+def corner_radius(
+    rect: Rect, screens: Iterable[Rect], os_major: int, configured: object = "auto"
+) -> float:
     """Corner radius for the glow around ``rect``.
 
     A number in the config wins. "auto": 0 for a window that fills its screen
@@ -401,9 +482,14 @@ def corner_radius(rect: Rect, screens: Iterable[Rect], os_major: int, configured
 
 
 # -------------------------------------------------------------------- trail
-def trail_view(points: Sequence[Tuple[int, Point, float]], now: float, style: str = "modern",
-               keep: int = 3, fade_secs: float = 10.0,
-               numbered: bool = False) -> List[Tuple[Optional[int], Point, float, float, float]]:
+def trail_view(
+    points: Sequence[tuple[int, Point, float]],
+    now: float,
+    style: str = "modern",
+    keep: int = 3,
+    fade_secs: float = 10.0,
+    numbered: bool = False,
+) -> list[tuple[int | None, Point, float, float, float]]:
     """(number or None, point, opacity, diameter, seconds left) per trail mark, oldest first.
 
     ``points`` are (step number, point, time added). Modern: the last
@@ -416,8 +502,10 @@ def trail_view(points: Sequence[Tuple[int, Point, float]], now: float, style: st
     if style == "classic":
         pts = list(points)[-keep:] if keep > 0 else []
         n = len(pts)
-        return [(num, pt, max(0.2, 0.85 - 0.17 * (n - 1 - i)), 18.0, 0.0)
-                for i, (num, pt, _t) in enumerate(pts)]
+        return [
+            (num, pt, max(0.2, 0.85 - 0.17 * (n - 1 - i)), 18.0, 0.0)
+            for i, (num, pt, _t) in enumerate(pts)
+        ]
     out = []
     pts = [p for p in points if now - p[2] < fade_secs]
     pts = pts[-keep:] if keep > 0 else []
@@ -437,8 +525,16 @@ def trail_view(points: Sequence[Tuple[int, Point, float]], now: float, style: st
 
 
 # --------------------------------------------------------------- name tag
-def tag_flip(tip: Point, tag_w: float, tag_h: float, arrow_w: float, arrow_h: float,
-             screen: Optional[Rect], gap: float = 4.0, margin: float = 6.0) -> Tuple[bool, bool]:
+def tag_flip(
+    tip: Point,
+    tag_w: float,
+    tag_h: float,
+    arrow_w: float,
+    arrow_h: float,
+    screen: Rect | None,
+    gap: float = 4.0,
+    margin: float = 6.0,
+) -> tuple[bool, bool]:
     """(flip left, flip up) so the tag stays on the pointer's screen.
 
     Normally the tag sits below-right of the tip. Near the right edge it goes
@@ -454,8 +550,15 @@ def tag_flip(tip: Point, tag_w: float, tag_h: float, arrow_w: float, arrow_h: fl
     return (left, up)
 
 
-def tag_origin(tip: Point, tag_w: float, tag_h: float, arrow_w: float, arrow_h: float,
-               flip: Tuple[bool, bool], gap: float = 4.0) -> Point:
+def tag_origin(
+    tip: Point,
+    tag_w: float,
+    tag_h: float,
+    arrow_w: float,
+    arrow_h: float,
+    flip: tuple[bool, bool],
+    gap: float = 4.0,
+) -> Point:
     """Global top-left of the tag for a given flip (matches ``geometry.chip_rect`` unflipped)."""
     left, up = flip
     x = tip[0] - tag_w - gap if left else tip[0] + arrow_w - gap

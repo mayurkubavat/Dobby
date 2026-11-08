@@ -1,12 +1,12 @@
 """Screen capture, compression, scaling, and cursor overlay pipeline."""
 
-import io
 import base64
-from typing import Tuple, Optional
-from PIL import Image, ImageDraw, ImageChops
+import io
 
-from dobby.hal.base import IDesktopHAL
+from PIL import Image, ImageChops, ImageDraw
+
 from dobby.config import CONFIG
+from dobby.hal.base import IDesktopHAL
 
 
 class CapturePipeline:
@@ -15,7 +15,7 @@ class CapturePipeline:
     def __init__(self, hal: IDesktopHAL) -> None:
         self.hal = hal
 
-    def draw_cursor(self, image: Image.Image, cursor_pos: Tuple[int, int]) -> Image.Image:
+    def draw_cursor(self, image: Image.Image, cursor_pos: tuple[int, int]) -> Image.Image:
         """Draws a high-visibility cursor indicator at the current pointer location."""
         img = image.copy()
         draw = ImageDraw.Draw(img)
@@ -35,10 +35,9 @@ class CapturePipeline:
 
     def scale_image(
         self, image: Image.Image, max_dim: int = CONFIG.max_image_dimension
-    ) -> Tuple[Image.Image, float]:
-        """
-        Scales down image if dimensions exceed max_dim.
-        
+    ) -> tuple[Image.Image, float]:
+        """Scales down image if dimensions exceed max_dim.
+
         Returns:
             Tuple of (scaled_image, scale_factor).
             scale_factor < 1.0 means the image was reduced in size.
@@ -56,7 +55,9 @@ class CapturePipeline:
         scaled = image.resize((new_w, new_h), Image.Resampling.BILINEAR)
         return scaled, scale
 
-    def encode_image(self, image: Image.Image, format: str = "JPEG", quality: int = CONFIG.image_quality) -> str:
+    def encode_image(
+        self, image: Image.Image, format: str = "JPEG", quality: int = CONFIG.image_quality
+    ) -> str:
         """Encodes PIL image to Base64 string."""
         buffer = io.BytesIO()
         if format.upper() == "JPEG" and image.mode in ("RGBA", "P"):
@@ -66,12 +67,11 @@ class CapturePipeline:
 
     def capture(
         self,
-        region: Optional[Tuple[int, int, int, int]] = None,
+        region: tuple[int, int, int, int] | None = None,
         draw_cursor: bool = CONFIG.draw_cursor,
         scale_down: bool = True,
-    ) -> Tuple[Image.Image, float, Tuple[int, int], Tuple[int, int]]:
-        """
-        Captures screenshot and returns processed image and metadata.
+    ) -> tuple[Image.Image, float, tuple[int, int], tuple[int, int]]:
+        """Captures screenshot and returns processed image and metadata.
 
         Returns:
             Tuple of:
@@ -100,8 +100,7 @@ class CapturePipeline:
 
     @staticmethod
     def compute_image_delta(img1: Image.Image, img2: Image.Image) -> float:
-        """
-        Calculates fraction of pixels changed between two images of same dimensions.
+        """Calculates fraction of pixels changed between two images of same dimensions.
         Returns float between 0.0 (identical) and 1.0 (completely different).
         """
         if img1.size != img2.size:
@@ -116,7 +115,9 @@ class CapturePipeline:
         data = getattr(diff, "get_flattened_data", diff.getdata)()
         # Handle RGB (3 bytes per pixel) or tuples
         if isinstance(data, (bytes, bytearray, memoryview)):
-            changed_pixels = sum(1 for i in range(0, len(data), 3) if any(data[i + j] > 15 for j in range(3)))
+            changed_pixels = sum(
+                1 for i in range(0, len(data), 3) if any(data[i + j] > 15 for j in range(3))
+            )
         else:
             changed_pixels = sum(1 for pixel in data if any(c > 15 for c in pixel))
         return changed_pixels / float(total_pixels)

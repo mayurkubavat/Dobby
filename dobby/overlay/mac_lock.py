@@ -20,10 +20,15 @@ from __future__ import annotations
 
 import sys
 import time
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any
 
-from AppKit import NSImageView, NSPanel, NSBackingStoreBuffered, NSWindowStyleMaskBorderless, \
-    NSWindowStyleMaskNonactivatingPanel
+from AppKit import (
+    NSBackingStoreBuffered,
+    NSImageView,
+    NSPanel,
+    NSWindowStyleMaskBorderless,
+    NSWindowStyleMaskNonactivatingPanel,
+)
 from Quartz import (
     CABasicAnimation,
     CFMachPortCreateRunLoopSource,
@@ -40,25 +45,31 @@ from Quartz import (
 
 from . import inputlock
 
-_SESSION_TAP = 1          # kCGSessionEventTap
-_HEAD_INSERT = 0          # kCGHeadInsertEventTap
-_TAP_DEFAULT = 0          # kCGEventTapOptionDefault (may drop events)
-_USER_DATA = 42           # kCGEventSourceUserData
-_KEYCODE = 9              # kCGKeyboardEventKeycode
+_SESSION_TAP = 1  # kCGSessionEventTap
+_HEAD_INSERT = 0  # kCGHeadInsertEventTap
+_TAP_DEFAULT = 0  # kCGEventTapOptionDefault (may drop events)
+_USER_DATA = 42  # kCGEventSourceUserData
+_KEYCODE = 9  # kCGKeyboardEventKeycode
 _DISABLED_TIMEOUT = 0xFFFFFFFE
 _DISABLED_USER = 0xFFFFFFFF
 _CTRL, _ALT = 0x40000, 0x80000
-_HOTKEYS = {53, 35, 4}    # Esc (stop), P (pause), H (hide bar) with Ctrl+Option
+_HOTKEYS = {53, 35, 4}  # Esc (stop), P (pause), H (hide bar) with Ctrl+Option
 
 # Quartz event type -> (kind, button, phase) for the rules in inputlock.
-_TYPES: Dict[int, Tuple[str, str, str]] = {
-    1: ("click", "l", "down"), 2: ("click", "l", "up"),
-    3: ("click", "r", "down"), 4: ("click", "r", "up"),
-    25: ("click", "o", "down"), 26: ("click", "o", "up"),
-    6: ("drag", "l", "drag"), 7: ("drag", "r", "drag"), 27: ("drag", "o", "drag"),
+_TYPES: dict[int, tuple[str, str, str]] = {
+    1: ("click", "l", "down"),
+    2: ("click", "l", "up"),
+    3: ("click", "r", "down"),
+    4: ("click", "r", "up"),
+    25: ("click", "o", "down"),
+    26: ("click", "o", "up"),
+    6: ("drag", "l", "drag"),
+    7: ("drag", "r", "drag"),
+    27: ("drag", "o", "drag"),
     5: ("move", "", "move"),
     22: ("scroll", "", "scroll"),
-    10: ("key", "", "down"), 11: ("key", "", "up"),
+    10: ("key", "", "down"),
+    11: ("key", "", "up"),
 }
 _MASK = 0
 for _t in _TYPES:
@@ -73,7 +84,8 @@ class _Badge:
     def __init__(self, configure, symbol, rgb) -> None:
         style = NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
         win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
-            ((0, 0), (_BADGE, _BADGE)), style, NSBackingStoreBuffered, False)
+            ((0, 0), (_BADGE, _BADGE)), style, NSBackingStoreBuffered, False
+        )
         configure(win, {"capture_visible": False}, click_through=True)
         view = NSImageView.alloc().initWithFrame_(((0, 0), (_BADGE, _BADGE)))
         img = symbol("nosign", 15.0, rgb)
@@ -84,7 +96,7 @@ class _Badge:
         self.window, self.view = win, view
         self.shown = False
 
-    def place(self, pt: Optional[Tuple[float, float]], primary_h: float) -> None:
+    def place(self, pt: tuple[float, float] | None, primary_h: float) -> None:
         """pt: the pointer in global top-left points, or None to hide."""
         if pt is None:
             if self.shown:
@@ -118,24 +130,28 @@ class MacInputLock:
     def __init__(self, owner: Any, configure, symbol) -> None:
         self.owner = owner
         self.insist = inputlock.Insist()
-        self.dropped_buttons: Set[str] = set()
-        self.dropped_keys: Set[int] = set()
+        self.dropped_buttons: set[str] = set()
+        self.dropped_keys: set[int] = set()
         self.timeouts = 0
         self.tap = None
-        self.badge: Optional[_Badge] = None
+        self.badge: _Badge | None = None
         try:
             self.badge = _Badge(configure, symbol, owner.colors["danger"])
         except Exception as exc:  # noqa: BLE001 - the badge is a nicety
             sys.stderr.write(f"dobby.overlay: no lock badge: {exc}\n")
         self._callback = self._on_event  # keep a reference for the tap's lifetime
         try:
-            tap = CGEventTapCreate(_SESSION_TAP, _HEAD_INSERT, _TAP_DEFAULT, _MASK, self._callback, None)
+            tap = CGEventTapCreate(
+                _SESSION_TAP, _HEAD_INSERT, _TAP_DEFAULT, _MASK, self._callback, None
+            )
         except Exception as exc:  # noqa: BLE001
             tap = None
             sys.stderr.write(f"dobby.overlay: input lock: {exc}\n")
         if tap is None:
-            sys.stderr.write("dobby.overlay: input lock off: no event tap "
-                             "(grant Accessibility to the app that runs Dobby)\n")
+            sys.stderr.write(
+                "dobby.overlay: input lock off: no event tap "
+                "(grant Accessibility to the app that runs Dobby)\n"
+            )
             return
         src = CFMachPortCreateRunLoopSource(None, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), src, kCFRunLoopCommonModes)
@@ -221,7 +237,7 @@ class MacInputLock:
         return None
 
     # ----------------------------------------------------------- the badge
-    def _show_badge(self, pt: Optional[Tuple[float, float]]) -> None:
+    def _show_badge(self, pt: tuple[float, float] | None) -> None:
         if self.badge is not None:
             self.badge.place(pt, self.owner.primary_h)
 

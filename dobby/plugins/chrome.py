@@ -6,12 +6,16 @@ sub-pane bounding box routing, and web application automation macros.
 
 import time
 
+
 def _send_hotkey(hal, combo: str) -> None:
     parts = [p.strip().lower() for p in combo.split("+")]
     hal.keyboard_hotkey(parts)
-from typing import Dict, List, Optional, Any
+
+
+from typing import Any
+
 from dobby.plugins.base import BaseUIAppPlugin
-from dobby.types import SubPaneROI, FeatureDescriptor, BoundingBox
+from dobby.types import FeatureDescriptor, SubPaneROI
 
 
 class ChromeBrowserPlugin(BaseUIAppPlugin):
@@ -81,8 +85,16 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 hotkey="ctrl+l",
                 target_pane="address_bar",
                 parameters={
-                    "url": {"type": "string", "required": True, "description": "URL to navigate to"},
-                    "new_tab": {"type": "boolean", "default": False, "description": "Whether to open in new tab"},
+                    "url": {
+                        "type": "string",
+                        "required": True,
+                        "description": "URL to navigate to",
+                    },
+                    "new_tab": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Whether to open in new tab",
+                    },
                 },
             ),
             "browser.new_tab": FeatureDescriptor(
@@ -119,7 +131,11 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 category="navigation",
                 hotkey="ctrl+r",
                 parameters={
-                    "hard": {"type": "boolean", "default": False, "description": "Whether to bypass cache (Ctrl+Shift+R)"},
+                    "hard": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Whether to bypass cache (Ctrl+Shift+R)",
+                    },
                 },
             ),
             "browser.zoom_in": FeatureDescriptor(
@@ -167,8 +183,16 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 category="view",
                 target_pane="content_area",
                 parameters={
-                    "direction": {"type": "string", "default": "down", "description": "'down' or 'up'"},
-                    "amount": {"type": "integer", "default": 15, "description": "Scroll wheel tick count"},
+                    "direction": {
+                        "type": "string",
+                        "default": "down",
+                        "description": "'down' or 'up'",
+                    },
+                    "amount": {
+                        "type": "integer",
+                        "default": 15,
+                        "description": "Scroll wheel tick count",
+                    },
                 },
             ),
             "browser.dismiss_dialog": FeatureDescriptor(
@@ -185,13 +209,21 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 category="macro",
                 target_pane="content_area",
                 parameters={
-                    "prompt": {"type": "string", "required": True, "description": "Research prompt to submit"},
-                    "press_enter": {"type": "boolean", "default": True, "description": "Whether to press Enter to submit"},
+                    "prompt": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Research prompt to submit",
+                    },
+                    "press_enter": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "Whether to press Enter to submit",
+                    },
                 },
             ),
         }
 
-    def detect(self, window_title: str, app_name: Optional[str] = None) -> bool:
+    def detect(self, window_title: str, app_name: str | None = None) -> bool:
         """Matches Google Chrome or Chromium desktop windows."""
         lower_title = window_title.lower() if window_title else ""
         lower_app = app_name.lower() if app_name else ""
@@ -206,8 +238,8 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
         self,
         feature_id: str,
         controller: Any,
-        args: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Executes a Chrome browser feature with closed-loop verification."""
         args = args or {}
         feature = self.get_feature(feature_id)
@@ -224,7 +256,11 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
         if feature_id == "browser.navigate":
             url = args.get("url", "")
             if not url:
-                return {"success": False, "feature_id": feature_id, "message": "Missing required 'url' parameter."}
+                return {
+                    "success": False,
+                    "feature_id": feature_id,
+                    "message": "Missing required 'url' parameter.",
+                }
 
             if args.get("new_tab", False):
                 _send_hotkey(hal, "ctrl+t")
@@ -259,7 +295,13 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name="browser.new_tab",
                 settle_time_sec=0.3,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": "Opened new browser tab."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": "Opened new browser tab.",
+            }
 
         elif feature_id == "browser.close_tab":
             res = controller.execute_with_verification(
@@ -267,7 +309,13 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name="browser.close_tab",
                 settle_time_sec=0.3,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": "Closed active tab."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": "Closed active tab.",
+            }
 
         elif feature_id == "browser.switch_tab":
             tab_index = args.get("tab_index")
@@ -284,7 +332,13 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name=f"browser.switch_tab({combo})",
                 settle_time_sec=0.25,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": f"Switched tab via {combo}."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": f"Switched tab via {combo}.",
+            }
 
         # 3. Reload
         elif feature_id == "browser.reload":
@@ -294,7 +348,13 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name=f"browser.reload({combo})",
                 settle_time_sec=0.5,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": f"Reloaded page ({combo})."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": f"Reloaded page ({combo}).",
+            }
 
         # 4. Zoom controls
         elif feature_id in ("browser.zoom_in", "browser.zoom_out", "browser.zoom_reset"):
@@ -304,7 +364,13 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name=feature_id,
                 settle_time_sec=0.2,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": f"Executed {feature_id}."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": f"Executed {feature_id}.",
+            }
 
         # 5. Find in page
         elif feature_id == "browser.find_in_page":
@@ -315,7 +381,11 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 hal.keyboard_type(query)
                 time.sleep(0.05)
                 hal.keyboard_press_key("enter")
-            return {"success": True, "feature_id": feature_id, "message": f"Find in page triggered for query '{query}'."}
+            return {
+                "success": True,
+                "feature_id": feature_id,
+                "message": f"Find in page triggered for query '{query}'.",
+            }
 
         # 6. DevTools
         elif feature_id == "browser.devtools":
@@ -324,7 +394,13 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name="browser.devtools",
                 settle_time_sec=0.5,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": "Toggled Developer Tools."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": "Toggled Developer Tools.",
+            }
 
         # 7. Scroll content viewport
         elif feature_id == "browser.scroll_content":
@@ -338,18 +414,30 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                     hal.mouse_move(*pane_bbox.center)
 
             res = controller.execute_with_verification(
-                action_func=lambda: hal.mouse_scroll(dx=0, dy=-amount if direction == "down" else amount),
+                action_func=lambda: hal.mouse_scroll(
+                    dx=0, dy=-amount if direction == "down" else amount
+                ),
                 action_name=f"browser.scroll_content({direction}, {amount})",
                 settle_time_sec=0.3,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": f"Scrolled content {direction} by {amount} units."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": f"Scrolled content {direction} by {amount} units.",
+            }
 
         # 8. Dismiss Dialog
         elif feature_id == "browser.dismiss_dialog":
             # Attempt autonomous obstruction dismissal first
             obs_res = controller.obstruction_interceptor.scan_and_dismiss()
             if obs_res.get("dismissed", False):
-                return {"success": True, "feature_id": feature_id, "message": f"Dismissed obstruction: {obs_res.get('message')}"}
+                return {
+                    "success": True,
+                    "feature_id": feature_id,
+                    "message": f"Dismissed obstruction: {obs_res.get('message')}",
+                }
 
             # Fallback to Escape key
             res = controller.execute_with_verification(
@@ -357,13 +445,23 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name="browser.dismiss_dialog(escape)",
                 settle_time_sec=0.2,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": "Sent Escape to dismiss dialog."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": "Sent Escape to dismiss dialog.",
+            }
 
         # 9. Gemini Query Macro
         elif feature_id == "browser.gemini_query":
             prompt = args.get("prompt", "")
             if not prompt:
-                return {"success": False, "feature_id": feature_id, "message": "Missing required 'prompt' parameter."}
+                return {
+                    "success": False,
+                    "feature_id": feature_id,
+                    "message": "Missing required 'prompt' parameter.",
+                }
 
             press_enter = args.get("press_enter", True)
             # Find prompt input box or click in content area center
@@ -401,6 +499,16 @@ class ChromeBrowserPlugin(BaseUIAppPlugin):
                 action_name=f"feature.{feature_id}({feature.hotkey})",
                 settle_time_sec=0.25,
             )
-            return {"success": res.success, "feature_id": feature_id, "delta_detected": res.delta_detected, "change_ratio": res.change_ratio, "message": f"Executed hotkey '{feature.hotkey}' for {feature_id}."}
+            return {
+                "success": res.success,
+                "feature_id": feature_id,
+                "delta_detected": res.delta_detected,
+                "change_ratio": res.change_ratio,
+                "message": f"Executed hotkey '{feature.hotkey}' for {feature_id}.",
+            }
 
-        return {"success": False, "feature_id": feature_id, "message": "No execution pathway resolved."}
+        return {
+            "success": False,
+            "feature_id": feature_id,
+            "message": "No execution pathway resolved.",
+        }

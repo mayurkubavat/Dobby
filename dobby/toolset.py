@@ -13,18 +13,20 @@ import json
 import os
 import tempfile
 import time
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class OutputMode(str, Enum):
     """Payload output mode for MCP tools."""
 
-    INLINE = "inline"        # Return full dictionary directly inside MCP response
-    FILE = "file"            # Offload heavy payloads to tmpfs file, return URI & preview
-    RESOURCE = "resource"    # Expose as mcp://dobby/state/<id> pointer
+    INLINE = "inline"  # Return full dictionary directly inside MCP response
+    FILE = "file"  # Offload heavy payloads to tmpfs file, return URI & preview
+    RESOURCE = "resource"  # Expose as mcp://dobby/state/<id> pointer
 
 
 class ToolDefinition(BaseModel):
@@ -36,7 +38,7 @@ class ToolDefinition(BaseModel):
         description="Domain group: 'core', 'window_mgmt', 'developer', 'plugins', 'skills', 'vdom', 'advanced_vision', 'eda_vivado', 'eda_verdi'",
     )
     description: str = ""
-    input_schema: Dict[str, Any] = Field(default_factory=dict)
+    input_schema: dict[str, Any] = Field(default_factory=dict)
     max_inline_tokens: int = 350
 
 
@@ -47,23 +49,22 @@ class ManageToolsetsInput(BaseModel):
         pattern="^(list_domains|enable|disable|set_output_mode)$",
         description="Action to perform: 'list_domains', 'enable', 'disable', or 'set_output_mode'",
     )
-    domains: List[str] = Field(
+    domains: list[str] = Field(
         default_factory=list,
         description="List of domain names to enable or disable",
     )
-    output_mode: Optional[OutputMode] = Field(
+    output_mode: OutputMode | None = Field(
         default=None,
         description="Target output mode when action is 'set_output_mode'",
     )
 
 
 class ToolSetManager:
-    """
-    Manages active tool domain profiles, dynamic capability gating,
+    """Manages active tool domain profiles, dynamic capability gating,
     and out-of-band large payload disk/tmpfs offloading.
     """
 
-    PROFILES: Dict[str, List[str]] = {
+    PROFILES: dict[str, list[str]] = {
         "minimal_computer_use": ["core"],
         "window_mgmt": ["core", "window_mgmt"],
         "full_developer": [
@@ -93,12 +94,12 @@ class ToolSetManager:
         initial_profile: str = "full_developer",
         output_mode: OutputMode = OutputMode.INLINE,
         max_inline_tokens: int = 350,
-        state_dir: Optional[Path | str] = None,
-        notify_tools_changed_cb: Optional[Callable[[], Any]] = None,
+        state_dir: Path | str | None = None,
+        notify_tools_changed_cb: Callable[[], Any] | None = None,
     ) -> None:
-        self._registry: Dict[str, ToolDefinition] = {}
+        self._registry: dict[str, ToolDefinition] = {}
         domains = self.PROFILES.get(initial_profile, ["core"])
-        self._active_domains: Set[str] = set(domains)
+        self._active_domains: set[str] = set(domains)
         self._output_mode: OutputMode = output_mode
         self._max_inline_tokens: int = max_inline_tokens
         self._notify_cb = notify_tools_changed_cb
@@ -128,19 +129,19 @@ class ToolSetManager:
         """Registers a tool definition and its domain categorization."""
         self._registry[tool.name] = tool
 
-    def get_tool(self, name: str) -> Optional[ToolDefinition]:
+    def get_tool(self, name: str) -> ToolDefinition | None:
         """Retrieves tool definition by name."""
         return self._registry.get(name)
 
-    def list_all_tools(self) -> List[str]:
+    def list_all_tools(self) -> list[str]:
         """Lists all registered tool names."""
         return sorted(self._registry.keys())
 
-    def get_active_domains(self) -> List[str]:
+    def get_active_domains(self) -> list[str]:
         """Returns sorted list of currently enabled domain names."""
         return sorted(self._active_domains)
 
-    def get_available_domains(self) -> List[str]:
+    def get_available_domains(self) -> list[str]:
         """Returns sorted list of all registered domain names."""
         domains = {tool.domain for tool in self._registry.values()}
         domains.add("core")
@@ -153,7 +154,7 @@ class ToolSetManager:
             return True  # Unknown tools default to active for compatibility
         return tool.domain in self._active_domains
 
-    def get_active_mcp_schemas(self) -> List[Dict[str, Any]]:
+    def get_active_mcp_schemas(self) -> list[dict[str, Any]]:
         """Returns active MCP tool schemas matching enabled domains."""
         return [
             {
@@ -168,11 +169,10 @@ class ToolSetManager:
     def manage_toolsets(
         self,
         action: str,
-        domains: Optional[List[str]] = None,
-        output_mode: Optional[OutputMode | str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Manages domain activation and output mode preferences.
+        domains: list[str] | None = None,
+        output_mode: OutputMode | str | None = None,
+    ) -> dict[str, Any]:
+        """Manages domain activation and output mode preferences.
 
         Args:
             action: 'list_domains', 'enable', 'disable', or 'set_output_mode'
@@ -215,6 +215,7 @@ class ToolSetManager:
                 res = self._notify_cb()
                 if hasattr(res, "__await__"):
                     import asyncio
+
                     try:
                         loop = asyncio.get_running_loop()
                         loop.create_task(res)
@@ -237,12 +238,11 @@ class ToolSetManager:
     def format_output(
         self,
         tool_name: str,
-        payload: Dict[str, Any],
-        output_mode_override: Optional[OutputMode | str] = None,
+        payload: dict[str, Any],
+        output_mode_override: OutputMode | str | None = None,
         force_offload: bool = False,
-    ) -> Dict[str, Any]:
-        """
-        Intercepts tool payloads and offloads heavy structures out-of-band when configured.
+    ) -> dict[str, Any]:
+        """Intercepts tool payloads and offloads heavy structures out-of-band when configured.
 
         Args:
             tool_name: Name of executing tool
@@ -253,9 +253,7 @@ class ToolSetManager:
             Raw payload if inline or small; summary preview and file URI if offloaded.
         """
         effective_mode = (
-            OutputMode(output_mode_override)
-            if output_mode_override
-            else self._output_mode
+            OutputMode(output_mode_override) if output_mode_override else self._output_mode
         )
 
         serialized = json.dumps(payload, default=str, indent=2)
@@ -283,10 +281,8 @@ class ToolSetManager:
             "title",
             "resolution",
         ]
-        compact_preview: Dict[str, Any] = {
-            k: payload[k] for k in preview_fields if k in payload
-        }
-        sample_lines: List[str] = []
+        compact_preview: dict[str, Any] = {k: payload[k] for k in preview_fields if k in payload}
+        sample_lines: list[str] = []
         if "lines" in payload and isinstance(payload["lines"], list):
             sample_lines = [str(item.get("text", item))[:60] for item in payload["lines"][:3]]
             compact_preview["sample_lines"] = sample_lines
@@ -308,7 +304,7 @@ class ToolSetManager:
             "uri": uri,
             "bytes": len(serialized.encode("utf-8")),
         }
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "offloaded": True,
             "output_mode": effective_mode.value,
             "estimated_tokens_saved": max(0, est_tokens - 80),
@@ -323,7 +319,9 @@ class ToolSetManager:
             result["read_hint"] = f"resources/read {uri}"
         else:
             result["file_path"] = str(artifact_path)
-            result["read_hint"] = f"Call read_file(path='{artifact_path}') or grep target keys on demand."
+            result["read_hint"] = (
+                f"Call read_file(path='{artifact_path}') or grep target keys on demand."
+            )
         return result
 
     def resolve_state_file(self, name: str) -> Path:
@@ -352,4 +350,3 @@ class ToolSetManager:
             except OSError:
                 pass
         return removed
-

@@ -68,8 +68,11 @@ def main() -> int:
     if insp.is_available:
         runs = [ms(insp.inspect_desktop) for _ in range(args.repeats)]
         els = runs[-1][0]
-        report["accessibility"] = {"ms": med([t for _, t in runs]), "elements": len(els),
-                                   "text_tokens": text_tokens([[e.role, e.name, e.bbox.x, e.bbox.y] for e in els])}
+        report["accessibility"] = {
+            "ms": med([t for _, t in runs]),
+            "elements": len(els),
+            "text_tokens": text_tokens([[e.role, e.name, e.bbox.x, e.bbox.y] for e in els]),
+        }
     else:
         els = []
         report["accessibility"] = {"available": False, "error": getattr(insp, "error", None)}
@@ -79,9 +82,14 @@ def main() -> int:
         lines, cold = ms(lambda: ocr.inner.recognize(img))
         _, warm = ms(lambda: ocr.recognize(img))
         _, cached = ms(lambda: ocr.recognize(img))
-        report["ocr"] = {"engine": ocr.name, "first_ms": round(cold, 1), "uncached_ms": round(warm, 1),
-                         "cached_ms": round(cached, 1), "lines": len(lines),
-                         "text_tokens": text_tokens([ln.as_dict() for ln in lines])}
+        report["ocr"] = {
+            "engine": ocr.name,
+            "first_ms": round(cold, 1),
+            "uncached_ms": round(warm, 1),
+            "cached_ms": round(cached, 1),
+            "lines": len(lines),
+            "text_tokens": text_tokens([ln.as_dict() for ln in lines]),
+        }
 
     if not args.no_gemma:
         from dobby.vdom.gemma3_sidecar import Gemma3Grounder
@@ -90,17 +98,30 @@ def main() -> int:
         if g.is_available():
             q = "Is there any visible text in this window?"
             first, t_first = ms(lambda: g.ask_yes_no(img, q))
-            warm_runs = [ms(lambda: g.ask_yes_no(img, q))[1] for _ in range(max(1, args.repeats - 1))]
-            report["gemma_yes_no"] = {"first_ms": round(t_first, 1), "warm_ms": med(warm_runs),
-                                      "answer": first, "text_tokens": text_tokens(first)}
+            warm_runs = [
+                ms(lambda: g.ask_yes_no(img, q))[1] for _ in range(max(1, args.repeats - 1))
+            ]
+            report["gemma_yes_no"] = {
+                "first_ms": round(t_first, 1),
+                "warm_ms": med(warm_runs),
+                "answer": first,
+                "text_tokens": text_tokens(first),
+            }
             boxes = []
             if region and els:
-                boxes = [(e.bbox.x - region[0], e.bbox.y - region[1], e.bbox.width, e.bbox.height) for e in els[:10]]
+                boxes = [
+                    (e.bbox.x - region[0], e.bbox.y - region[1], e.bbox.width, e.bbox.height)
+                    for e in els[:10]
+                ]
             if boxes:
                 labels, t_lab = ms(lambda: g.marks.label_marks(img, boxes, app_key="bench"))
                 _, t_cached = ms(lambda: g.marks.label_marks(img, boxes, app_key="bench"))
-                report["gemma_label_marks"] = {"boxes": len(boxes), "named": len(labels),
-                                               "ms": round(t_lab, 1), "cached_ms": round(t_cached, 1)}
+                report["gemma_label_marks"] = {
+                    "boxes": len(boxes),
+                    "named": len(labels),
+                    "ms": round(t_lab, 1),
+                    "cached_ms": round(t_cached, 1),
+                }
             report["gemma_stats"] = g.diagnostics()
         else:
             report["gemma"] = {"available": False, "installed": sorted(g.client.installed_models())}

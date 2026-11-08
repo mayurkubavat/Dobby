@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from PIL import Image
 
@@ -15,10 +15,10 @@ class NullAXDriver:
 
     def get_accessibility_tree(
         self,
-        app_filter: Optional[str] = None,
-        max_depth: Optional[int] = None,
+        app_filter: str | None = None,
+        max_depth: int | None = None,
         diff_only: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if diff_only:
             return {"available": False, "changed": False, "nodes": []}
         return {"available": False, "nodes": []}
@@ -38,15 +38,17 @@ class DesktopSession(IDesktopHAL):
         self.capture = backend
         self.input = backend
         self.windows = backend
-        self.ax = ax if ax is not None else (
-            backend if hasattr(backend, "get_accessibility_tree") else NullAXDriver()
+        self.ax = (
+            ax
+            if ax is not None
+            else (backend if hasattr(backend, "get_accessibility_tree") else NullAXDriver())
         )
         self.quiescence = quiescence
         self.topology = topology
         # Optional LiveCassetteRecorder; input methods report to it after acting.
         self.recorder: Any = None
 
-    def _record(self, action: str, args: Dict[str, Any]) -> None:
+    def _record(self, action: str, args: dict[str, Any]) -> None:
         rec = self.recorder
         if rec is not None and getattr(rec, "active", False):
             rec.after_action(action, args)
@@ -57,13 +59,13 @@ class DesktopSession(IDesktopHAL):
             raise AttributeError(name)
         return getattr(self.backend, name)
 
-    def get_screen_size(self) -> Tuple[int, int]:
+    def get_screen_size(self) -> tuple[int, int]:
         return self.backend.get_screen_size()
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Image.Image:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
         return self.backend.capture_screen(region)
 
-    def get_cursor_position(self) -> Tuple[int, int]:
+    def get_cursor_position(self) -> tuple[int, int]:
         return self.backend.get_cursor_position()
 
     def mouse_move(self, x: int, y: int) -> None:
@@ -80,7 +82,13 @@ class DesktopSession(IDesktopHAL):
         self.backend.mouse_drag(start_x, start_y, end_x, end_y, duration_sec)
         self._record(
             "mouse_drag",
-            {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y, "duration_sec": duration_sec},
+            {
+                "start_x": start_x,
+                "start_y": start_y,
+                "end_x": end_x,
+                "end_y": end_y,
+                "duration_sec": duration_sec,
+            },
         )
 
     def mouse_scroll(self, dx: int, dy: int) -> None:
@@ -95,14 +103,14 @@ class DesktopSession(IDesktopHAL):
         self.backend.keyboard_press_key(key_name)
         self._record("keyboard_press_key", {"key_name": key_name})
 
-    def keyboard_hotkey(self, keys: List[str]) -> None:
+    def keyboard_hotkey(self, keys: list[str]) -> None:
         self.backend.keyboard_hotkey(keys)
         self._record("keyboard_hotkey", {"keys": list(keys)})
 
-    def list_windows(self) -> List[WindowInfo]:
+    def list_windows(self) -> list[WindowInfo]:
         return self.backend.list_windows()
 
-    def get_active_window(self) -> Optional[WindowInfo]:
+    def get_active_window(self) -> WindowInfo | None:
         return self.backend.get_active_window()
 
     def focus_window(self, window_id: str) -> bool:
@@ -112,10 +120,10 @@ class DesktopSession(IDesktopHAL):
 
     def get_accessibility_tree(
         self,
-        app_filter: Optional[str] = None,
-        max_depth: Optional[int] = None,
+        app_filter: str | None = None,
+        max_depth: int | None = None,
         diff_only: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return self.ax.get_accessibility_tree(
             app_filter=app_filter, max_depth=max_depth, diff_only=diff_only
         )

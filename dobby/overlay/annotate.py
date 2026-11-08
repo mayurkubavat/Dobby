@@ -25,14 +25,15 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-Rect = Tuple[float, float, float, float]
-Point = Tuple[float, float]
+Rect = tuple[float, float, float, float]
+Point = tuple[float, float]
 
 COLORS = {"ok": (124, 92, 255), "caution": (245, 165, 36), "danger": (240, 68, 56)}
 INTENT_MS = 1600
@@ -43,20 +44,20 @@ _ARROW = [(0, 0), (0, 18), (4.5, 14), (8, 21.5), (10.5, 20.5), (7, 13), (13, 13)
 
 @dataclass
 class TrackState:
-    cursor: Optional[Point] = None
+    cursor: Point | None = None
     intent: str = ""
     intent_until: float = 0.0
-    box: Optional[Rect] = None
+    box: Rect | None = None
     box_until: float = float("inf")
     risk: str = "ok"
     state: str = "idle"
-    trail: List[Tuple[int, Point]] = field(default_factory=list)
+    trail: list[tuple[int, Point]] = field(default_factory=list)
     steps: int = 0
     scan_until: float = 0.0
-    scan_rect: Optional[Rect] = None
+    scan_rect: Rect | None = None
 
 
-def load_track(path: os.PathLike) -> List[Dict[str, Any]]:
+def load_track(path: os.PathLike) -> list[dict[str, Any]]:
     out = []
     with open(path) as fh:
         for line in fh:
@@ -73,7 +74,7 @@ def load_track(path: os.PathLike) -> List[Dict[str, Any]]:
     return out
 
 
-def state_at(events: Sequence[Dict[str, Any]], t: float) -> TrackState:
+def state_at(events: Sequence[dict[str, Any]], t: float) -> TrackState:
     """Overlay state after replaying every event with ``ts <= t``."""
     s = TrackState()
     for e in events:
@@ -103,14 +104,19 @@ def state_at(events: Sequence[Dict[str, Any]], t: float) -> TrackState:
             if text:
                 s.steps += 1
         elif op == "target.box":
-            s.box, s.box_until = (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"])), float("inf")
+            s.box, s.box_until = (
+                (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"])),
+                float("inf"),
+            )
         elif op == "target.clear":
             s.box = None
         elif op == "risk":
             s.risk = e.get("level", "ok")
         elif op == "scan":
             s.scan_until = ts + 0.9
-            s.scan_rect = (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"])) if "x" in e else None
+            s.scan_rect = (
+                (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"])) if "x" in e else None
+            )
         elif op == "trail.clear":
             s.trail = []
         elif op == "cursor.hide":
@@ -123,8 +129,11 @@ def state_at(events: Sequence[Dict[str, Any]], t: float) -> TrackState:
 
 
 def _font(size: int):
-    for name in ("/System/Library/Fonts/SFNS.ttf", "/System/Library/Fonts/Helvetica.ttc",
-                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+    for name in (
+        "/System/Library/Fonts/SFNS.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ):
         try:
             return ImageFont.truetype(name, size)
         except OSError:
@@ -132,29 +141,51 @@ def _font(size: int):
     return ImageFont.load_default()
 
 
-def annotate(img: Image.Image, s: TrackState, scale: float = 1.0, origin: Point = (0.0, 0.0),
-             label: str = "Dobby", glow_rect: Optional[Rect] = None, t: Optional[float] = None) -> Image.Image:
+def annotate(
+    img: Image.Image,
+    s: TrackState,
+    scale: float = 1.0,
+    origin: Point = (0.0, 0.0),
+    label: str = "Dobby",
+    glow_rect: Rect | None = None,
+    t: float | None = None,
+) -> Image.Image:
     """Return a copy of ``img`` with the overlay drawn as it looked in state ``s``."""
     out = img.convert("RGBA")
     layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     color = COLORS.get(s.risk, COLORS["ok"])
 
-    def P(x: float, y: float) -> Tuple[float, float]:
+    def P(x: float, y: float) -> tuple[float, float]:
         return ((x - origin[0]) * scale, (y - origin[1]) * scale)
 
-    def R(r: Rect, pad: float = 0.0) -> List[float]:
+    def R(r: Rect, pad: float = 0.0) -> list[float]:
         x0, y0 = P(r[0] - pad, r[1] - pad)
         x1, y1 = P(r[0] + r[2] + pad, r[1] + r[3] + pad)
         return [x0, y0, x1, y1]
 
     if glow_rect is not None:
         for i, a in enumerate((60, 35, 18)):
-            d.rounded_rectangle(R(glow_rect, 2 + 3 * i), radius=11 * scale, outline=color + (a,), width=int(3 * scale))
-        d.rounded_rectangle(R(glow_rect, 1.5), radius=11 * scale, outline=color + (240,), width=max(1, int(3 * scale)))
+            d.rounded_rectangle(
+                R(glow_rect, 2 + 3 * i),
+                radius=11 * scale,
+                outline=color + (a,),
+                width=int(3 * scale),
+            )
+        d.rounded_rectangle(
+            R(glow_rect, 1.5),
+            radius=11 * scale,
+            outline=color + (240,),
+            width=max(1, int(3 * scale)),
+        )
     if s.box is not None:
-        d.rounded_rectangle(R(s.box, 3), radius=6 * scale, outline=color + (255,), width=max(1, int(2 * scale)),
-                            fill=color + (20,))
+        d.rounded_rectangle(
+            R(s.box, 3),
+            radius=6 * scale,
+            outline=color + (255,),
+            width=max(1, int(2 * scale)),
+            fill=color + (20,),
+        )
     small = _font(int(10 * scale))
     n = len(s.trail)
     for idx, (num, pt) in enumerate(s.trail):
@@ -172,14 +203,23 @@ def annotate(img: Image.Image, s: TrackState, scale: float = 1.0, origin: Point 
     return Image.alpha_composite(out, layer).convert("RGB")
 
 
-def _lighter(rgb: Tuple[int, int, int], f: float = 0.35) -> Tuple[int, int, int]:
+def _lighter(rgb: tuple[int, int, int], f: float = 0.35) -> tuple[int, int, int]:
     return tuple(int(c + (255 - c) * f) for c in rgb)  # type: ignore[return-value]
 
 
-def _draw_chip(d: ImageDraw.ImageDraw, left: float, top: float, label: str, detail: str,
-               state: str, color: Tuple[int, int, int], scale: float) -> None:
+def _draw_chip(
+    d: ImageDraw.ImageDraw,
+    left: float,
+    top: float,
+    label: str,
+    detail: str,
+    state: str,
+    color: tuple[int, int, int],
+    scale: float,
+) -> None:
     """Capsule name tag: gradient fill, shine, white rim, state dot, label and,
-    while a step runs, a › breadcrumb and its detail (no chevron when idle)."""
+    while a step runs, a › breadcrumb and its detail (no chevron when idle).
+    """
     font = _font(int(12 * scale))
     dfont = _font(int(11 * scale))
     h = 22 * scale
@@ -192,7 +232,9 @@ def _draw_chip(d: ImageDraw.ImageDraw, left: float, top: float, label: str, deta
     w = pad + (icon + 5 * scale if icon else 0) + lw + crumb + pad
     r = h / 2
     # shadow
-    d.rounded_rectangle([left + 1, top + 2 * scale, left + w + 1, top + h + 2 * scale], radius=r, fill=(0, 0, 0, 60))
+    d.rounded_rectangle(
+        [left + 1, top + 2 * scale, left + w + 1, top + h + 2 * scale], radius=r, fill=(0, 0, 0, 60)
+    )
     # chip body built separately so the shine blends over the gradient
     hi = _lighter(color)
     W, H = max(1, int(round(w))), max(1, int(round(h)))
@@ -200,20 +242,32 @@ def _draw_chip(d: ImageDraw.ImageDraw, left: float, top: float, label: str, deta
     gd = ImageDraw.Draw(chip)
     for i in range(H):
         f = i / max(1, H - 1)
-        gd.line([(0, i), (W, i)], fill=tuple(int(hi[k] + (color[k] - hi[k]) * f) for k in range(3)) + (250,))
+        gd.line(
+            [(0, i), (W, i)],
+            fill=tuple(int(hi[k] + (color[k] - hi[k]) * f) for k in range(3)) + (250,),
+        )
     shine = Image.new("RGBA", (W, H))
-    ImageDraw.Draw(shine).rounded_rectangle([2 * scale, 1.5 * scale, W - 2 * scale, H * 0.5], radius=r * 0.8,
-                                             fill=(255, 255, 255, 40))
+    ImageDraw.Draw(shine).rounded_rectangle(
+        [2 * scale, 1.5 * scale, W - 2 * scale, H * 0.5], radius=r * 0.8, fill=(255, 255, 255, 40)
+    )
     chip = Image.alpha_composite(chip, shine)
-    ImageDraw.Draw(chip).rounded_rectangle([0, 0, W - 1, H - 1], radius=H / 2, outline=(255, 255, 255, 190),
-                                           width=max(1, int(0.75 * scale)))
+    ImageDraw.Draw(chip).rounded_rectangle(
+        [0, 0, W - 1, H - 1],
+        radius=H / 2,
+        outline=(255, 255, 255, 190),
+        width=max(1, int(0.75 * scale)),
+    )
     mask = Image.new("L", (W, H), 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 1, H - 1], radius=H / 2, fill=255)
     d._image.paste(chip, (int(round(left)), int(round(top))), mask)  # type: ignore[attr-defined]
     x = left + pad
     cy = top + h / 2
     if icon:
-        d.ellipse([x, cy - icon / 2, x + icon, cy + icon / 2], outline=(255, 255, 255, 255), width=max(1, int(1.5 * scale)))
+        d.ellipse(
+            [x, cy - icon / 2, x + icon, cy + icon / 2],
+            outline=(255, 255, 255, 255),
+            width=max(1, int(1.5 * scale)),
+        )
         x += icon + 5 * scale
     d.text((x, cy), label, font=font, fill=(255, 255, 255, 255), anchor="lm")
     if detail:  # breadcrumb: Dobby › detail
@@ -221,7 +275,9 @@ def _draw_chip(d: ImageDraw.ImageDraw, left: float, top: float, label: str, deta
         k = chev / 2
         pts = [(x + k * 0.6, cy - k), (x + k * 1.4, cy), (x + k * 0.6, cy + k)]
         d.line(pts, fill=(255, 255, 255, 235), width=max(1, int(1.6 * scale)), joint="curve")
-        d.text((x + chev + 5 * scale, cy), detail, font=dfont, fill=(255, 255, 255, 220), anchor="lm")
+        d.text(
+            (x + chev + 5 * scale, cy), detail, font=dfont, fill=(255, 255, 255, 220), anchor="lm"
+        )
 
 
 _TS = re.compile(r"(\d{13}|\d{10}(?:\.\d+)?)")
@@ -235,17 +291,24 @@ def frame_time(path: Path) -> float:
     return path.stat().st_mtime
 
 
-def find_frames(folder: os.PathLike) -> List[Tuple[float, Path]]:
+def find_frames(folder: os.PathLike) -> list[tuple[float, Path]]:
     exts = {".png", ".jpg", ".jpeg", ".webp"}
     frames = [(frame_time(p), p) for p in Path(folder).iterdir() if p.suffix.lower() in exts]
     frames.sort(key=lambda f: f[0])
     return frames
 
 
-def render(frames: Iterable[Tuple[float, Any]], events: Sequence[Dict[str, Any]], out: os.PathLike,
-           scale: float = 1.0, origin: Point = (0.0, 0.0), frame_ms: int = 600) -> List[Path]:
+def render(
+    frames: Iterable[tuple[float, Any]],
+    events: Sequence[dict[str, Any]],
+    out: os.PathLike,
+    scale: float = 1.0,
+    origin: Point = (0.0, 0.0),
+    frame_ms: int = 600,
+) -> list[Path]:
     """Annotate each (ts, image or path) frame. ``out`` ending in .gif makes a GIF,
-    otherwise ``out`` is a folder of numbered PNGs. Returns the files written."""
+    otherwise ``out`` is a folder of numbered PNGs. Returns the files written.
+    """
     images = []
     for ts, src in frames:
         img = src if isinstance(src, Image.Image) else Image.open(src)
@@ -266,7 +329,7 @@ def render(frames: Iterable[Tuple[float, Any]], events: Sequence[Dict[str, Any]]
     return written
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Draw the Dobby overlay onto recorded screenshots.")
     ap.add_argument("--track", required=True, help="overlay track .jsonl")
     ap.add_argument("--frames", required=True, help="folder of timestamped screenshots")

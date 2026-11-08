@@ -13,17 +13,35 @@ accessibility, right or double clicks) falls back to the real mouse.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 # Roles where AXPress does exactly what a click does.
-PRESSABLE = frozenset({
-    "AXButton", "AXCheckBox", "AXRadioButton", "AXMenuItem", "AXDisclosureTriangle", "AXLink",
-})
+PRESSABLE = frozenset(
+    {
+        "AXButton",
+        "AXCheckBox",
+        "AXRadioButton",
+        "AXMenuItem",
+        "AXDisclosureTriangle",
+        "AXLink",
+    }
+)
 # Walking up from a label stops at these: a click there is not a press.
-_STOP = frozenset({
-    "AXWindow", "AXSheet", "AXApplication", "AXWebArea", "AXScrollArea", "AXList", "AXTable",
-    "AXOutline", "AXTextField", "AXTextArea", "AXComboBox",
-})
+_STOP = frozenset(
+    {
+        "AXWindow",
+        "AXSheet",
+        "AXApplication",
+        "AXWebArea",
+        "AXScrollArea",
+        "AXList",
+        "AXTable",
+        "AXOutline",
+        "AXTextField",
+        "AXTextArea",
+        "AXComboBox",
+    }
+)
 MAX_UP = 2
 
 
@@ -43,7 +61,7 @@ def _actions(ax: Any, el: Any) -> list:
         return []
 
 
-def ax_press_at(ax: Any, pid: int, x: float, y: float) -> Optional[str]:
+def ax_press_at(ax: Any, pid: int, x: float, y: float) -> str | None:
     """Press the element of app ``pid`` at screen point (x, y), top-left points.
 
     Returns the pressed role, or None when nothing pressable is there (the

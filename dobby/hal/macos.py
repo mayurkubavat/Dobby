@@ -1,5 +1,4 @@
-"""
-macOS Desktop Hardware Abstraction Layer.
+"""macOS Desktop Hardware Abstraction Layer.
 
 * Coordinates are logical points everywhere (what CGEvent and the
   Accessibility API use). Screenshots from ``screencapture`` arrive at the
@@ -18,11 +17,12 @@ Accessibility (input and AX tree) and Screen Recording (capture).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
-import re
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 from PIL import Image
 
@@ -31,30 +31,104 @@ from dobby.hal.base import IDesktopHAL
 from dobby.types import BoundingBox, DisplayMetrics, DisplayTopology, WindowInfo
 
 # US ANSI virtual key codes (Carbon kVK_*)
-KEYCODES: Dict[str, int] = {
-    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
-    "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
-    "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "=": 24, "9": 25, "7": 26,
-    "-": 27, "8": 28, "0": 29, "]": 30, "o": 31, "u": 32, "[": 33, "i": 34, "p": 35,
-    "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43, "/": 44,
-    "n": 45, "m": 46, ".": 47, "`": 50,
-    "enter": 36, "return": 36, "tab": 48, "space": 49, "backspace": 51, "delete": 51,
-    "escape": 53, "esc": 53, "forward_delete": 117, "del": 117,
-    "home": 115, "end": 119, "page_up": 116, "pageup": 116, "page_down": 121, "pagedown": 121,
-    "left": 123, "right": 124, "down": 125, "up": 126,
-    "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97, "f7": 98, "f8": 100,
-    "f9": 101, "f10": 109, "f11": 103, "f12": 111,
+KEYCODES: dict[str, int] = {
+    "a": 0,
+    "s": 1,
+    "d": 2,
+    "f": 3,
+    "h": 4,
+    "g": 5,
+    "z": 6,
+    "x": 7,
+    "c": 8,
+    "v": 9,
+    "b": 11,
+    "q": 12,
+    "w": 13,
+    "e": 14,
+    "r": 15,
+    "y": 16,
+    "t": 17,
+    "1": 18,
+    "2": 19,
+    "3": 20,
+    "4": 21,
+    "6": 22,
+    "5": 23,
+    "=": 24,
+    "9": 25,
+    "7": 26,
+    "-": 27,
+    "8": 28,
+    "0": 29,
+    "]": 30,
+    "o": 31,
+    "u": 32,
+    "[": 33,
+    "i": 34,
+    "p": 35,
+    "l": 37,
+    "j": 38,
+    "'": 39,
+    "k": 40,
+    ";": 41,
+    "\\": 42,
+    ",": 43,
+    "/": 44,
+    "n": 45,
+    "m": 46,
+    ".": 47,
+    "`": 50,
+    "enter": 36,
+    "return": 36,
+    "tab": 48,
+    "space": 49,
+    "backspace": 51,
+    "delete": 51,
+    "escape": 53,
+    "esc": 53,
+    "forward_delete": 117,
+    "del": 117,
+    "home": 115,
+    "end": 119,
+    "page_up": 116,
+    "pageup": 116,
+    "page_down": 121,
+    "pagedown": 121,
+    "left": 123,
+    "right": 124,
+    "down": 125,
+    "up": 126,
+    "f1": 122,
+    "f2": 120,
+    "f3": 99,
+    "f4": 118,
+    "f5": 96,
+    "f6": 97,
+    "f7": 98,
+    "f8": 100,
+    "f9": 101,
+    "f10": 109,
+    "f11": 103,
+    "f12": 111,
 }
 
 # CGEventFlags masks
-MODIFIER_FLAGS: Dict[str, int] = {
-    "cmd": 0x100000, "command": 0x100000, "super": 0x100000, "meta": 0x100000, "win": 0x100000,
+MODIFIER_FLAGS: dict[str, int] = {
+    "cmd": 0x100000,
+    "command": 0x100000,
+    "super": 0x100000,
+    "meta": 0x100000,
+    "win": 0x100000,
     "shift": 0x20000,
-    "ctrl": 0x40000, "control": 0x40000,
-    "alt": 0x80000, "option": 0x80000, "opt": 0x80000,
+    "ctrl": 0x40000,
+    "control": 0x40000,
+    "alt": 0x80000,
+    "option": 0x80000,
+    "opt": 0x80000,
 }
 
-MODIFIER_KEYCODES: Dict[int, int] = {0x100000: 55, 0x20000: 56, 0x40000: 59, 0x80000: 58}
+MODIFIER_KEYCODES: dict[int, int] = {0x100000: 55, 0x20000: 56, 0x40000: 59, 0x80000: 58}
 
 # Quartz constants (stable ABI values; kept here so tests can run off-Mac)
 _kCGHIDEventTap = 0
@@ -95,13 +169,16 @@ _FOCUS_WAIT_S = 0.5
 _FOCUS_POLL_S = 0.05
 
 
-def _lsappinfo_front_pid() -> Optional[int]:
+def _lsappinfo_front_pid() -> int | None:
     """The frontmost app's pid, asked fresh from the launch services daemon (~10 ms)."""
-    asn = subprocess.run([_LSAPPINFO, "front"], capture_output=True, text=True, timeout=2).stdout.strip()
+    asn = subprocess.run(
+        [_LSAPPINFO, "front"], capture_output=True, text=True, timeout=2
+    ).stdout.strip()
     if not asn:
         return None
-    out = subprocess.run([_LSAPPINFO, "info", "-only", "pid", asn],
-                         capture_output=True, text=True, timeout=2).stdout
+    out = subprocess.run(
+        [_LSAPPINFO, "info", "-only", "pid", asn], capture_output=True, text=True, timeout=2
+    ).stdout
     m = _PID_RE.search(out)
     return int(m.group(1)) if m else None
 
@@ -112,7 +189,7 @@ def _load_ax():
     return ApplicationServices
 
 
-def _screencapture(region: Optional[Tuple[int, int, int, int]]) -> Image.Image:
+def _screencapture(region: tuple[int, int, int, int] | None) -> Image.Image:
     fd, path = tempfile.mkstemp(suffix=".png", prefix="dc_cap_")
     os.close(fd)
     try:
@@ -134,8 +211,14 @@ def _screencapture(region: Optional[Tuple[int, int, int, int]]) -> Image.Image:
 class MacHAL(IDesktopHAL):
     """macOS HAL in logical points: screencapture + CGEvent + CGWindowList."""
 
-    def __init__(self, quartz: Any = None, appkit: Any = None, capture_fn=None,
-                 front_pid_fn: Optional[Callable[[], Optional[int]]] = None, ax: Any = None) -> None:
+    def __init__(
+        self,
+        quartz: Any = None,
+        appkit: Any = None,
+        capture_fn=None,
+        front_pid_fn: Callable[[], int | None] | None = None,
+        ax: Any = None,
+    ) -> None:
         self.Q = quartz if quartz is not None else _load_quartz()
         self._appkit = appkit
         # Fresh frontmost lookup. With injected fakes (tests) the fake AppKit answers instead.
@@ -144,7 +227,7 @@ class MacHAL(IDesktopHAL):
         self._front_pid_fn = front_pid_fn
         self._ax = ax
         # Why the last focus_window returned False, for the tool result.
-        self.last_focus_error: Optional[str] = None
+        self.last_focus_error: str | None = None
         self._capture = capture_fn or _screencapture
         self._is_wayland = False  # diagnostics compatibility
         self.display_server = "Quartz"
@@ -168,7 +251,9 @@ class MacHAL(IDesktopHAL):
 
     def _check_failsafe(self, x: int, y: int) -> None:
         if CONFIG.failsafe_corner and x == 0 and y == 0:
-            raise RuntimeError("VisionMCP Failsafe Triggered: Cursor moved to (0, 0). Aborting execution.")
+            raise RuntimeError(
+                "VisionMCP Failsafe Triggered: Cursor moved to (0, 0). Aborting execution."
+            )
 
     def _post(self, event) -> None:
         try:
@@ -182,11 +267,11 @@ class MacHAL(IDesktopHAL):
 
     # ------------------------------------------------------------- screen
 
-    def get_screen_size(self) -> Tuple[int, int]:
+    def get_screen_size(self) -> tuple[int, int]:
         bounds = self.Q.CGDisplayBounds(self.Q.CGMainDisplayID())
         return int(bounds.size.width), int(bounds.size.height)
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Image.Image:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
         """Captures in logical points: a 2x Retina capture is resized to the region size."""
         img = self._capture(region)
         if region:
@@ -225,7 +310,7 @@ class MacHAL(IDesktopHAL):
 
     # -------------------------------------------------------------- mouse
 
-    def get_cursor_position(self) -> Tuple[int, int]:
+    def get_cursor_position(self) -> tuple[int, int]:
         loc = self.Q.CGEventGetLocation(self.Q.CGEventCreate(None))
         return int(loc.x), int(loc.y)
 
@@ -250,22 +335,38 @@ class MacHAL(IDesktopHAL):
                 time.sleep(0.01)
         self._cooldown()
 
-    def mouse_drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3) -> None:
+    def mouse_drag(
+        self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3
+    ) -> None:
         self._check_failsafe(start_x, start_y)
         self.mouse_move(start_x, start_y)
-        self._post(self.Q.CGEventCreateMouseEvent(None, _kCGEventLeftMouseDown, (start_x, start_y), _kCGMouseButtonLeft))
+        self._post(
+            self.Q.CGEventCreateMouseEvent(
+                None, _kCGEventLeftMouseDown, (start_x, start_y), _kCGMouseButtonLeft
+            )
+        )
         steps = max(2, int(duration_sec / 0.016))
         for i in range(1, steps + 1):
             px = start_x + (end_x - start_x) * i / steps
             py = start_y + (end_y - start_y) * i / steps
-            self._post(self.Q.CGEventCreateMouseEvent(None, _kCGEventLeftMouseDragged, (px, py), _kCGMouseButtonLeft))
+            self._post(
+                self.Q.CGEventCreateMouseEvent(
+                    None, _kCGEventLeftMouseDragged, (px, py), _kCGMouseButtonLeft
+                )
+            )
             time.sleep(duration_sec / steps)
-        self._post(self.Q.CGEventCreateMouseEvent(None, _kCGEventLeftMouseUp, (end_x, end_y), _kCGMouseButtonLeft))
+        self._post(
+            self.Q.CGEventCreateMouseEvent(
+                None, _kCGEventLeftMouseUp, (end_x, end_y), _kCGMouseButtonLeft
+            )
+        )
         self._cooldown()
 
     def mouse_scroll(self, dx: int, dy: int) -> None:
         # Positive dy scrolls content up (same sign convention as the Linux HAL wheel)
-        ev = self.Q.CGEventCreateScrollWheelEvent(None, _kCGScrollEventUnitLine, 2, int(dy), int(dx))
+        ev = self.Q.CGEventCreateScrollWheelEvent(
+            None, _kCGScrollEventUnitLine, 2, int(dy), int(dx)
+        )
         self._post(ev)
         self._cooldown()
 
@@ -286,7 +387,7 @@ class MacHAL(IDesktopHAL):
         self._cooldown()
 
     @staticmethod
-    def _resolve(key: str) -> Tuple[Optional[int], int]:
+    def _resolve(key: str) -> tuple[int | None, int]:
         """Returns (keycode or None, modifier flag or 0) for a key name."""
         k = key.lower().strip()
         if k in MODIFIER_FLAGS:
@@ -314,14 +415,14 @@ class MacHAL(IDesktopHAL):
         self._key_event(code, False, 0)
         self._cooldown()
 
-    def keyboard_hotkey(self, keys: List[str]) -> None:
+    def keyboard_hotkey(self, keys: list[str]) -> None:
         """Chord such as ['cmd', 's']. Note: 'ctrl' is Control, not Command, on macOS.
 
         Presses the modifier keys for real, then the keys, then releases everything in
         reverse, ending with no modifier flags, so nothing stays held afterwards.
         """
-        mods: List[int] = []
-        codes: List[int] = []
+        mods: list[int] = []
+        codes: list[int] = []
         for k in keys:
             code, flag = self._resolve(k)
             if code is None:
@@ -351,7 +452,7 @@ class MacHAL(IDesktopHAL):
 
     # ------------------------------------------------------------ windows
 
-    def _frontmost_pid(self) -> Optional[int]:
+    def _frontmost_pid(self) -> int | None:
         if self._front_pid_fn is not None:
             try:
                 pid = self._front_pid_fn()
@@ -365,14 +466,14 @@ class MacHAL(IDesktopHAL):
         except Exception:
             return None
 
-    def _window_dicts(self) -> List[Dict[str, Any]]:
+    def _window_dicts(self) -> list[dict[str, Any]]:
         opts = _kCGWindowListOptionOnScreenOnly | _kCGWindowListExcludeDesktopElements
         return list(self.Q.CGWindowListCopyWindowInfo(opts, _kCGNullWindowID) or [])
 
-    def list_windows(self) -> List[WindowInfo]:
+    def list_windows(self) -> list[WindowInfo]:
         """Normal on-screen windows (layer 0), front to back. The frontmost app's top window is active."""
         front_pid = self._frontmost_pid()
-        results: List[WindowInfo] = []
+        results: list[WindowInfo] = []
         active_assigned = False
         for w in self._window_dicts():
             if int(w.get("kCGWindowLayer", 0)) != 0:
@@ -390,20 +491,22 @@ class MacHAL(IDesktopHAL):
                 WindowInfo(
                     window_id=str(int(w.get("kCGWindowNumber", 0))),
                     title=f"{title} - {owner}" if title else owner,
-                    bbox=BoundingBox(x=int(b.get("X", 0)), y=int(b.get("Y", 0)), width=width, height=height),
+                    bbox=BoundingBox(
+                        x=int(b.get("X", 0)), y=int(b.get("Y", 0)), width=width, height=height
+                    ),
                     is_active=is_active,
                     app_name=owner,
                 )
             )
         return results
 
-    def get_active_window(self) -> Optional[WindowInfo]:
+    def get_active_window(self) -> WindowInfo | None:
         for w in self.list_windows():
             if w.is_active:
                 return w
         return None
 
-    def window_pid(self, window_id: str) -> Optional[int]:
+    def window_pid(self, window_id: str) -> int | None:
         for w in self._window_dicts():
             if str(int(w.get("kCGWindowNumber", -1))) == str(window_id):
                 return int(w.get("kCGWindowOwnerPID", -1))
@@ -411,7 +514,8 @@ class MacHAL(IDesktopHAL):
 
     def background_click(self, x: int, y: int, window_id: str) -> bool:
         """Press the button at (x, y) in window ``window_id``'s app without the
-        real mouse (see ``dobby.hal.background``). False: click normally."""
+        real mouse (see ``dobby.hal.background``). False: click normally.
+        """
         pid = self.window_pid(window_id)
         if pid is None or pid <= 0:
             return False
@@ -428,8 +532,7 @@ class MacHAL(IDesktopHAL):
         return True
 
     def focus_window(self, window_id: str) -> bool:
-        """
-        Activates the owning app, then checks that the window really is in front.
+        """Activates the owning app, then checks that the window really is in front.
         macOS may refuse activation and still report success, so when the window
         is not active after a short wait, Dobby raises it through AX
         (AXFrontmost + AXRaise) and checks again. ``last_focus_error`` says why
@@ -449,7 +552,9 @@ class MacHAL(IDesktopHAL):
         except Exception as e:  # noqa: BLE001
             self.last_focus_error = f"activation failed: {e}"
             return False
-        if self._wait_active(window_id) or (self._ax_raise(pid, window_id) and self._wait_active(window_id)):
+        if self._wait_active(window_id) or (
+            self._ax_raise(pid, window_id) and self._wait_active(window_id)
+        ):
             self._cooldown()
             return True
         active = self.get_active_window()
@@ -475,10 +580,17 @@ class MacHAL(IDesktopHAL):
             root = ax.AXUIElementCreateApplication(pid)
             ax.AXUIElementSetAttributeValue(root, "AXFrontmost", True)
             target = None
-            bounds = next((w.bbox for w in self.list_windows() if w.window_id == str(window_id)), None)
+            bounds = next(
+                (w.bbox for w in self.list_windows() if w.window_id == str(window_id)), None
+            )
             err, wins = ax.AXUIElementCopyAttributeValue(root, "AXWindows", None)
             for win in (wins or []) if err == 0 else []:
-                if bounds is None or self._ax_frame(ax, win) == (bounds.x, bounds.y, bounds.width, bounds.height):
+                if bounds is None or self._ax_frame(ax, win) == (
+                    bounds.x,
+                    bounds.y,
+                    bounds.width,
+                    bounds.height,
+                ):
                     target = win
                     break
             if target is not None:
@@ -488,7 +600,7 @@ class MacHAL(IDesktopHAL):
             return False
 
     @staticmethod
-    def _ax_frame(ax: Any, win: Any) -> Optional[Tuple[int, int, int, int]]:
+    def _ax_frame(ax: Any, win: Any) -> tuple[int, int, int, int] | None:
         try:
             _, pos = ax.AXUIElementCopyAttributeValue(win, "AXPosition", None)
             _, size = ax.AXUIElementCopyAttributeValue(win, "AXSize", None)

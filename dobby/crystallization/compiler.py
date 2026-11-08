@@ -1,5 +1,4 @@
-"""
-Trajectory Compiler and AST Parameterizer.
+"""Trajectory Compiler and AST Parameterizer.
 
 Cleanses raw echoed journal commands, deduplicates redundant selections,
 lifts entity literals into Jinja2 {{param}} templates, and injects synchronization barriers.
@@ -7,15 +6,13 @@ lifts entity literals into Jinja2 {{param}} templates, and injects synchronizati
 
 import re
 import time
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 
 from dobby.types import CorrelatedStep, CrystallizedSkillSpec
 
 
 class TclTrajectoryCompiler:
-    """
-    Compiles raw multi-step GUI trajectories into clean, parameterized Tcl/CLI scripts.
-    """
+    """Compiles raw multi-step GUI trajectories into clean, parameterized Tcl/CLI scripts."""
 
     NOISE_PATTERNS = [
         r"^highlight_objects\b.*",
@@ -26,11 +23,15 @@ class TclTrajectoryCompiler:
         r"^gui_.*",
     ]
 
-    def _collapse_redundant_selections(self, cmds: List[str]) -> List[str]:
+    def _collapse_redundant_selections(self, cmds: list[str]) -> list[str]:
         """Collapses consecutive select_objects calls, keeping only the final selection."""
-        result: List[str] = []
+        result: list[str] = []
         for i, cmd in enumerate(cmds):
-            if cmd.startswith("select_objects") and i + 1 < len(cmds) and cmds[i + 1].startswith("select_objects"):
+            if (
+                cmd.startswith("select_objects")
+                and i + 1 < len(cmds)
+                and cmds[i + 1].startswith("select_objects")
+            ):
                 continue
             result.append(cmd)
         return result
@@ -39,7 +40,7 @@ class TclTrajectoryCompiler:
         """Injects deterministic blocking wait barriers after asynchronous jobs."""
         # Vivado launch_runs -> wait_on_run
         pattern = r"(launch_runs\s+([^\s\n;]+)[^\n]*)"
-        
+
         def _add_wait(match):
             full_cmd = match.group(1)
             run_name = match.group(2)
@@ -52,14 +53,13 @@ class TclTrajectoryCompiler:
     def _parameterize_entities(
         self,
         script_body: str,
-        entities: Dict[str, Any],
+        entities: dict[str, Any],
         task_prompt: str,
-    ) -> Tuple[str, Dict[str, Dict[str, Any]]]:
-        """
-        Replaces concrete entity literals with {{param}} placeholders.
+    ) -> tuple[str, dict[str, dict[str, Any]]]:
+        """Replaces concrete entity literals with {{param}} placeholders.
         Sorts entities by length descending to prevent substring collisions.
         """
-        param_schema: Dict[str, Dict[str, Any]] = {}
+        param_schema: dict[str, dict[str, Any]] = {}
 
         for param_key, literal_val in sorted(entities.items(), key=lambda x: -len(str(x[1]))):
             lit_str = str(literal_val).strip()
@@ -74,25 +74,25 @@ class TclTrajectoryCompiler:
                 param_schema[param_key] = {
                     "type": "number" if is_num else "string",
                     "description": f"Parameterized from '{lit_str}' in task: {task_prompt}",
-                    "default": float(lit_str) if is_num and "." in lit_str else (int(lit_str) if is_num else lit_str),
+                    "default": float(lit_str)
+                    if is_num and "." in lit_str
+                    else (int(lit_str) if is_num else lit_str),
                 }
 
         return script_body, param_schema
 
     def compile_trajectory(
         self,
-        steps: List[CorrelatedStep],
+        steps: list[CorrelatedStep],
         task_prompt: str,
-        extracted_entities: Optional[Dict[str, Any]] = None,
-        skill_name: Optional[str] = None,
+        extracted_entities: dict[str, Any] | None = None,
+        skill_name: str | None = None,
         app_target: str = "vivado_2025.1",
-        description: Optional[str] = None,
-        verification_cmd: Optional[str] = None,
+        description: str | None = None,
+        verification_cmd: str | None = None,
     ) -> CrystallizedSkillSpec:
-        """
-        Compiles captured trajectory into a structured, parameterized skill specification.
-        """
-        raw_commands: List[str] = []
+        """Compiles captured trajectory into a structured, parameterized skill specification."""
+        raw_commands: list[str] = []
         for step in steps:
             for line in step.journal_lines:
                 cleaned = line.strip()
@@ -112,7 +112,9 @@ class TclTrajectoryCompiler:
 
         # 4. Generate metadata
         name = skill_name or f"skill_{app_target}_{int(time.time())}"
-        desc = description or f"Crystallized deterministic skill compiled from task: '{task_prompt}'"
+        desc = (
+            description or f"Crystallized deterministic skill compiled from task: '{task_prompt}'"
+        )
         v_cmd = verification_cmd or "puts [get_property STATUS [get_runs -quiet current_run]]"
 
         return CrystallizedSkillSpec(

@@ -1,55 +1,53 @@
 """Feedback loop controller for perception-action-verification cycles."""
 
+import logging
 import re
 import time
-import logging
-import sys
-from typing import Any, Optional, Dict, Tuple, List, Callable
+from collections.abc import Callable
+from typing import Any
+
 from PIL import Image
 
-from dobby.handoff import is_handoff
-from dobby.hal.base import IDesktopHAL
-from dobby.hal.quiescence import X11QuiescenceMonitor
-from dobby.perception.capture import CapturePipeline
-from dobby.perception.som import SetOfMarksGenerator
-from dobby.perception.grounding.engine import GroundingEngine
-from dobby.perception.token_optimizer import TokenOptimizer
-from dobby.perception.window_clipper import WindowClipper
+from dobby.agent_loop.bicameral import BicameralStepController
 from dobby.agent_loop.cache import ActionCache
 from dobby.agent_loop.obstruction import ObstructionInterceptor
-from dobby.agent_loop.bicameral import BicameralStepController
+from dobby.config import CONFIG
 from dobby.crystallization import (
+    DynamicSkillRegistry,
     JournalCorrelator,
     TclTrajectoryCompiler,
     TraceCompiler,
-    DynamicSkillRegistry,
 )
-from dobby.vdom import (
-    VDOMFusionEngine,
-    VDOMQueryEngine,
-    LocalNeuralGrounder,
-    SubPaneLayoutSolver,
-)
+from dobby.hal.base import IDesktopHAL
+from dobby.handoff import is_handoff
+from dobby.perception.capture import CapturePipeline
+from dobby.perception.grounding.engine import GroundingEngine
+from dobby.perception.ocr import OCRLine, assign_text_to_boxes, get_ocr_engine, text_matches
+from dobby.perception.som import SetOfMarksGenerator
+from dobby.perception.token_optimizer import TokenOptimizer
+from dobby.perception.window_clipper import WindowClipper
+from dobby.plugins.base import BaseUIAppPlugin
+from dobby.plugins.registry import PLUGIN_REGISTRY
 from dobby.types import (
-    ScreenshotResult,
-    UIElement,
     ActionVerificationResult,
-    FindElementResult,
     BoundingBox,
-    PostConditionContract,
-    PostConditionAssertion,
-    StateAssertionType,
     ExecutionPhase,
+    FindElementResult,
     GroundingSource,
+    PostConditionContract,
+    ScreenshotResult,
+    StateAssertionType,
+    UIElement,
     UIRole,
     VDOMNode,
     VirtualDOMSnapshot,
-    SubPaneLayoutSpec,
 )
-from dobby.config import CONFIG
-from dobby.perception.ocr import OCRLine, assign_text_to_boxes, get_ocr_engine, text_matches
-from dobby.plugins.registry import PluginRegistry, PLUGIN_REGISTRY
-from dobby.plugins.base import BaseUIAppPlugin
+from dobby.vdom import (
+    LocalNeuralGrounder,
+    SubPaneLayoutSolver,
+    VDOMFusionEngine,
+    VDOMQueryEngine,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +60,7 @@ def _is_sliver(bbox: Any) -> bool:
 
 
 class FeedbackLoopController:
-    """
-    Coordinates perception, action execution, and post-action verification.
+    """Coordinates perception, action execution, and post-action verification.
     Integrates the pluggable GroundingEngine, TokenOptimizer, WindowClipper,
     Self-Healing ActionCache, ObstructionInterceptor, and Set-of-Marks mapping.
     """
@@ -77,7 +74,7 @@ class FeedbackLoopController:
         self.window_clipper = WindowClipper(hal)
         self.action_cache = ActionCache()
         self.plugin_registry = PLUGIN_REGISTRY
-        self._ax_previous_trees: Dict[str, List[UIElement]] = {}
+        self._ax_previous_trees: dict[str, list[UIElement]] = {}
 
         # Backward compatibility aliases
         self.atspi_inspector = self.grounding_engine._semantic.inspector
@@ -88,8 +85,12 @@ class FeedbackLoopController:
         gemma = self.neural_grounder.gemma3_grounder
         modal_classifier = None
         if gemma is not None and CONFIG.gemma3_modal_tiebreak:
-            def modal_classifier(text: str, labels: List[str]) -> Dict[str, Any]:
-                return gemma.classify_modal(text, button_labels=labels, timeout=CONFIG.gemma3_modal_timeout_seconds)
+
+            def modal_classifier(text: str, labels: list[str]) -> dict[str, Any]:
+                return gemma.classify_modal(
+                    text, button_labels=labels, timeout=CONFIG.gemma3_modal_timeout_seconds
+                )
+
         self.obstruction_interceptor = ObstructionInterceptor(
             hal,
             self.atspi_inspector,
@@ -99,7 +100,9 @@ class FeedbackLoopController:
         # The session factory picks the monitor per backend (X11 damage, cassette, or sleep).
         # A HAL built outside the factory (tests, plugins) gets none rather than a real X11
         # monitor watching a display the HAL never touches.
-        self.quiescence_monitor = getattr(hal, "quiescence", None) if CONFIG.enable_quiescence_monitor else None
+        self.quiescence_monitor = (
+            getattr(hal, "quiescence", None) if CONFIG.enable_quiescence_monitor else None
+        )
         self.journal_correlator = JournalCorrelator()
         self.skill_registry = DynamicSkillRegistry()
         self.trajectory_compiler = TclTrajectoryCompiler()
@@ -111,12 +114,12 @@ class FeedbackLoopController:
             local_gemma_client=gemma,
             text_reader=getattr(hal, "read_screen_text", None) or self.read_screen_text,
         )
-        self._trajectory_log: List[Dict[str, Any]] = []
+        self._trajectory_log: list[dict[str, Any]] = []
         self._act_batches = 0
-        self.last_vdom_snapshot: Optional[VirtualDOMSnapshot] = None
-        self.active_marks: Dict[int, UIElement] = {}
-        self.last_screenshot_meta: Optional[Tuple[int, int, float]] = None
-        self.last_clean_frame: Optional[Image.Image] = None
+        self.last_vdom_snapshot: VirtualDOMSnapshot | None = None
+        self.active_marks: dict[int, UIElement] = {}
+        self.last_screenshot_meta: tuple[int, int, float] | None = None
+        self.last_clean_frame: Image.Image | None = None
 
     def note_turn(self, role: str, content: str) -> None:
         """Appends one turn and compacts every six act-verify batches."""
@@ -129,13 +132,17 @@ class FeedbackLoopController:
             )
             self._act_batches = 0
 
-    def compact_history(self, max_tokens: int = 12000, keep_last_n: int = 2) -> List[Dict[str, Any]]:
+    def compact_history(
+        self, max_tokens: int = 12000, keep_last_n: int = 2
+    ) -> list[dict[str, Any]]:
         """Compacts the in-server trajectory log with the 8-part checkpoint."""
         compressor = None
         grounder = getattr(self.neural_grounder, "gemma3_grounder", None)
         if grounder is not None and hasattr(grounder, "compress_history"):
+
             def compressor(prompt: str) -> str:
                 return grounder.compress_history(prompt)
+
         self._trajectory_log = BicameralStepController.compact_trajectory_history(
             self._trajectory_log,
             max_tokens=max_tokens,
@@ -160,16 +167,15 @@ class FeedbackLoopController:
     def capture_state(
         self,
         mode: str = "annotated_som",
-        app_filter: Optional[str] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-        window_id: Optional[str] = None,
+        app_filter: str | None = None,
+        region: tuple[int, int, int, int] | None = None,
+        window_id: str | None = None,
         clip_to_active_window: bool = False,
-        strategy_override: Optional[str] = None,
+        strategy_override: str | None = None,
         compress_quality: int = CONFIG.image_quality,
         zoom_factor: float = 1.0,
     ) -> ScreenshotResult:
-        """
-        Captures current desktop state with Set-of-Marks, pluggable grounding,
+        """Captures current desktop state with Set-of-Marks, pluggable grounding,
         and optional per-window clipping.
 
         Args:
@@ -204,7 +210,7 @@ class FeedbackLoopController:
             scale_down=True,
         )
 
-        marks_list: List[UIElement] = []
+        marks_list: list[UIElement] = []
 
         if mode in ("annotated_som", "annotated_cv"):
             strat = "cv" if mode == "annotated_cv" else strategy_override
@@ -218,7 +224,9 @@ class FeedbackLoopController:
 
             # Filter marks if clipped to window
             if target_win:
-                raw_elements = self.window_clipper.filter_and_offset_elements(raw_elements, target_win.bbox)
+                raw_elements = self.window_clipper.filter_and_offset_elements(
+                    raw_elements, target_win.bbox
+                )
 
             if raw_elements:
                 img, self.active_marks = self.som_generator.annotate(
@@ -271,12 +279,11 @@ class FeedbackLoopController:
     def find_element(
         self,
         query: str,
-        role: Optional[str] = None,
+        role: str | None = None,
         fuzzy: bool = True,
-        strategy_override: Optional[str] = None,
+        strategy_override: str | None = None,
     ) -> FindElementResult:
-        """
-        Autonomous element search by text label, accessible name, or role.
+        """Autonomous element search by text label, accessible name, or role.
         Enables one-shot coordinate resolution with zero screenshot token overhead.
         """
         clean_img, scale_factor, _, _ = self.pipeline.capture(draw_cursor=False, scale_down=True)
@@ -312,18 +319,15 @@ class FeedbackLoopController:
             candidates_count=len(candidates),
         )
 
-    def verify_post_conditions(
-        self, contract: PostConditionContract
-    ) -> Tuple[bool, List[str]]:
-        """
-        Evaluates semantic post-condition assertions declared in a contract.
+    def verify_post_conditions(self, contract: PostConditionContract) -> tuple[bool, list[str]]:
+        """Evaluates semantic post-condition assertions declared in a contract.
         Supports AT-SPI state checks, window spawning/closing, text detection, and cursor state.
         """
         if not contract.assertions:
             return True, ["No assertions declared in contract"]
 
-        results: List[bool] = []
-        details: List[str] = []
+        results: list[bool] = []
+        details: list[str] = []
 
         for assertion in contract.assertions:
             passed = False
@@ -354,7 +358,8 @@ class FeedbackLoopController:
                     expected_st = (assertion.expected_state or "").lower()
 
                     matches = [
-                        el for el in elements
+                        el
+                        for el in elements
                         if (not target_role or el.role.lower() == target_role)
                         and target_name_pat.search(el.name)
                     ]
@@ -380,8 +385,11 @@ class FeedbackLoopController:
                     if not passed and self._ocr_available():
                         # Canvases and custom widgets expose no AT-SPI text: read the pixels locally
                         ocr_hits = [
-                            ln for ln in self.read_screen_lines()
-                            if text_matches(assertion.target_name_regex or ".*", ln.text, regex=True)
+                            ln
+                            for ln in self.read_screen_lines()
+                            if text_matches(
+                                assertion.target_name_regex or ".*", ln.text, regex=True
+                            )
                             or text_matches(assertion.target_name_regex or "", ln.text)
                         ]
                         passed = len(ocr_hits) > 0
@@ -408,7 +416,10 @@ class FeedbackLoopController:
                         passed = False
                         msg = f"VISUAL_QUERY unanswered ({res['evidence']}); take a screenshot to verify"
                     else:
-                        passed = bool(res["answer"]) and res["confidence"] >= CONFIG.gemma3_visual_min_confidence
+                        passed = (
+                            bool(res["answer"])
+                            and res["confidence"] >= CONFIG.gemma3_visual_min_confidence
+                        )
                         msg = (
                             f"VISUAL_QUERY '{assertion.visual_question or assertion.visual_expected_text}' "
                             f"[{res['source']}]: answer={res['answer']} "
@@ -440,7 +451,7 @@ class FeedbackLoopController:
         ocr = getattr(self, "ocr", None)
         return ocr is not None and ocr.is_available
 
-    def _default_region(self) -> Optional[Tuple[int, int, int, int]]:
+    def _default_region(self) -> tuple[int, int, int, int] | None:
         try:
             win = self.hal.get_active_window()
             if win and win.bbox.width > 0 and win.bbox.height > 0:
@@ -449,13 +460,12 @@ class FeedbackLoopController:
             pass
         return None
 
-    def cassette_snapshot(self, capture_ocr: bool = True) -> Tuple[Dict[str, Any], Optional[Any]]:
-        """
-        One cassette frame of the live desktop: AX nodes, OCR lines (screen
+    def cassette_snapshot(self, capture_ocr: bool = True) -> tuple[dict[str, Any], Any | None]:
+        """One cassette frame of the live desktop: AX nodes, OCR lines (screen
         coordinates), windows, cursor and screen size, plus the screen image.
         Each part is best effort so a missing backend never blocks recording.
         """
-        frame: Dict[str, Any] = {}
+        frame: dict[str, Any] = {}
         try:
             frame["screen_size"] = list(self.hal.get_screen_size())
         except Exception:
@@ -474,7 +484,12 @@ class FeedbackLoopController:
             elements = self.atspi_inspector.inspect() if self.atspi_inspector is not None else []
             frame["ax_tree"] = {
                 "nodes": [
-                    {"role": e.role, "name": e.name, "bbox": e.bbox.model_dump(), "states": e.states}
+                    {
+                        "role": e.role,
+                        "name": e.name,
+                        "bbox": e.bbox.model_dump(),
+                        "states": e.states,
+                    }
                     for e in elements
                 ]
             }
@@ -492,7 +507,7 @@ class FeedbackLoopController:
                 frame["ocr_boxes"] = []
         return frame, image
 
-    def read_screen_lines(self, region: Optional[Tuple[int, int, int, int]] = None) -> List[OCRLine]:
+    def read_screen_lines(self, region: tuple[int, int, int, int] | None = None) -> list[OCRLine]:
         """OCR lines in screen coordinates for ``region`` (default: the active window)."""
         if not self._ocr_available():
             return []
@@ -503,20 +518,27 @@ class FeedbackLoopController:
 
     def read_screen_text(
         self,
-        region: Optional[Tuple[int, int, int, int]] = None,
-        contains: Optional[str] = None,
+        region: tuple[int, int, int, int] | None = None,
+        contains: str | None = None,
         regex: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Text on screen via local OCR, optionally filtered, with click points. No image returned."""
         recorded = self._replay_backend()
         if recorded is not None:
             # A cassette carries the OCR that was recorded with each frame; use it, not a live engine.
             lines = list(recorded.current_state.ocr_boxes)
             if contains:
-                lines = [b for b in lines if text_matches(contains, str(b.get("text", "")), regex=regex)]
+                lines = [
+                    b for b in lines if text_matches(contains, str(b.get("text", "")), regex=regex)
+                ]
             return {"available": True, "engine": "cassette", "count": len(lines), "lines": lines}
         if not self._ocr_available():
-            return {"available": False, "engine": self.ocr.name, "lines": [], "diagnostics": self.ocr.diagnostics()}
+            return {
+                "available": False,
+                "engine": self.ocr.name,
+                "lines": [],
+                "diagnostics": self.ocr.diagnostics(),
+            }
         lines = self.read_screen_lines(region)
         if contains:
             lines = [ln for ln in lines if text_matches(contains, ln.text, regex=regex)]
@@ -531,11 +553,10 @@ class FeedbackLoopController:
     def ask_screen(
         self,
         question: str,
-        region: Optional[Tuple[int, int, int, int]] = None,
-        expected_text: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Answers a yes/no question about the screen without returning any image.
+        region: tuple[int, int, int, int] | None = None,
+        expected_text: str | None = None,
+    ) -> dict[str, Any]:
+        """Answers a yes/no question about the screen without returning any image.
 
         If ``expected_text`` is given, local OCR checks for it first (hundreds of
         ms); a hit answers True with no Gemma call. Otherwise local Gemma answers
@@ -572,9 +593,19 @@ class FeedbackLoopController:
 
         gemma = self.neural_grounder.gemma3_grounder
         if not question.strip():
-            return {"answer": None, "confidence": 0.0, "evidence": "empty question", "source": "fallback"}
+            return {
+                "answer": None,
+                "confidence": 0.0,
+                "evidence": "empty question",
+                "source": "fallback",
+            }
         if gemma is None:
-            return {"answer": None, "confidence": 0.0, "evidence": "Gemma sidecar disabled", "source": "fallback"}
+            return {
+                "answer": None,
+                "confidence": 0.0,
+                "evidence": "Gemma sidecar disabled",
+                "source": "fallback",
+            }
         texts = [ln.text for ln in ocr_lines]
         result = gemma.ask_yes_no(
             image,
@@ -589,14 +620,12 @@ class FeedbackLoopController:
         self,
         action_name: str,
         action_func: Callable[[], None],
-        settle_time_sec: Optional[float] = None,
+        settle_time_sec: float | None = None,
         verify_delta: bool = True,
-        contract: Optional[PostConditionContract] = None,
+        contract: PostConditionContract | None = None,
         ui_target_text: str = "",
     ) -> ActionVerificationResult:
-        """
-        Executes action with automated event-driven quiescence and post-condition verification.
-        """
+        """Executes action with automated event-driven quiescence and post-condition verification."""
         # If recording skills, mark start offset
         if self.journal_correlator.is_recording:
             self.journal_correlator.mark_pre_action()
@@ -633,12 +662,12 @@ class FeedbackLoopController:
                     action_type=action_name,
                     delta_detected=False,
                     change_ratio=0.0,
-                    message=f"Action failed with error: {str(e)}",
+                    message=f"Action failed with error: {e!s}",
                     execution_phase=ExecutionPhase.CONTRACT_FAILED,
                 )
 
         # Pre-action capture / damage reset
-        before_img: Optional[Image.Image] = None
+        before_img: Image.Image | None = None
         use_quiescence = (
             CONFIG.enable_quiescence_monitor
             and self.quiescence_monitor is not None
@@ -665,7 +694,7 @@ class FeedbackLoopController:
                 action_type=action_name,
                 delta_detected=False,
                 change_ratio=0.0,
-                message=f"Action failed during execution: {str(e)}",
+                message=f"Action failed during execution: {e!s}",
                 execution_phase=ExecutionPhase.CONTRACT_FAILED,
             )
 
@@ -677,7 +706,11 @@ class FeedbackLoopController:
 
         if use_quiescence and self.quiescence_monitor is not None:
             q_win = contract.quiescence_window_ms if contract else CONFIG.quiescence_window_ms
-            init_to = contract.initial_reaction_timeout_ms if contract else CONFIG.initial_reaction_timeout_ms
+            init_to = (
+                contract.initial_reaction_timeout_ms
+                if contract
+                else CONFIG.initial_reaction_timeout_ms
+            )
             max_to = contract.max_total_timeout_ms if contract else CONFIG.max_quiescence_timeout_ms
 
             phase, quiescence_elapsed_ms, dirty_area = self.quiescence_monitor.wait_for_quiescence(
@@ -688,14 +721,18 @@ class FeedbackLoopController:
             cur_name, _ = self.quiescence_monitor.get_cursor_state()
             cursor_state = cur_name
         else:
-            sleep_duration = settle_time_sec if settle_time_sec is not None else (CONFIG.quiescence_window_ms / 1000.0)
+            sleep_duration = (
+                settle_time_sec
+                if settle_time_sec is not None
+                else (CONFIG.quiescence_window_ms / 1000.0)
+            )
             time.sleep(sleep_duration)
             quiescence_elapsed_ms = (time.monotonic() - t_action_start) * 1000.0
             phase = ExecutionPhase.SLEEP_FALLBACK
 
         # Evaluate Post-Condition Contract
-        contract_passed: Optional[bool] = None
-        contract_details: List[str] = []
+        contract_passed: bool | None = None
+        contract_details: list[str] = []
         if contract is not None:
             contract_passed, contract_details = self.verify_post_conditions(contract)
             if contract_passed:
@@ -705,7 +742,10 @@ class FeedbackLoopController:
 
         # Compute delta if before_img was taken or fallback
         change_ratio = 0.0
-        delta_detected = dirty_area > 0 or phase in (ExecutionPhase.QUIESCENT, ExecutionPhase.CONTRACT_VERIFIED)
+        delta_detected = dirty_area > 0 or phase in (
+            ExecutionPhase.QUIESCENT,
+            ExecutionPhase.CONTRACT_VERIFIED,
+        )
 
         if before_img is not None:
             try:
@@ -727,10 +767,10 @@ class FeedbackLoopController:
             except Exception as e:
                 logger.debug(f"Failed to harvest post-quiescence journal entries: {e}")
 
-        details_msg = f" | Contract details: {'; '.join(contract_details)}" if contract_details else ""
-        status_msg = (
-            f"Action verified [{phase.value} in {quiescence_elapsed_ms:.1f}ms, dirty_area={dirty_area}px]{details_msg}"
+        details_msg = (
+            f" | Contract details: {'; '.join(contract_details)}" if contract_details else ""
         )
+        status_msg = f"Action verified [{phase.value} in {quiescence_elapsed_ms:.1f}ms, dirty_area={dirty_area}px]{details_msg}"
 
         # A click with no damage and no other evidence is a silent miss. Evidence wins:
         # a passed post-condition contract or a frame delta means the action landed.
@@ -758,15 +798,13 @@ class FeedbackLoopController:
 
     def resolve_target_coordinates(
         self,
-        query: Optional[str] = None,
-        mark_id: Optional[int] = None,
-        x: Optional[int] = None,
-        y: Optional[int] = None,
+        query: str | None = None,
+        mark_id: int | None = None,
+        x: int | None = None,
+        y: int | None = None,
         use_cache: bool = True,
-    ) -> Tuple[int, int]:
-        """
-        Resolves target coordinates from cache, query text, mark ID, or explicit (x, y).
-        """
+    ) -> tuple[int, int]:
+        """Resolves target coordinates from cache, query text, mark ID, or explicit (x, y)."""
         if query:
             app_key = self._get_active_app_key()
             if use_cache and CONFIG.enable_action_cache:
@@ -835,9 +873,7 @@ class FeedbackLoopController:
         click_count: int = 1,
         verify_delta: bool = True,
     ) -> ActionVerificationResult:
-        """
-        Autonomous one-shot action with Self-Healing Action Cache & Obstruction Defense.
-        """
+        """Autonomous one-shot action with Self-Healing Action Cache & Obstruction Defense."""
         app_key = self._get_active_app_key()
         current_win = self.hal.get_active_window()
         screen = None
@@ -867,7 +903,9 @@ class FeedbackLoopController:
             def _do_cached():
                 self.hal.mouse_click(target_x, target_y, button=button, click_count=click_count)
 
-            tag = f"find_and_click[{status.lower()}]('{query}', {button}) at ({target_x}, {target_y})"
+            tag = (
+                f"find_and_click[{status.lower()}]('{query}', {button}) at ({target_x}, {target_y})"
+            )
             res = self.execute_with_verification(
                 action_name=tag,
                 action_func=_do_cached,
@@ -932,17 +970,16 @@ class FeedbackLoopController:
     def click_and_type(
         self,
         text: str,
-        query: Optional[str] = None,
-        mark_id: Optional[int] = None,
-        x: Optional[int] = None,
-        y: Optional[int] = None,
+        query: str | None = None,
+        mark_id: int | None = None,
+        x: int | None = None,
+        y: int | None = None,
         clear_first: bool = False,
         press_enter: bool = False,
         delay_ms: float = CONFIG.typing_delay_ms,
         verify_delta: bool = True,
     ) -> ActionVerificationResult:
-        """
-        Compound action with Self-Healing Action Cache: Focuses target, optionally clears,
+        """Compound action with Self-Healing Action Cache: Focuses target, optionally clears,
         types text, and optionally presses Enter.
         """
         app_key = self._get_active_app_key()
@@ -1015,9 +1052,7 @@ class FeedbackLoopController:
         scroll_amount: int = 6,
         verify_delta: bool = True,
     ) -> FindElementResult:
-        """
-        Iteratively scrolls the viewport until the query element is discovered.
-        """
+        """Iteratively scrolls the viewport until the query element is discovered."""
         for scroll_idx in range(max_scrolls):
             res = self.find_element(query=query)
             if res.found:
@@ -1029,7 +1064,7 @@ class FeedbackLoopController:
 
         return self.find_element(query=query)
 
-    def get_active_plugin(self) -> Optional[BaseUIAppPlugin]:
+    def get_active_plugin(self) -> BaseUIAppPlugin | None:
         """Detects and returns the application plugin matching the active foreground window."""
         try:
             act_win = self.hal.get_active_window()
@@ -1042,16 +1077,17 @@ class FeedbackLoopController:
     def capture_pane(
         self,
         pane_name: str,
-        window_id: Optional[str] = None,
-        title_filter: Optional[str] = None,
+        window_id: str | None = None,
+        title_filter: str | None = None,
         mode: str = "raw",
     ) -> ScreenshotResult:
-        """
-        High-efficiency perception tool that captures strictly a named sub-pane of
+        """High-efficiency perception tool that captures strictly a named sub-pane of
         the target or active application window (e.g. 'address_bar', 'content_area').
         Slashes multimodal tokens by up to 90% compared to full-window captures.
         """
-        target_win = self.window_clipper.resolve_target_window(window_id=window_id, title_filter=title_filter)
+        target_win = self.window_clipper.resolve_target_window(
+            window_id=window_id, title_filter=title_filter
+        )
         if not target_win:
             target_win = self.hal.get_active_window()
         if not target_win:
@@ -1108,15 +1144,16 @@ class FeedbackLoopController:
 
     def capture_vdom(
         self,
-        window_id: Optional[str] = None,
-        title_filter: Optional[str] = None,
-        label_with_gemma: Optional[bool] = None,
+        window_id: str | None = None,
+        title_filter: str | None = None,
+        label_with_gemma: bool | None = None,
     ) -> VirtualDOMSnapshot:
-        """
-        Captures desktop and accessibility state, fuses AT-SPI2 nodes with local neural/CV
+        """Captures desktop and accessibility state, fuses AT-SPI2 nodes with local neural/CV
         proposals, and returns an indexed VirtualDOMSnapshot in < 30ms with 0 cloud tokens.
         """
-        target_win = self.window_clipper.resolve_target_window(window_id=window_id, title_filter=title_filter)
+        target_win = self.window_clipper.resolve_target_window(
+            window_id=window_id, title_filter=title_filter
+        )
         if not target_win:
             target_win = self.hal.get_active_window()
 
@@ -1147,13 +1184,15 @@ class FeedbackLoopController:
                     if p.get("named_by") == "ocr"
                 )
                 if not inside_any:
-                    visual_props.append({
-                        "bbox": {"x": ln.x, "y": ln.y, "width": ln.width, "height": ln.height},
-                        "confidence": ln.confidence,
-                        "class_name": "static_text",
-                        "text": ln.text,
-                        "named_by": "ocr",
-                    })
+                    visual_props.append(
+                        {
+                            "bbox": {"x": ln.x, "y": ln.y, "width": ln.width, "height": ln.height},
+                            "confidence": ln.confidence,
+                            "class_name": "static_text",
+                            "text": ln.text,
+                            "named_by": "ocr",
+                        }
+                    )
 
         # AT-SPI2 accessibility elements
         atspi_elements = []
@@ -1191,12 +1230,16 @@ class FeedbackLoopController:
         if gemma is None:
             return 0
         targets = [
-            n for n in snapshot.nodes.values()
+            n
+            for n in snapshot.nodes.values()
             if n.source == GroundingSource.VISION_ONLY and not n.name.strip()
         ]
         if not targets:
             return 0
-        boxes = [(n.bbox.x - win_bbox.x, n.bbox.y - win_bbox.y, n.bbox.width, n.bbox.height) for n in targets]
+        boxes = [
+            (n.bbox.x - win_bbox.x, n.bbox.y - win_bbox.y, n.bbox.width, n.bbox.height)
+            for n in targets
+        ]
         labels = gemma.marks.label_marks(img, boxes, app_key=app_key)
         for i, info in labels.items():
             node = targets[i]
@@ -1211,10 +1254,9 @@ class FeedbackLoopController:
     def find_with_gemma(
         self,
         description: str,
-        region: Optional[Tuple[int, int, int, int]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Finds an element by description on canvases and custom widgets that have
+        region: tuple[int, int, int, int] | None = None,
+    ) -> dict[str, Any]:
+        """Finds an element by description on canvases and custom widgets that have
         no accessibility names: the detector proposes boxes, Gemma picks one by
         number, and the click point comes from the detector box.
         """
@@ -1230,7 +1272,11 @@ class FeedbackLoopController:
             for suffix in (" button", " field", " tab", " menu", " icon", " link"):
                 if needle.lower().endswith(suffix):
                     needle = needle[: -len(suffix)]
-            hits = [ln for ln in self.ocr.recognize(img) if needle.strip() and text_matches(needle, ln.text)]
+            hits = [
+                ln
+                for ln in self.ocr.recognize(img)
+                if needle.strip() and text_matches(needle, ln.text)
+            ]
             if hits:
                 hits.sort(key=lambda ln: len(ln.text))  # tightest label wins
                 ln = hits[0].shifted(ox, oy)
@@ -1249,10 +1295,17 @@ class FeedbackLoopController:
         proposals = self.neural_grounder.generate_proposals(img, offset=(0, 0))
         # Largest-first keeps real controls ahead of glyph fragments when capped
         proposals.sort(key=lambda p: p["bbox"]["width"] * p["bbox"]["height"], reverse=True)
-        boxes = [(p["bbox"]["x"], p["bbox"]["y"], p["bbox"]["width"], p["bbox"]["height"]) for p in proposals]
+        boxes = [
+            (p["bbox"]["x"], p["bbox"]["y"], p["bbox"]["width"], p["bbox"]["height"])
+            for p in proposals
+        ]
         res = gemma.marks.find_mark(img, boxes, description)
         if res["index"] is None:
-            return {"found": False, "candidates": len(boxes), **{k: res[k] for k in ("confidence", "reason", "source")}}
+            return {
+                "found": False,
+                "candidates": len(boxes),
+                **{k: res[k] for k in ("confidence", "reason", "source")},
+            }
         x, y, w, h = boxes[res["index"]]
         return {
             "found": True,
@@ -1267,13 +1320,11 @@ class FeedbackLoopController:
     def query_vdom(
         self,
         selector: str,
-        window_id: Optional[str] = None,
+        window_id: str | None = None,
         refresh: bool = False,
         limit: int = 10,
-    ) -> List[VDOMNode]:
-        """
-        Executes zero-token spatial & semantic query over the Virtual DOM.
-        """
+    ) -> list[VDOMNode]:
+        """Executes zero-token spatial & semantic query over the Virtual DOM."""
         if self.last_vdom_snapshot is None or refresh:
             self.capture_vdom(window_id=window_id)
 
@@ -1282,13 +1333,12 @@ class FeedbackLoopController:
 
     def get_accessibility_tree(
         self,
-        app_name_filter: Optional[str] = None,
+        app_name_filter: str | None = None,
         max_depth: int = 16,
         filter_interactable: bool = True,
         diff_only: bool = False,
     ) -> Any:
-        """
-        Directly queries the OS accessibility bus (AXUIElement on macOS, AT-SPI2 on Linux).
+        """Directly queries the OS accessibility bus (AXUIElement on macOS, AT-SPI2 on Linux).
         Supports full tree export as well as diff-only payloads (added, removed, modified)
         to minimize multi-turn context token explosion.
         """
@@ -1326,20 +1376,24 @@ class FeedbackLoopController:
                 added.append(curr_elem.model_dump())
             else:
                 prev_elem = prev_map[(role, name)]
-                if (curr_elem.bbox.x != prev_elem.bbox.x or
-                    curr_elem.bbox.y != prev_elem.bbox.y or
-                    curr_elem.bbox.width != prev_elem.bbox.width or
-                    curr_elem.bbox.height != prev_elem.bbox.height or
-                    curr_elem.states != prev_elem.states or
-                    curr_elem.interactable != prev_elem.interactable):
-                    modified.append({
-                        "id": curr_elem.id,
-                        "role": curr_elem.role,
-                        "name": curr_elem.name,
-                        "bbox": curr_elem.bbox.model_dump(),
-                        "states": curr_elem.states,
-                        "previous_bbox": prev_elem.bbox.model_dump(),
-                    })
+                if (
+                    curr_elem.bbox.x != prev_elem.bbox.x
+                    or curr_elem.bbox.y != prev_elem.bbox.y
+                    or curr_elem.bbox.width != prev_elem.bbox.width
+                    or curr_elem.bbox.height != prev_elem.bbox.height
+                    or curr_elem.states != prev_elem.states
+                    or curr_elem.interactable != prev_elem.interactable
+                ):
+                    modified.append(
+                        {
+                            "id": curr_elem.id,
+                            "role": curr_elem.role,
+                            "name": curr_elem.name,
+                            "bbox": curr_elem.bbox.model_dump(),
+                            "states": curr_elem.states,
+                            "previous_bbox": prev_elem.bbox.model_dump(),
+                        }
+                    )
 
         removed = []
         for (role, name), prev_elem in prev_map.items():
@@ -1355,4 +1409,3 @@ class FeedbackLoopController:
             "modified": modified,
             "total_count": len(elements),
         }
-

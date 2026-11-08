@@ -12,7 +12,6 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 from .lease import pid_alive
 
@@ -33,10 +32,12 @@ def _pick_color(root: Path, pid: int) -> str:
     return pick_agent_color(taken)
 
 
-def register(root: Path, agent_id: str, name: str, pid: int, priority: int = 0,
-             color: Optional[str] = None) -> Path:
+def register(
+    root: Path, agent_id: str, name: str, pid: int, priority: int = 0, color: str | None = None
+) -> Path:
     """Write ``agents/<pid>.json``. ``color`` is this Dobby's overlay colour:
-    by default the first palette colour no other running Dobby uses."""
+    by default the first palette colour no other running Dobby uses.
+    """
     d = agents_dir(root)
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{pid}.json"
@@ -51,8 +52,19 @@ def register(root: Path, agent_id: str, name: str, pid: int, priority: int = 0,
         color = color or _pick_color(root, pid)
     except Exception:  # noqa: BLE001 - a colour is cosmetic
         color = None
-    tmp.write_text(json.dumps({"id": agent_id, "name": name, "pid": pid, "priority": priority,
-                               "started": started, "color": color}), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(
+            {
+                "id": agent_id,
+                "name": name,
+                "pid": pid,
+                "priority": priority,
+                "started": started,
+                "color": color,
+            }
+        ),
+        encoding="utf-8",
+    )
     os.replace(tmp, path)
     return path
 
@@ -64,7 +76,7 @@ def unregister(root: Path, pid: int) -> None:
         pass
 
 
-def list_agents(root: Path) -> List[Dict[str, object]]:
+def list_agents(root: Path) -> list[dict[str, object]]:
     out = []
     d = agents_dir(root)
     if not d.is_dir():
@@ -95,10 +107,10 @@ class AgentPidCache:
     def __init__(self, root: Path, ttl: float = 1.0) -> None:
         self.root = Path(root)
         self.ttl = ttl
-        self._pids: Set[int] = set()
-        self._at: Optional[float] = None
+        self._pids: set[int] = set()
+        self._at: float | None = None
 
-    def pids(self) -> Set[int]:
+    def pids(self) -> set[int]:
         now = time.monotonic()
         if self._at is None or now - self._at >= self.ttl:
             self._at = now

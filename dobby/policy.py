@@ -50,9 +50,10 @@ import os
 import shlex
 import sys
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Tuple
+from typing import Any
 
 log = logging.getLogger("dobby.policy")
 
@@ -67,7 +68,7 @@ ALWAYS_CALLABLE = frozenset({"manage_toolsets", "wait_for_wake"})
 _SHELL_SYNTAX = (";", "|", "&", "`", "$", ">", "<", "\n")
 
 
-def system_path(platform: Optional[str] = None, env: Optional[Mapping[str, str]] = None) -> Path:
+def system_path(platform: str | None = None, env: Mapping[str, str] | None = None) -> Path:
     platform = sys.platform if platform is None else platform
     env = os.environ if env is None else env
     if platform == "darwin":
@@ -81,15 +82,15 @@ def system_path(platform: Optional[str] = None, env: Optional[Mapping[str, str]]
 class Policy:
     """The rules in force. ``Policy()`` (no file) leaves everything to the person."""
 
-    source: Optional[str] = None
-    mode: Optional[str] = None
-    tools_deny: FrozenSet[str] = frozenset()
-    tools_allow: FrozenSet[str] = frozenset()
-    shell_enabled: Optional[bool] = None
-    shell_allow: Tuple[str, ...] = ()
-    apps: Dict[str, str] = field(default_factory=dict)
-    app_default: Optional[str] = None
-    broken: Optional[str] = None  # why the file could not be used
+    source: str | None = None
+    mode: str | None = None
+    tools_deny: frozenset[str] = frozenset()
+    tools_allow: frozenset[str] = frozenset()
+    shell_enabled: bool | None = None
+    shell_allow: tuple[str, ...] = ()
+    apps: dict[str, str] = field(default_factory=dict)
+    app_default: str | None = None
+    broken: str | None = None  # why the file could not be used
 
     # ------------------------------------------------------------ queries
     @property
@@ -111,11 +112,13 @@ class Policy:
 
     def tool_refusal(self, name: str) -> str:
         if self.broken is not None:
-            return (f"Tool '{name}' is blocked: the admin policy at {self.source} could not be read "
-                    f"({self.broken}). Ask your administrator.")
+            return (
+                f"Tool '{name}' is blocked: the admin policy at {self.source} could not be read "
+                f"({self.broken}). Ask your administrator."
+            )
         return f"Tool '{name}' is turned off by your organisation's Dobby policy ({self.source})."
 
-    def app_tier(self, normalized_app: str) -> Optional[str]:
+    def app_tier(self, normalized_app: str) -> str | None:
         """The admin's tier for an app (already normalized), or None when not set."""
         if self.broken is not None:
             return "read"
@@ -124,7 +127,7 @@ class Policy:
             tier = self.app_default
         return tier
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         if not self.active:
             return {"active": False}
         return {
@@ -147,7 +150,7 @@ def shell_summary(policy: Policy) -> str:
     return "allow list" if policy.shell_allow else "on"
 
 
-def _strings(value: Any) -> List[str]:
+def _strings(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, (list, tuple)):
@@ -167,7 +170,7 @@ def parse(data: Any, source: str) -> Policy:
     tools = data.get("tools") if isinstance(data.get("tools"), dict) else {}
     shell = data.get("shell") if isinstance(data.get("shell"), dict) else {}
     apps_in = data.get("apps") if isinstance(data.get("apps"), dict) else {}
-    apps: Dict[str, str] = {}
+    apps: dict[str, str] = {}
     for name, tier in apps_in.items():
         tier = str(tier).strip().lower()
         if tier not in TIERS:
@@ -208,10 +211,10 @@ class _Loader:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._key: Optional[Tuple[str, Optional[float]]] = None
+        self._key: tuple[str, float | None] | None = None
         self._policy = Policy()
 
-    def path(self) -> Optional[Path]:
+    def path(self) -> Path | None:
         system = system_path()
         try:
             if system.exists():
@@ -226,7 +229,7 @@ class _Loader:
         if path is None:
             return Policy()
         try:
-            mtime: Optional[float] = path.stat().st_mtime
+            mtime: float | None = path.stat().st_mtime
         except OSError:
             mtime = None
         key = (str(path), mtime)
@@ -235,7 +238,11 @@ class _Loader:
                 self._key = key
                 self._policy = read_policy(path)
                 if self._policy.broken:
-                    log.error("admin policy %s is unusable (%s); failing closed", path, self._policy.broken)
+                    log.error(
+                        "admin policy %s is unusable (%s); failing closed",
+                        path,
+                        self._policy.broken,
+                    )
                 elif self._policy.active:
                     log.info("admin policy loaded from %s", path)
             return self._policy
@@ -261,7 +268,9 @@ def reset_cache() -> None:
 _TRUE = {"1", "true", "yes", "on"}
 
 
-def shell_enabled(policy: Optional[Policy] = None, env: Optional[Mapping[str, str]] = None) -> Tuple[bool, str]:
+def shell_enabled(
+    policy: Policy | None = None, env: Mapping[str, str] | None = None
+) -> tuple[bool, str]:
     """Whether ``run_terminal_command`` may run, and why not when it may not.
 
     The admin policy decides when it says anything. Otherwise the person opts
@@ -277,15 +286,21 @@ def shell_enabled(policy: Optional[Policy] = None, env: Optional[Mapping[str, st
     if policy.shell_enabled is not None:
         if policy.shell_enabled:
             return True, ""
-        return False, f"Terminal commands are turned off by your organisation's Dobby policy ({policy.source})."
+        return (
+            False,
+            f"Terminal commands are turned off by your organisation's Dobby policy ({policy.source}).",
+        )
     if env.get("DOBBY_ALLOW_SHELL", "").strip().lower() in _TRUE or CONFIG.allow_terminal_commands:
         return True, ""
-    return False, ("Terminal commands are off. The person can turn them on with DOBBY_ALLOW_SHELL=1 "
-                   "in the MCP client's config; until then, open apps and files through the screen.")
+    return False, (
+        "Terminal commands are off. The person can turn them on with DOBBY_ALLOW_SHELL=1 "
+        "in the MCP client's config; until then, open apps and files through the screen."
+    )
 
 
-def check_command(command: str, policy: Optional[Policy] = None,
-                  env: Optional[Mapping[str, str]] = None) -> Tuple[Optional[List[str]], Optional[str]]:
+def check_command(
+    command: str, policy: Policy | None = None, env: Mapping[str, str] | None = None
+) -> tuple[list[str] | None, str | None]:
     """Decide how ``command`` may run.
 
     Returns ``(argv, None)`` to run without a shell, ``(None, None)`` to run
@@ -301,8 +316,10 @@ def check_command(command: str, policy: Optional[Policy] = None,
     if not policy.shell_allow:
         return None, None
     if any(s in command for s in _SHELL_SYNTAX):
-        return None, ("This command uses shell syntax (; | & ` $ > <), which the Dobby policy does not "
-                      "allow. Run one plain command at a time.")
+        return None, (
+            "This command uses shell syntax (; | & ` $ > <), which the Dobby policy does not "
+            "allow. Run one plain command at a time."
+        )
     try:
         argv = shlex.split(command)
     except ValueError as exc:
@@ -313,11 +330,13 @@ def check_command(command: str, policy: Optional[Policy] = None,
     for pattern in policy.shell_allow:
         if fnmatch.fnmatchcase(flat, pattern):
             return argv, None
-    return None, (f"'{flat}' is not on the list of commands your organisation's Dobby policy allows. "
-                  f"Allowed: {', '.join(policy.shell_allow)}.")
+    return None, (
+        f"'{flat}' is not on the list of commands your organisation's Dobby policy allows. "
+        f"Allowed: {', '.join(policy.shell_allow)}."
+    )
 
 
-def run_command(command: str, timeout: float, cwd: Optional[str] = None) -> Dict[str, Any]:
+def run_command(command: str, timeout: float, cwd: str | None = None) -> dict[str, Any]:
     """Run ``command`` if the policy allows it. Never raises."""
     import subprocess
     import time
@@ -332,11 +351,22 @@ def run_command(command: str, timeout: float, cwd: Optional[str] = None) -> Dict
             proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, cwd=cwd)
         else:
             shell = "/bin/bash" if os.path.exists("/bin/bash") else None
-            proc = subprocess.run(command, shell=True, executable=shell, capture_output=True, text=True,
-                                  timeout=timeout, cwd=cwd)
+            proc = subprocess.run(
+                command,
+                shell=True,
+                executable=shell,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=cwd,
+            )
     except subprocess.TimeoutExpired:
-        return {"success": False, "exit_code": -1, "error": f"Command timed out after {timeout} seconds",
-                "execution_time_sec": timeout}
+        return {
+            "success": False,
+            "exit_code": -1,
+            "error": f"Command timed out after {timeout} seconds",
+            "execution_time_sec": timeout,
+        }
     except (OSError, ValueError) as exc:
         return {"success": False, "exit_code": -1, "error": str(exc)}
     return {

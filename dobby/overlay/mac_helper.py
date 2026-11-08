@@ -49,14 +49,19 @@ import platform
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import objc
 from AppKit import (
+    NSAnimationContext,
+    NSAppearance,
+    NSAppearanceNameDarkAqua,
     NSApplication,
     NSApplicationActivationPolicyAccessory,
     NSApplicationDidChangeScreenParametersNotification,
+    NSAttributedString,
     NSBackingStoreBuffered,
+    NSBezierPath,
     NSButton,
     NSColor,
     NSEvent,
@@ -68,11 +73,6 @@ from AppKit import (
     NSEventMaskScrollWheel,
     NSEventModifierFlagControl,
     NSEventModifierFlagOption,
-    NSAnimationContext,
-    NSAppearance,
-    NSAppearanceNameDarkAqua,
-    NSBezierPath,
-    NSAttributedString,
     NSFont,
     NSFontAttributeName,
     NSForegroundColorAttributeName,
@@ -103,9 +103,9 @@ from Foundation import NSNotificationCenter, NSObject, NSTimer, NSUserDefaults
 from PyObjCTools import AppHelper
 from Quartz import (
     CABasicAnimation,
-    CAKeyframeAnimation,
     CACurrentMediaTime,
     CAGradientLayer,
+    CAKeyframeAnimation,
     CALayer,
     CAMediaTimingFunction,
     CAShapeLayer,
@@ -130,17 +130,34 @@ from Quartz import (
     kCGWindowListOptionOnScreenOnly,
 )
 
-from . import geometry, inputlock, protocol, style, topbar
 from ..personality import Voice
+from . import geometry, inputlock, protocol, style, topbar
 
 _kCGEventSourceUserData = 42
 DOBBY_EVENT_TAG = 0x444F4242  # same value as dobby.hal.macos.DOBBY_EVENT_TAG
-from .barlock import (BAR_LOCK, BarOwner as _BarOwner, BarRow, mark_waiting, others_showing, others_waiting,
-                      showing_dir, waiting_dir)
-from .menu import (bar_click, bar_tip, bar_view, idle_cleanup, label_click, menu_entries, picker_groups,
-                   status_of, takes_over)
+from .barlock import (
+    BAR_LOCK,
+    BarRow,
+    mark_waiting,
+    others_showing,
+    others_waiting,
+    showing_dir,
+    waiting_dir,
+)
+from .barlock import BarOwner as _BarOwner
+from .menu import (
+    bar_click,
+    bar_tip,
+    bar_view,
+    idle_cleanup,
+    label_click,
+    menu_entries,
+    picker_groups,
+    status_of,
+    takes_over,
+)
 
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "color": "#7C5CFF",  # Dobby violet; deliberately not Claude's orange
     "caution_color": "#F5A524",
     "danger_color": "#F04438",
@@ -220,17 +237,17 @@ _HOTKEY_MODS = NSEventModifierFlagControl | NSEventModifierFlagOption
 _INPUT_KIND = {1: "click", 3: "click", 6: "drag", 22: "scroll", 5: "move", 10: "key"}
 
 
-def _hex_rgb(value: str) -> Tuple[float, float, float]:
+def _hex_rgb(value: str) -> tuple[float, float, float]:
     s = str(value).lstrip("#")
     if len(s) != 6:
         s = "7C5CFF"
     try:
-        return tuple(int(s[i:i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
+        return tuple(int(s[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
     except ValueError:
         return (0x7C / 255.0, 0x5C / 255.0, 1.0)
 
 
-def _cg(rgb: Tuple[float, float, float], alpha: float = 1.0):
+def _cg(rgb: tuple[float, float, float], alpha: float = 1.0):
     return CGColorCreateGenericRGB(rgb[0], rgb[1], rgb[2], alpha)
 
 
@@ -246,7 +263,7 @@ def _agent_pid_cache():
 
 
 def _os_major() -> int:
-    """macOS major version (26 for Tahoe; Python built on old SDKs says 16)."""
+    """MacOS major version (26 for Tahoe; Python built on old SDKs says 16)."""
     try:
         major = int((platform.mac_ver()[0] or "0").split(".")[0])
     except ValueError:
@@ -296,11 +313,13 @@ class _AXProbe:
         except Exception:  # noqa: BLE001
             return None
 
-    def at(self, x: float, y: float) -> Tuple[Optional[str], Optional[geometry.Rect]]:
+    def at(self, x: float, y: float) -> tuple[str | None, geometry.Rect | None]:
         if not self.ok:
             return None, None
         try:
-            err, el = self.AS.AXUIElementCopyElementAtPosition(self.system, float(x), float(y), None)
+            err, el = self.AS.AXUIElementCopyElementAtPosition(
+                self.system, float(x), float(y), None
+            )
         except Exception:  # noqa: BLE001
             return None, None
         if err != 0 or el is None:
@@ -409,7 +428,8 @@ class _Target(NSObject):
 
 class _HotspotView(NSView):
     """Almost transparent view: borderless windows pass clicks through fully
-    clear pixels, so it is filled at alpha 0.01."""
+    clear pixels, so it is filled at alpha 0.01.
+    """
 
     def acceptsFirstMouse_(self, _event):
         return True
@@ -440,11 +460,11 @@ class _ChipHotspot:
         view.dobby_target = target
         win.setContentView_(view)
         self.window, self.view = win, view
-        self.rect: Optional[geometry.Rect] = None
+        self.rect: geometry.Rect | None = None
         self.shown = False
 
-    def place(self, rect: Optional[geometry.Rect], primary_h: float) -> None:
-        """rect in global top-left points, or None to hide."""
+    def place(self, rect: geometry.Rect | None, primary_h: float) -> None:
+        """Rect in global top-left points, or None to hide."""
         if rect is None or rect[2] <= 0:
             if self.shown:
                 self.window.orderOut_(None)
@@ -474,7 +494,9 @@ _TRACK_OPTS = 0x01 | 0x80 | 0x200  # mouse entered/exited, always active, in vis
 
 def _track_hover(view) -> None:
     try:
-        area = NSTrackingArea.alloc().initWithRect_options_owner_userInfo_(((0, 0), (0, 0)), _TRACK_OPTS, view, None)
+        area = NSTrackingArea.alloc().initWithRect_options_owner_userInfo_(
+            ((0, 0), (0, 0)), _TRACK_OPTS, view, None
+        )
         view.addTrackingArea_(area)
     except Exception:  # noqa: BLE001 - hover is a nicety
         pass
@@ -482,7 +504,8 @@ def _track_hover(view) -> None:
 
 class _PillView(NSView):
     """The bar's background: a click away from its buttons wakes Dobby;
-    hovering grows the compact sleeping bar."""
+    hovering grows the compact sleeping bar.
+    """
 
     def acceptsFirstMouse_(self, _event):
         return True
@@ -539,7 +562,7 @@ class _PillButton(NSButton):
         objc.super(_PillButton, self).mouseExited_(event)
 
 
-def _configure_overlay_window(win, cfg: Dict[str, Any], click_through: bool) -> None:
+def _configure_overlay_window(win, cfg: dict[str, Any], click_through: bool) -> None:
     win.setTitle_(protocol.OVERLAY_WINDOW_TITLE)
     win.setOpaque_(False)
     win.setBackgroundColor_(NSColor.clearColor())
@@ -570,7 +593,9 @@ def _lighter(rgb, amount: float = 0.28):
 
 def _text_width(text: str, font) -> float:
     try:
-        attr = NSAttributedString.alloc().initWithString_attributes_(text, {NSFontAttributeName: font})
+        attr = NSAttributedString.alloc().initWithString_attributes_(
+            text, {NSFontAttributeName: font}
+        )
         return float(attr.size().width)
     except Exception:  # noqa: BLE001
         return 6.6 * len(text)
@@ -669,7 +694,7 @@ class _Chip:
         self.bg.addSublayer_(self.chev)
         self._chev_down = _symbol_contents("chevron.down", scale)
         self._chev_right = _symbol_contents("chevron.right", scale)
-        self._icons: Dict[str, Any] = {}
+        self._icons: dict[str, Any] = {}
         self._state = None
         self.width = 0.0
         parent.addSublayer_(self.root)
@@ -700,8 +725,16 @@ class _Chip:
             self._icons[name] = _symbol_contents(name, self.scale)
         return self._icons[name]
 
-    def update(self, label: str, detail: str, state: str, x: float, y_top: float, animate: bool = True,
-               flip: Tuple[bool, bool] = (False, False)) -> None:
+    def update(
+        self,
+        label: str,
+        detail: str,
+        state: str,
+        x: float,
+        y_top: float,
+        animate: bool = True,
+        flip: tuple[bool, bool] = (False, False),
+    ) -> None:
         """``flip``: (left, up) puts the tag left of / above the arrow tip."""
         h, pad, gap = _CHIP_H, 9.0, 5.0
         icon = self._icon_for(state)
@@ -711,8 +744,14 @@ class _Chip:
         dw = min(_text_width(detail, self.font), 300.0) if detail else 0.0
         # The › breadcrumb only separates a detail; ▾ only hints at a menu.
         chev_w = 8.0 if (detail or self.menu_hint) else 0.0
-        w = (pad + (icon_w + gap if icon_w else 0) + lw + (gap + chev_w if chev_w else 0)
-             + (gap + dw if detail else 0) + pad)
+        w = (
+            pad
+            + (icon_w + gap if icon_w else 0)
+            + lw
+            + (gap + chev_w if chev_w else 0)
+            + (gap + dw if detail else 0)
+            + pad
+        )
         CATransaction.begin()
         if animate:
             CATransaction.setAnimationDuration_(0.28)
@@ -728,7 +767,9 @@ class _Chip:
             y_top = _ARROW_H + 4.0 + h
         self.root.setBounds_(CGRectMake(0, 0, w, h))
         self.root.setPosition_((x, y_top))
-        self.root.setShadowPath_(CGPathCreateWithRoundedRect(CGRectMake(0, 0, w, h), h / 2, h / 2, None))
+        self.root.setShadowPath_(
+            CGPathCreateWithRoundedRect(CGRectMake(0, 0, w, h), h / 2, h / 2, None)
+        )
         self.bg.setFrame_(CGRectMake(0, 0, w, h))
         self.shine.setFrame_(CGRectMake(0, h * 0.45, w, h * 0.55))
         cx = pad
@@ -771,13 +812,15 @@ class _Chip:
 class _Panel:
     """One click-through overlay window covering one screen."""
 
-    def __init__(self, screen, cfg: Dict[str, Any], rgb) -> None:
+    def __init__(self, screen, cfg: dict[str, Any], rgb) -> None:
         self.screen = screen
         fr = screen.frame()
         self.frame = (fr.origin.x, fr.origin.y, fr.size.width, fr.size.height)
         self.scale = float(screen.backingScaleFactor())
         style = NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
-        win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(fr, style, NSBackingStoreBuffered, False)
+        win = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+            fr, style, NSBackingStoreBuffered, False
+        )
         win.setFrame_display_(fr, False)
         _configure_overlay_window(win, cfg, click_through=True)
 
@@ -856,7 +899,7 @@ class _Panel:
         self.glow, self.box, self.trail, self.effects = glow, box, trail, effects
         self.sweep = sweep
         self.pointer, self.arrow, self.tag = pointer, arrow, tag
-        self.flip: Tuple[bool, bool] = (False, False)
+        self.flip: tuple[bool, bool] = (False, False)
         self.apply_color(rgb)
         win.orderFrontRegardless()
 
@@ -885,7 +928,9 @@ class _Panel:
         primary = NSScreen.screens()[0].frame().size.height if NSScreen.screens() else self.frame[3]
         return geometry.cocoa_rect_to_global(self.frame, float(primary))
 
-    def set_tag(self, label: str, detail: str = "", state: str = "idle", animate: bool = True) -> None:
+    def set_tag(
+        self, label: str, detail: str = "", state: str = "idle", animate: bool = True
+    ) -> None:
         # Below and to the right of the arrow tip, in pointer-layer coordinates
         # (or flipped left / up near a screen edge, see self.flip).
         self.tag.update(label, detail, state, _ARROW_W - 4, -4, animate=animate, flip=self.flip)
@@ -905,10 +950,13 @@ def _dots_image(dots, caption: str = ""):
     text = None
     if caption:
         font = NSFont.systemFontOfSize_(11.0)
-        text = NSAttributedString.alloc().initWithString_attributes_(caption, {
-            NSFontAttributeName: font,
-            NSForegroundColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.75),
-        })
+        text = NSAttributedString.alloc().initWithString_attributes_(
+            caption,
+            {
+                NSFontAttributeName: font,
+                NSForegroundColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.75),
+            },
+        )
     w = dots_w + (4.0 + float(text.size().width) if text is not None else 0.0)
     img = NSImage.alloc().initWithSize_((w, h))
     img.lockFocus()
@@ -919,7 +967,9 @@ def _dots_image(dots, caption: str = ""):
             NSBezierPath.bezierPathWithOvalInRect_(((x, (h - d) / 2), (d, d))).fill()
             if holding:
                 NSColor.whiteColor().setStroke()
-                ring = NSBezierPath.bezierPathWithOvalInRect_(((x - 1.5, (h - d) / 2 - 1.5), (d + 3, d + 3)))
+                ring = NSBezierPath.bezierPathWithOvalInRect_(
+                    ((x - 1.5, (h - d) / 2 - 1.5), (d + 3, d + 3))
+                )
                 ring.setLineWidth_(1.2)
                 ring.stroke()
             x += d + gap
@@ -937,10 +987,14 @@ _FILL_HOVER_RGB = style.hex_rgb01("#6A50EA")
 
 
 def _desktop_dark() -> bool:
-    """macOS Dark Mode. Read from defaults: the helper app is never active,
-    so its own effectiveAppearance does not follow the system."""
+    """MacOS Dark Mode. Read from defaults: the helper app is never active,
+    so its own effectiveAppearance does not follow the system.
+    """
     try:
-        return str(NSUserDefaults.standardUserDefaults().stringForKey_("AppleInterfaceStyle") or "") == "Dark"
+        return (
+            str(NSUserDefaults.standardUserDefaults().stringForKey_("AppleInterfaceStyle") or "")
+            == "Dark"
+        )
     except Exception:  # noqa: BLE001
         return True
 
@@ -984,7 +1038,7 @@ class _Pill:
 
     H = 34.0
 
-    def __init__(self, cfg: Dict[str, Any], target, animate: bool = False) -> None:
+    def __init__(self, cfg: dict[str, Any], target, animate: bool = False) -> None:
         self.cfg = cfg
         self.style = style.normalize_style(cfg.get("style"))
         self.modern = self.style == "modern"
@@ -1050,12 +1104,16 @@ class _Pill:
         view.dobby_backdrops = tuple(backdrops)
         self.label = NSTextField.labelWithString_("")
         if self.modern:
-            self.label.setFont_(NSFont.monospacedDigitSystemFontOfSize_weight_(12.5, 0.23))  # medium
+            self.label.setFont_(
+                NSFont.monospacedDigitSystemFontOfSize_weight_(12.5, 0.23)
+            )  # medium
         else:
             self.label.setFont_(NSFont.systemFontOfSize_(12.5))
         view.addSubview_(self.label)
         self.primary = _PillButton.buttonWithTitle_target_action_("Pause", target, "pillPrimary:")
-        self.secondary = _PillButton.buttonWithTitle_target_action_("Stop", target, "pillSecondary:")
+        self.secondary = _PillButton.buttonWithTitle_target_action_(
+            "Stop", target, "pillSecondary:"
+        )
         self.hide_btn = _PillButton.buttonWithTitle_target_action_("–", target, "pillHide:")
         self.hide_btn.setToolTip_("Hide this bar (⌃⌥H shows it again)")
         self.menu_btn = _PillButton.buttonWithTitle_target_action_("", target, "pillMenu:")
@@ -1063,10 +1121,16 @@ class _Pill:
         self.dots_btn = _PillButton.buttonWithTitle_target_action_("", target, "pillMenu:")
         self.dots_btn.setBordered_(False)
         self.dots_btn.setImagePosition_(NSImageOnly)
-        self.dots_btn.setToolTip_("Running Dobbys (ringed: in control). Click for each one's Pause and Stop.")
+        self.dots_btn.setToolTip_(
+            "Running Dobbys (ringed: in control). Click for each one's Pause and Stop."
+        )
         self.dots_btn.setHidden_(True)
-        self._btns = {"primary": self.primary, "secondary": self.secondary,
-                      "hide": self.hide_btn, "menu": self.menu_btn}
+        self._btns = {
+            "primary": self.primary,
+            "secondary": self.secondary,
+            "hide": self.hide_btn,
+            "menu": self.menu_btn,
+        }
         for b in (self.primary, self.secondary, self.hide_btn, self.menu_btn, self.dots_btn):
             b.setFont_(NSFont.systemFontOfSize_(12.0))
             view.addSubview_(b)
@@ -1079,7 +1143,7 @@ class _Pill:
         if self.menu_glyph is not None:
             self.menu_btn.setImage_(self.menu_glyph)
             self.menu_btn.setImagePosition_(NSImageOnly)
-        self._symbols: Dict[Tuple[str, str], Any] = {}
+        self._symbols: dict[tuple[str, str], Any] = {}
         self.dot = CALayer.layer()
         # Modern: above the glass and tint subviews, which would cover it on the view layer.
         (self.tint or view).layer().addSublayer_(self.dot)
@@ -1087,7 +1151,7 @@ class _Pill:
         self.shimmer = None
         self.window, self.view = win, view
         self.mode = "hidden"
-        self.spec: Optional[style.BarSpec] = None
+        self.spec: style.BarSpec | None = None
         self.ducked = False
         self.user_hidden = False
         self._apply_theme(self.dark)
@@ -1138,7 +1202,11 @@ class _Pill:
     def _symbol(self, name: str, role: str, filled: bool = False):
         key = (name, role, filled)
         if key not in self._symbols:
-            rgb = (1.0, 1.0, 1.0) if filled else (self.danger_rgb if role == "danger" else self.text_rgb)
+            rgb = (
+                (1.0, 1.0, 1.0)
+                if filled
+                else (self.danger_rgb if role == "danger" else self.text_rgb)
+            )
             self._symbols[key] = _white_symbol(name, 13.0 if self.modern else 10.0, rgb)
         return self._symbols[key]
 
@@ -1179,14 +1247,25 @@ class _Pill:
         if spec_btn.tip:
             btn.setToolTip_(spec_btn.tip)
 
-    def show(self, mode: str, text: str, primary: str, secondary: str, rgb, dot_alpha: float = 1.0,
-             tip: Optional[str] = None) -> None:
+    def show(
+        self,
+        mode: str,
+        text: str,
+        primary: str,
+        secondary: str,
+        rgb,
+        dot_alpha: float = 1.0,
+        tip: str | None = None,
+    ) -> None:
         """Old entry point: a bar_view tuple drawn in this bar's style."""
         if mode == "confirm":
             spec = style.confirm_spec(text)
         else:
-            spec = style.bar_spec((mode, text, primary, secondary, "ok", dot_alpha), style=self.style,
-                                  narrate=bool(self.cfg.get("narrate", True)))
+            spec = style.bar_spec(
+                (mode, text, primary, secondary, "ok", dot_alpha),
+                style=self.style,
+                narrate=bool(self.cfg.get("narrate", True)),
+            )
         self.show_spec(spec, rgb, tip=tip)
 
     def _sync_presence(self) -> None:
@@ -1201,7 +1280,7 @@ class _Pill:
             self.marked_showing = showing
             mark_waiting(self.show_dir, os.getpid(), showing)
 
-    def show_spec(self, spec: style.BarSpec, rgb, dots=(), tip: Optional[str] = None) -> None:
+    def show_spec(self, spec: style.BarSpec, rgb, dots=(), tip: str | None = None) -> None:
         self._follow_theme()
         self.mode = spec.mode
         self.spec = spec
@@ -1297,7 +1376,7 @@ class _Pill:
         self.mode = "hidden"
         self._apply_visibility()
 
-    def menu_anchor(self) -> Tuple[float, float]:
+    def menu_anchor(self) -> tuple[float, float]:
         """Where Dobby's menu opens: just under the ▾ (or the Dobby dots), in self.view coordinates."""
         btn = self.menu_btn if not self.menu_btn.isHidden() else self.dots_btn
         if btn.isHidden():
@@ -1320,7 +1399,9 @@ class _Pill:
         width.setToValue_(1.0)
         for a in (border, width):
             a.setDuration_(0.6)
-            a.setTimingFunction_(CAMediaTimingFunction.functionWithName_(kCAMediaTimingFunctionEaseInEaseOut))
+            a.setTimingFunction_(
+                CAMediaTimingFunction.functionWithName_(kCAMediaTimingFunctionEaseInEaseOut)
+            )
             layer.addAnimation_forKey_(a, a.keyPath())
 
     def duck(self, ducked: bool) -> None:
@@ -1352,10 +1433,12 @@ class _Pill:
         self.view.setAlphaValue_(0.18 if ducked else 1.0)
         self.window.orderFrontRegardless()
 
-    def near(self, cocoa_pt: Tuple[float, float], margin: float = 60.0) -> bool:
+    def near(self, cocoa_pt: tuple[float, float], margin: float = 60.0) -> bool:
         f = self.window.frame()
-        return (f.origin.x - margin <= cocoa_pt[0] <= f.origin.x + f.size.width + margin
-                and f.origin.y - margin <= cocoa_pt[1] <= f.origin.y + f.size.height + margin)
+        return (
+            f.origin.x - margin <= cocoa_pt[0] <= f.origin.x + f.size.width + margin
+            and f.origin.y - margin <= cocoa_pt[1] <= f.origin.y + f.size.height + margin
+        )
 
     def close(self) -> None:
         self.mode = "hidden"
@@ -1366,7 +1449,7 @@ class _Pill:
 
 # -------------------------------------------------------------- controller
 class OverlayController:
-    def __init__(self, cfg: Dict[str, Any], out=sys.stdout, interactive: bool = True) -> None:
+    def __init__(self, cfg: dict[str, Any], out=sys.stdout, interactive: bool = True) -> None:
         self.cfg = dict(DEFAULT_CONFIG)
         self.cfg.update(cfg)
         self.colors = {
@@ -1384,35 +1467,35 @@ class OverlayController:
         self.reduce_motion = _reduce_motion()
         # Other Dobbys (agent registry): colours, this one's name on the tag,
         # the bar's Dobby dots.
-        self.agents: List[Dict[str, Any]] = []
+        self.agents: list[dict[str, Any]] = []
         self.agents_next = 0.0
         self.agent_label = str(self.cfg["label"])
-        self.agent_dots: List[Tuple[int, str, bool, bool]] = []
+        self.agent_dots: list[tuple[int, str, bool, bool]] = []
         # The task in progress, for the bar's live step and timer.
         self.task_started = 0.0
         self.task_steps = 0
         self.current_step = ""
         self.bar_second = -1
         self.pill_hovered = False
-        self._glow_sig: Optional[tuple] = None
+        self._glow_sig: tuple | None = None
         self._glow_r = 0.0
         self.out = out
         self.out_lock = threading.Lock()
         self.server_pid = int(os.environ.get("DOBBY_SERVER_PID", "0") or 0)
         self.agent_pids = _agent_pid_cache()  # every running Dobby, not just ours
-        self.panels: List[_Panel] = []
+        self.panels: list[_Panel] = []
         self.primary_h = 0.0
-        self.cursor: Optional[Tuple[float, float]] = None
+        self.cursor: tuple[float, float] | None = None
         self.cursor_state = "idle"
         self.intent_text = ""
         self.intent_until = 0.0
-        self.track_wid: Optional[int] = None
-        self.track_pid: Optional[int] = None
-        self.glow_rect: Optional[geometry.Rect] = None
+        self.track_wid: int | None = None
+        self.track_pid: int | None = None
+        self.glow_rect: geometry.Rect | None = None
         self.glow_dim = False
-        self.trail_points: List[Tuple[int, Tuple[float, float], float]] = []  # (step, point, time)
+        self.trail_points: list[tuple[int, tuple[float, float], float]] = []  # (step, point, time)
         self.step_no = 0
-        self.steps: List[str] = []
+        self.steps: list[str] = []
         self.user_visible = True
         self.capture_hidden = False
         self.trail_on = bool(self.cfg["trail"])
@@ -1423,7 +1506,7 @@ class OverlayController:
         self.takeover = False
         self.takeover_reported = False
         self.last_user_input = 0.0
-        self.pending_confirm: Optional[Tuple[Any, float]] = None  # (msg id, deadline)
+        self.pending_confirm: tuple[Any, float] | None = None  # (msg id, deadline)
         self.stopped_until = 0.0
         self.awake_until = 0.0  # woken from the bar until then, or 0
         self.wake_pointer = False  # the pointer is showing only because of a wake
@@ -1439,8 +1522,11 @@ class OverlayController:
         if mode is True:
             mode = "always"
         self.pill_mode = mode if mode in ("always", "auto") else "off"
-        self.pill = (_Pill(self.cfg, self.target, animate=interactive and not self.reduce_motion)
-                     if self.pill_mode != "off" else None)
+        self.pill = (
+            _Pill(self.cfg, self.target, animate=interactive and not self.reduce_motion)
+            if self.pill_mode != "off"
+            else None
+        )
         self.pill_user_hidden = False
         self.pointer_visible = False
         self.chip_menu_open = False
@@ -1452,10 +1538,10 @@ class OverlayController:
         self.interactive = interactive
         self.status_item = None
         self.topbar_menu = None
-        self.topbar_sig: Optional[tuple] = None
+        self.topbar_sig: tuple | None = None
         self.topbar_next = 0.0
         self.publish_next = 0.0
-        self.app_names: Dict[int, str] = {}
+        self.app_names: dict[int, str] = {}
         self.rebuild_panels()
         NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(
             self.target, "screensChanged:", NSApplicationDidChangeScreenParametersNotification, None
@@ -1463,13 +1549,13 @@ class OverlayController:
         self.timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             1.0 / float(self.cfg["track_hz"]), self.target, "tick:", None, True
         )
-        self.monitors: List[Any] = []
+        self.monitors: list[Any] = []
         # Input lock: the tracked window's frame, windows above it, and
         # whether it is in front (from _track_tick); the tap itself.
         self.event_tag = DOBBY_EVENT_TAG
         self.lock_mode = str(self.cfg.get("input_lock") or "off")
-        self.lock_target: Optional[geometry.Rect] = None
-        self.lock_above: List[geometry.Rect] = []
+        self.lock_target: geometry.Rect | None = None
+        self.lock_above: list[geometry.Rect] = []
         self.lock_front = False
         self.lock_note_next = 0.0
         self.lock_stopped = False  # Stop frees the window until Dobby acts again
@@ -1498,13 +1584,13 @@ class OverlayController:
             except (BrokenPipeError, OSError, ValueError):
                 pass
 
-    def emit(self, obj: Dict[str, Any]) -> None:
+    def emit(self, obj: dict[str, Any]) -> None:
         self._write(json.dumps(obj, separators=(",", ":")) + "\n")
 
     def send_event(self, name: str) -> None:
         self._write(protocol.event(name))
 
-    def ack(self, msg_id: Any, ok: bool = True, error: Optional[str] = None) -> None:
+    def ack(self, msg_id: Any, ok: bool = True, error: str | None = None) -> None:
         if msg_id is None:
             return
         self._write(protocol.ack(msg_id, ok, error))
@@ -1537,13 +1623,15 @@ class OverlayController:
         if self.pill is not None and self.cfg.get("pill_in_recordings"):
             self.pill.window.setAlphaValue_(0.0 if self.capture_hidden else 1.0)
 
-    def _duration(self, ms: Optional[float]) -> float:
+    def _duration(self, ms: float | None) -> float:
         if self.reduce_motion or not ms:
             return 0.0
         return max(0.0, float(ms) / 1000.0)
 
-    def _tag_parts(self) -> Tuple[str, str]:
-        detail = self.intent_text if (self.intent_text and time.monotonic() < self.intent_until) else ""
+    def _tag_parts(self) -> tuple[str, str]:
+        detail = (
+            self.intent_text if (self.intent_text and time.monotonic() < self.intent_until) else ""
+        )
         return self.agent_label, style.tag_detail(detail, self.cursor_state, self.narrate)
 
     def _refresh_tag(self) -> None:
@@ -1554,7 +1642,7 @@ class OverlayController:
             p.set_tag(label, detail, self.cursor_state)
         self._update_hotspot()
 
-    def _update_flips(self) -> List["_Panel"]:
+    def _update_flips(self) -> list[_Panel]:
         """Flip the tag left / up near a screen edge (modern). Returns panels that changed."""
         changed = []
         for p in self.panels:
@@ -1562,7 +1650,9 @@ class OverlayController:
             if self.style == "modern" and self.cursor is not None:
                 frame = p.global_frame
                 if geometry.contains(frame, self.cursor):
-                    flip = style.tag_flip(self.cursor, p.tag.width, _CHIP_H, _ARROW_W, _ARROW_H, frame)
+                    flip = style.tag_flip(
+                        self.cursor, p.tag.width, _CHIP_H, _ARROW_W, _ARROW_H, frame
+                    )
             if flip != p.flip:
                 p.flip = flip
                 changed.append(p)
@@ -1586,20 +1676,26 @@ class OverlayController:
             return
         self._apply_agents(self._agents())
 
-    def _apply_agents(self, agents: List[Dict[str, Any]]) -> None:
+    def _apply_agents(self, agents: list[dict[str, Any]]) -> None:
         """Take this Dobby's colour and name from the registry; update the bar's dots."""
         self.agents = list(agents)
         colors = style.agent_colors(self.agents)
         own = colors.get(self.server_pid)
-        if (own and self.cfg.get("agent_colors", True) and not self.cfg.get("color_fixed")
-                and own.upper() != self.ok_hex.upper()):
+        if (
+            own
+            and self.cfg.get("agent_colors", True)
+            and not self.cfg.get("color_fixed")
+            and own.upper() != self.ok_hex.upper()
+        ):
             self.ok_hex = own
             self.colors["ok"] = _hex_rgb(own)
             if self.risk_level == "ok":
                 self._set_risk("ok")  # recolours pointer, tag, glow and bar
             self._glow_sig = None
             self._redraw_trail()
-        own_name = next((str(a.get("name")) for a in self.agents if a.get("pid") == self.server_pid), None)
+        own_name = next(
+            (str(a.get("name")) for a in self.agents if a.get("pid") == self.server_pid), None
+        )
         label = style.tag_label(str(self.cfg["label"]), own_name, len(self.agents))
         if label != self.agent_label:
             self.agent_label = label
@@ -1609,7 +1705,7 @@ class OverlayController:
             self.agent_dots = dots
             self._refresh_pill()
 
-    def _place_pointer(self, pt: Tuple[float, float], ms: Optional[float]) -> None:
+    def _place_pointer(self, pt: tuple[float, float], ms: float | None) -> None:
         dur = self._duration(ms)
         CATransaction.begin()
         if dur <= 0:
@@ -1637,13 +1733,20 @@ class OverlayController:
     def _update_hotspot(self) -> None:
         if self.hotspot is None:
             return
-        show = (self.pointer_visible and self.cursor is not None and self.user_visible
-                and not self.capture_hidden and not self.chip_menu_open)
+        show = (
+            self.pointer_visible
+            and self.cursor is not None
+            and self.user_visible
+            and not self.capture_hidden
+            and not self.chip_menu_open
+        )
         width = max((p.tag.width for p in self.panels), default=0.0)
         rect = None
         if show:
-            flip = next((p.flip for p in self.panels if geometry.contains(p.global_frame, self.cursor)),
-                        (False, False))
+            flip = next(
+                (p.flip for p in self.panels if geometry.contains(p.global_frame, self.cursor)),
+                (False, False),
+            )
             x, y = style.tag_origin(self.cursor, width, _CHIP_H, _ARROW_W, _ARROW_H, flip)
             rect = (x, y, width, _CHIP_H)
         self.hotspot.place(rect, self.primary_h)
@@ -1720,8 +1823,13 @@ class OverlayController:
 
     def _glow_state(self) -> str:
         working = time.monotonic() - self.last_action <= float(self.cfg["active_secs"])
-        return style.glow_state(paused=self.paused, takeover=self.takeover, working=working,
-                                thinking=self.cursor_state == "thinking", risk=self.risk_level)
+        return style.glow_state(
+            paused=self.paused,
+            takeover=self.takeover,
+            working=working,
+            thinking=self.cursor_state == "thinking",
+            risk=self.risk_level,
+        )
 
     def _refresh_glow(self) -> None:
         """Modern glow: colour, opacity and motion follow Dobby's state.
@@ -1777,7 +1885,11 @@ class OverlayController:
         CATransaction.setAnimationDuration_(0.2)
         for p in self.panels:
             p.glow.setOpacity_(opacity)
-            if opacity > 0 and not self.reduce_motion and p.glow.animationForKey_("breathe") is None:
+            if (
+                opacity > 0
+                and not self.reduce_motion
+                and p.glow.animationForKey_("breathe") is None
+            ):
                 anim = CABasicAnimation.animationWithKeyPath_("shadowOpacity")
                 anim.setFromValue_(0.35)
                 anim.setToValue_(0.75)
@@ -1792,7 +1904,9 @@ class OverlayController:
             x, y, w, h = geometry.global_rect_to_local(rect, p.frame, self.primary_h)
             CATransaction.begin()
             CATransaction.setDisableActions_(True)
-            p.box.setPath_(CGPathCreateWithRoundedRect(CGRectMake(x - 3, y - 3, w + 6, h + 6), 6, 6, None))
+            p.box.setPath_(
+                CGPathCreateWithRoundedRect(CGRectMake(x - 3, y - 3, w + 6, h + 6), 6, 6, None)
+            )
             CATransaction.commit()
             CATransaction.begin()
             CATransaction.setAnimationDuration_(0.12)
@@ -1836,7 +1950,7 @@ class OverlayController:
                     ring.addAnimation_forKey_(a, a.keyPath())
                 CATransaction.commit()
 
-    def _scan(self, rect: Optional[geometry.Rect]) -> None:
+    def _scan(self, rect: geometry.Rect | None) -> None:
         rect = rect or self.glow_rect
         if rect is None or rect[2] < 8 or rect[3] < 8:
             return
@@ -1872,15 +1986,23 @@ class OverlayController:
                 sweep.setFromValue_(-band / 2)
                 sweep.setToValue_(w + band / 2)
                 sweep.setDuration_(0.9)
-                sweep.setTimingFunction_(CAMediaTimingFunction.functionWithName_(kCAMediaTimingFunctionEaseInEaseOut))
+                sweep.setTimingFunction_(
+                    CAMediaTimingFunction.functionWithName_(kCAMediaTimingFunctionEaseInEaseOut)
+                )
                 grad.setPosition_((w + band / 2, h / 2))
                 grad.addAnimation_forKey_(sweep, "sweep")
             CATransaction.commit()
 
     def _redraw_trail(self) -> None:
         keep = 3 if self.style == "modern" else int(self.cfg["trail_len"])
-        marks = style.trail_view(self.trail_points, time.monotonic(), self.style, keep=keep,
-                                 fade_secs=float(self.cfg["trail_secs"]), numbered=self.narrate)
+        marks = style.trail_view(
+            self.trail_points,
+            time.monotonic(),
+            self.style,
+            keep=keep,
+            fade_secs=float(self.cfg["trail_secs"]),
+            numbered=self.narrate,
+        )
         for p in self.panels:
             for sub in list(p.trail.sublayers() or []):
                 sub.removeFromSuperlayer()
@@ -1924,13 +2046,18 @@ class OverlayController:
         self._refresh_pill()  # the bar shows the step and count; this also refreshes the menu
 
     # ------------------------------------------------------------- tracking
-    def _window_list(self, option: int, wid: int = kCGNullWindowID) -> List[Dict[str, Any]]:
+    def _window_list(self, option: int, wid: int = kCGNullWindowID) -> list[dict[str, Any]]:
         return list(CGWindowListCopyWindowInfo(option, wid) or [])
 
     @staticmethod
-    def _bounds(info: Dict[str, Any]) -> geometry.Rect:
+    def _bounds(info: dict[str, Any]) -> geometry.Rect:
         b = info.get("kCGWindowBounds") or {}
-        return (float(b.get("X", 0)), float(b.get("Y", 0)), float(b.get("Width", 0)), float(b.get("Height", 0)))
+        return (
+            float(b.get("X", 0)),
+            float(b.get("Y", 0)),
+            float(b.get("Width", 0)),
+            float(b.get("Height", 0)),
+        )
 
     def _claim_bar(self) -> None:
         """Become the helper that shows the idle bar (and menu bar icon, if on)."""
@@ -1952,8 +2079,12 @@ class OverlayController:
             if len(fresh) != len(self.trail_points):
                 self.trail_points = fresh
                 self._redraw_trail()
-        if (self.style == "modern" and self.pill is not None and self.pill.mode == "working"
-                and self.pending_confirm is None):
+        if (
+            self.style == "modern"
+            and self.pill is not None
+            and self.pill.mode == "working"
+            and self.pending_confirm is None
+        ):
             second = int(now - self.task_started)
             if second != self.bar_second:  # the bar's timer
                 self.bar_second = second
@@ -1963,14 +2094,19 @@ class OverlayController:
         if self.interactive and not self.bar_owner.owned and now >= self.bar_owner_retry:
             self.bar_owner_retry = now + 2.0
             self._claim_bar()
-        if self.intent_text and (now >= self.intent_until or (
-                self.narrate and now - self.last_action > float(self.cfg["active_secs"]))):
+        if self.intent_text and (
+            now >= self.intent_until
+            or (self.narrate and now - self.last_action > float(self.cfg["active_secs"]))
+        ):
             self.intent_text = ""  # narration: the action stays until Dobby goes idle
             self._refresh_tag()
         if self.pending_confirm is not None and now >= self.pending_confirm[1]:
             self._answer_confirm(False)
-        if (self.takeover and self.cfg["takeover_resume"] == "auto"
-                and now - self.last_user_input >= float(self.cfg["idle_secs"])):
+        if (
+            self.takeover
+            and self.cfg["takeover_resume"] == "auto"
+            and now - self.last_user_input >= float(self.cfg["idle_secs"])
+        ):
             self.takeover = False
             self.send_event("user_idle")
             self._refresh_pill()
@@ -1988,13 +2124,17 @@ class OverlayController:
         if self.bar_owner.owned and now >= self.others_checked:
             self.others_checked = now + 1.0
             # Step aside while another helper's AI waits or another Dobby's bar shows.
-            others = not self.ai_waiting and (others_waiting(self.wait_dir, os.getpid())
-                                              or others_showing(self.pill_show_dir, os.getpid()))
+            others = not self.ai_waiting and (
+                others_waiting(self.wait_dir, os.getpid())
+                or others_showing(self.pill_show_dir, os.getpid())
+            )
             if others != self.others_waiting:
                 self.others_waiting = others
                 self._refresh_pill()
         if self.pill is not None:
-            if self.pill.mode == "working" and now - self.last_action > float(self.cfg["active_secs"]):
+            if self.pill.mode == "working" and now - self.last_action > float(
+                self.cfg["active_secs"]
+            ):
                 self._refresh_pill()
             elif self.pill.mode == "stopped" and now >= self.stopped_until:
                 self.pill.mode = "ready"
@@ -2004,10 +2144,15 @@ class OverlayController:
     def _put_away_when_done(self, now: float) -> None:
         """The task is over: stop the thinking sweep, hide the agent pointer."""
         reset_thinking, hide_pointer = idle_cleanup(
-            since_action=now - self.last_action, active_secs=float(self.cfg["active_secs"]),
-            linger_secs=float(self.cfg["linger_secs"]), cursor_state=self.cursor_state,
-            pointer_visible=self.pointer_visible, awake=self._awake(),
-            halted=self.paused or self.takeover, confirming=self.pending_confirm is not None)
+            since_action=now - self.last_action,
+            active_secs=float(self.cfg["active_secs"]),
+            linger_secs=float(self.cfg["linger_secs"]),
+            cursor_state=self.cursor_state,
+            pointer_visible=self.pointer_visible,
+            awake=self._awake(),
+            halted=self.paused or self.takeover,
+            confirming=self.pending_confirm is not None,
+        )
         if reset_thinking:
             self.cursor_state = "idle"
             self._refresh_tag()
@@ -2020,35 +2165,49 @@ class OverlayController:
     def _track_tick(self) -> None:
         if self.track_wid is None and self.track_pid is None:
             return
-        onscreen = self._window_list(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements)
+        onscreen = self._window_list(
+            kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements
+        )
         me = os.getpid()
         wid = self.track_wid
         if wid is None:
             for info in onscreen:
-                if info.get("kCGWindowOwnerPID") == self.track_pid and info.get("kCGWindowLayer", 0) == 0:
+                if (
+                    info.get("kCGWindowOwnerPID") == self.track_pid
+                    and info.get("kCGWindowLayer", 0) == 0
+                ):
                     wid = int(info["kCGWindowNumber"])
                     break
-        index = next((i for i, info in enumerate(onscreen) if info.get("kCGWindowNumber") == wid), None)
+        index = next(
+            (i for i, info in enumerate(onscreen) if info.get("kCGWindowNumber") == wid), None
+        )
         if wid is None or index is None:
             self.lock_target = None
             if self.glow_rect is not None:
                 self.glow_rect = None
                 self._set_glow_opacity(0.0)
                 self._glow_sig = None
-            if (wid is not None and self.track_pid is None
-                    and not self._window_list(kCGWindowListOptionIncludingWindow, wid)):
+            if (
+                wid is not None
+                and self.track_pid is None
+                and not self._window_list(kCGWindowListOptionIncludingWindow, wid)
+            ):
                 self.track_wid = None
             return
         rect = self._bounds(onscreen[index])
         above = [
-            self._bounds(info) for info in onscreen[:index]
-            if info.get("kCGWindowLayer", 0) == 0 and info.get("kCGWindowOwnerPID") != me
+            self._bounds(info)
+            for info in onscreen[:index]
+            if info.get("kCGWindowLayer", 0) == 0
+            and info.get("kCGWindowOwnerPID") != me
             and float(info.get("kCGWindowAlpha", 1)) > 0
         ]
         dim = geometry.occluded(rect, above)
         self.lock_target = rect
         self.lock_above = above
-        self.lock_front = inputlock.frontmost_owner(onscreen, me) == onscreen[index].get("kCGWindowOwnerPID")
+        self.lock_front = inputlock.frontmost_owner(onscreen, me) == onscreen[index].get(
+            "kCGWindowOwnerPID"
+        )
         first = self.glow_rect is None
         if rect != self.glow_rect:
             self._place_glow(rect, 0 if first else 1000.0 / float(self.cfg["track_hz"]))
@@ -2169,7 +2328,7 @@ class OverlayController:
             self.set_pill_hidden(False)  # the click target must be on screen
         self._refresh_pill()
 
-    def _below_bar(self) -> Tuple[float, float]:
+    def _below_bar(self) -> tuple[float, float]:
         """Global top-left point under the bar, clear of where the bar ducks."""
         if self.pill is not None:
             f = self.pill.window.frame()
@@ -2187,11 +2346,18 @@ class OverlayController:
             self._refresh_menu()
             return
         view = bar_view(
-            paused=self.paused, takeover=self.takeover, takeover_resume=self.cfg["takeover_resume"],
+            paused=self.paused,
+            takeover=self.takeover,
+            takeover_resume=self.cfg["takeover_resume"],
             working=time.monotonic() - self.last_action <= float(self.cfg["active_secs"]),
-            turbo=self.turbo, current_mode=self.pill.mode, bar_mode=self.pill_mode,
-            owner=self.bar_owner.owned, awake=self._awake(), ai_waiting=self.ai_waiting > 0,
-            handoff=self.handoff, other_waiting=self.others_waiting,
+            turbo=self.turbo,
+            current_mode=self.pill.mode,
+            bar_mode=self.pill_mode,
+            owner=self.bar_owner.owned,
+            awake=self._awake(),
+            ai_waiting=self.ai_waiting > 0,
+            handoff=self.handoff,
+            other_waiting=self.others_waiting,
             locked=self.input_lock is not None,
         )
         if view is None:
@@ -2201,14 +2367,24 @@ class OverlayController:
             rgb = self.rgb if color == "risk" else self.colors[color]
             now = time.monotonic()
             spec = style.bar_spec(
-                view, style=self.style, hovered=self.pill_hovered, label=str(self.cfg["label"]),
-                step=self.current_step, steps=self.task_steps,
+                view,
+                style=self.style,
+                hovered=self.pill_hovered,
+                label=str(self.cfg["label"]),
+                step=self.current_step,
+                steps=self.task_steps,
                 elapsed=(now - self.task_started) if self.task_started else 0.0,
-                turbo=self.turbo, thinking=self.cursor_state == "thinking", narrate=self.narrate,
+                turbo=self.turbo,
+                thinking=self.cursor_state == "thinking",
+                narrate=self.narrate,
                 voice=self.voice,
             )
-            self.pill.show_spec(spec, rgb, dots=self.agent_dots,
-                                tip=bar_tip(mode, self.ai_waiting > 0, self.wait_reason))
+            self.pill.show_spec(
+                spec,
+                rgb,
+                dots=self.agent_dots,
+                tip=bar_tip(mode, self.ai_waiting > 0, self.wait_reason),
+            )
         self._refresh_menu()
 
     def set_pill_hidden(self, hidden: bool) -> None:
@@ -2278,8 +2454,16 @@ class OverlayController:
             self.stopped_until = time.monotonic() + 2.0
         self._refresh_menu()
 
-    def _start_confirm(self, msg_id: Any, text: str, secs: float, detail: str = "",
-                       allow: str = "Allow", deny: str = "Deny", kind: str = "danger") -> None:
+    def _start_confirm(
+        self,
+        msg_id: Any,
+        text: str,
+        secs: float,
+        detail: str = "",
+        allow: str = "Allow",
+        deny: str = "Deny",
+        kind: str = "danger",
+    ) -> None:
         if self.pending_confirm is not None:
             self._answer_confirm(False)
         if self.turbo:
@@ -2290,7 +2474,9 @@ class OverlayController:
         if self.pill is None:
             self._answer_confirm(False)  # no way to ask: deny
             return
-        spec = style.confirm_spec(_short(text, 70), allow=allow, deny=deny, kind=kind, detail=detail)
+        spec = style.confirm_spec(
+            _short(text, 70), allow=allow, deny=deny, kind=kind, detail=detail
+        )
         rgb = self.colors["ok"] if kind == "access" else self.colors["danger"]
         self.pill.show_spec(spec, rgb)
 
@@ -2306,10 +2492,18 @@ class OverlayController:
 
     # ------------------------------------------- controls: input + hotkeys
     def _install_monitors(self) -> None:
-        mask = (NSEventMaskKeyDown | NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown
-                | NSEventMaskMouseMoved | NSEventMaskLeftMouseDragged | NSEventMaskScrollWheel)
+        mask = (
+            NSEventMaskKeyDown
+            | NSEventMaskLeftMouseDown
+            | NSEventMaskRightMouseDown
+            | NSEventMaskMouseMoved
+            | NSEventMaskLeftMouseDragged
+            | NSEventMaskScrollWheel
+        )
         try:
-            mon = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(mask, self._on_global_event)
+            mon = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(
+                mask, self._on_global_event
+            )
             if mon is not None:
                 self.monitors.append(mon)
         except Exception as exc:  # noqa: BLE001
@@ -2318,14 +2512,22 @@ class OverlayController:
     def _event_pid(self, event) -> int:
         try:
             cg = event.CGEvent()
-            return int(CGEventGetIntegerValueField(cg, kCGEventSourceUnixProcessID)) if cg is not None else 0
+            return (
+                int(CGEventGetIntegerValueField(cg, kCGEventSourceUnixProcessID))
+                if cg is not None
+                else 0
+            )
         except Exception:  # noqa: BLE001
             return 0
 
     def _event_tag(self, event) -> int:
         try:
             cg = event.CGEvent()
-            return int(CGEventGetIntegerValueField(cg, _kCGEventSourceUserData)) if cg is not None else 0
+            return (
+                int(CGEventGetIntegerValueField(cg, _kCGEventSourceUserData))
+                if cg is not None
+                else 0
+            )
         except Exception:  # noqa: BLE001
             return 0
 
@@ -2334,8 +2536,10 @@ class OverlayController:
             if self._event_tag(event) == DOBBY_EVENT_TAG:
                 return  # synthetic input from any Dobby process, not the person
             pid = self._event_pid(event)
-            if pid and (pid in (self.server_pid, os.getpid())
-                        or (self.agent_pids is not None and pid in self.agent_pids)):
+            if pid and (
+                pid in (self.server_pid, os.getpid())
+                or (self.agent_pids is not None and pid in self.agent_pids)
+            ):
                 return  # synthetic input from this or another Dobby agent, not the person
             etype = int(event.type())
             if etype == 10:  # NSEventTypeKeyDown
@@ -2363,8 +2567,14 @@ class OverlayController:
         if self.takeover and kind == "move":
             self.last_user_input = now  # still busy: keep the take-over going
             return
-        if not takes_over(kind, working=working, paused=self.paused, takeover=self.takeover,
-                          turbo=self.turbo, confirming=self.pending_confirm is not None):
+        if not takes_over(
+            kind,
+            working=working,
+            paused=self.paused,
+            takeover=self.takeover,
+            turbo=self.turbo,
+            confirming=self.pending_confirm is not None,
+        ):
             return  # idle, Turbo, reaching for the bar / Allow-Deny, or just moving the mouse
         self.last_user_input = now
         if self.paused:
@@ -2394,26 +2604,41 @@ class OverlayController:
         return inputlock.armed(
             mode=self.lock_mode if self.input_lock is not None else "off",
             working=time.monotonic() - self.last_action <= float(self.cfg["active_secs"]),
-            paused=self.paused or self.lock_stopped, takeover=self.takeover,
+            paused=self.paused or self.lock_stopped,
+            takeover=self.takeover,
             confirming=self.pending_confirm is not None,
-            has_target=self.lock_target is not None, screen_reader=self.voiceover)
+            has_target=self.lock_target is not None,
+            screen_reader=self.voiceover,
+        )
 
-    def _own_rects(self) -> List[geometry.Rect]:
+    def _own_rects(self) -> list[geometry.Rect]:
         """The overlay's clickable windows (bar, tag hotspot), global top-left."""
-        rects: List[geometry.Rect] = []
+        rects: list[geometry.Rect] = []
         if self.pill is not None and self.pill.visible and not self.pill.ducked:
             f = self.pill.window.frame()
-            rects.append((float(f.origin.x), self.primary_h - float(f.origin.y) - float(f.size.height),
-                          float(f.size.width), float(f.size.height)))
+            rects.append(
+                (
+                    float(f.origin.x),
+                    self.primary_h - float(f.origin.y) - float(f.size.height),
+                    float(f.size.width),
+                    float(f.size.height),
+                )
+            )
         if self.hotspot is not None and self.hotspot.rect is not None:
             rects.append(self.hotspot.rect)
         return rects
 
-    def lock_blocks(self, kind: str, pt: Optional[Tuple[float, float]]) -> bool:
-        return inputlock.blocks(kind, pt, target=self.lock_target, above=self.lock_above,
-                                own=self._own_rects(), target_front=self.lock_front)
+    def lock_blocks(self, kind: str, pt: tuple[float, float] | None) -> bool:
+        return inputlock.blocks(
+            kind,
+            pt,
+            target=self.lock_target,
+            above=self.lock_above,
+            own=self._own_rects(),
+            target_front=self.lock_front,
+        )
 
-    def on_lock_swallowed(self, kind: str, pt: Optional[Tuple[float, float]]) -> None:
+    def on_lock_swallowed(self, kind: str, pt: tuple[float, float] | None) -> None:
         """The person tried to use Dobby's window: point them at Take over."""
         now = time.monotonic()
         if now < self.lock_note_next:
@@ -2448,7 +2673,7 @@ class OverlayController:
             sys.stderr.write(f"dobby.overlay: no menu bar item: {exc}\n")
             self.status_item = None
 
-    def _menu_item(self, menu, title: str, action: Optional[str] = None, state: Optional[bool] = None):
+    def _menu_item(self, menu, title: str, action: str | None = None, state: bool | None = None):
         item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, action, "")
         if action:
             item.setTarget_(self.target)
@@ -2458,7 +2683,7 @@ class OverlayController:
         menu.addItem_(item)
         return item
 
-    def _status(self) -> Tuple[str, str]:
+    def _status(self) -> tuple[str, str]:
         """(status text, one-glyph menu bar title)."""
         working = time.monotonic() - self.last_action <= float(self.cfg["active_secs"])
         return status_of(self.paused, self.takeover, working, self.turbo)
@@ -2469,8 +2694,13 @@ class OverlayController:
         working = time.monotonic() - self.last_action <= float(self.cfg["active_secs"])
         halted = self.paused or self.takeover
         for title, action, state in menu_entries(
-            status, self.steps, halted, self.turbo, self.user_visible,
-            self.trail_on, None if self.pill is None else not self.pill_user_hidden,
+            status,
+            self.steps,
+            halted,
+            self.turbo,
+            self.user_visible,
+            self.trail_on,
+            None if self.pill is None else not self.pill_user_hidden,
             awake=None if (working or (halted and not self.ai_waiting)) else self._awake(),
         ):
             if title == "-":
@@ -2565,16 +2795,26 @@ class OverlayController:
             return
         now = time.monotonic()
         working = now - self.last_action <= float(self.cfg["active_secs"])
-        mode = topbar.dobby_mode(paused=self.paused, takeover=self.takeover,
-                                 confirming=self.pending_confirm is not None,
-                                 stopped=now < self.stopped_until, working=working, awake=self._awake())
-        topbar.publish(self.server_pid, mode=mode, step=self.current_step if working else "",
-                       steps=self.task_steps if working else 0,
-                       elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
-                       turbo=self.turbo, app=self._app_name() if working else "")
+        mode = topbar.dobby_mode(
+            paused=self.paused,
+            takeover=self.takeover,
+            confirming=self.pending_confirm is not None,
+            stopped=now < self.stopped_until,
+            working=working,
+            awake=self._awake(),
+        )
+        topbar.publish(
+            self.server_pid,
+            mode=mode,
+            step=self.current_step if working else "",
+            steps=self.task_steps if working else 0,
+            elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
+            turbo=self.turbo,
+            app=self._app_name() if working else "",
+        )
         self.publish_next = now + 5.0
 
-    def _topbar_view(self) -> "topbar.View":
+    def _topbar_view(self) -> topbar.View:
         return topbar.topbar_view(self._agents(), topbar.read_states(), self.server_pid)
 
     def _dark_menu_bar(self) -> bool:
@@ -2627,12 +2867,23 @@ class OverlayController:
         from AppKit import NSColor, NSMutableAttributedString
 
         text = NSMutableAttributedString.alloc().initWithString_attributes_(
-            first, {NSFontAttributeName: NSFont.boldSystemFontOfSize_(13.0) if bold
-                    else NSFont.menuFontOfSize_(13.0)})
+            first,
+            {
+                NSFontAttributeName: NSFont.boldSystemFontOfSize_(13.0)
+                if bold
+                else NSFont.menuFontOfSize_(13.0)
+            },
+        )
         if second:
-            text.appendAttributedString_(NSAttributedString.alloc().initWithString_attributes_(
-                "\n" + second, {NSFontAttributeName: NSFont.systemFontOfSize_(11.0),
-                                 NSForegroundColorAttributeName: NSColor.secondaryLabelColor()}))
+            text.appendAttributedString_(
+                NSAttributedString.alloc().initWithString_attributes_(
+                    "\n" + second,
+                    {
+                        NSFontAttributeName: NSFont.systemFontOfSize_(11.0),
+                        NSForegroundColorAttributeName: NSColor.secondaryLabelColor(),
+                    },
+                )
+            )
         return text
 
     def fill_topbar_menu(self, menu) -> None:
@@ -2648,15 +2899,21 @@ class OverlayController:
             menu.addItem_(NSMenuItem.separatorItem())
             for row in view.rows:
                 item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(row.title, None, "")
-                item.setAttributedTitle_(self._two_lines(row.title + ("  (this bar)" if row.own and
-                                                                    len(view.rows) > 1 else ""), row.detail))
+                item.setAttributedTitle_(
+                    self._two_lines(
+                        row.title + ("  (this bar)" if row.own and len(view.rows) > 1 else ""),
+                        row.detail,
+                    )
+                )
                 image = self._row_image(row.color, row.shape)
                 if image is not None:
                     item.setImage_(image)
                 sub = NSMenu.alloc().initWithTitle_(row.title)
                 sub.setAutoenablesItems_(False)
                 for title, action in row.actions:
-                    selector = {"pause_toggle": "menuAgentPauseToggle:", "stop": "menuAgentStop:"}[action]
+                    selector = {"pause_toggle": "menuAgentPauseToggle:", "stop": "menuAgentStop:"}[
+                        action
+                    ]
                     self._menu_item(sub, title, selector).setRepresentedObject_(row.pid)
                 item.setSubmenu_(sub)
                 item.setEnabled_(True)
@@ -2664,18 +2921,34 @@ class OverlayController:
             if view.all_actions:
                 menu.addItem_(NSMenuItem.separatorItem())
                 for title, action in view.all_actions:
-                    self._menu_item(menu, title, {"pause_all": "menuAllPause:", "resume_all": "menuAllResume:",
-                                                  "stop_all": "menuAllStop:"}[action])
+                    self._menu_item(
+                        menu,
+                        title,
+                        {
+                            "pause_all": "menuAllPause:",
+                            "resume_all": "menuAllResume:",
+                            "stop_all": "menuAllStop:",
+                        }[action],
+                    )
             menu.addItem_(NSMenuItem.separatorItem())
             settings = NSMenu.alloc().initWithTitle_("Dobby Settings")
             settings.setAutoenablesItems_(False)
-            self._menu_item(settings, "Turbo mode (no prompts, ignores take-over)", "menuToggleTurbo:", self.turbo)
+            self._menu_item(
+                settings,
+                "Turbo mode (no prompts, ignores take-over)",
+                "menuToggleTurbo:",
+                self.turbo,
+            )
             self._menu_item(settings, "Show overlay", "menuToggleOverlay:", self.user_visible)
             if self.pill is not None:
-                self._menu_item(settings, "Show control bar (⌃⌥H)", "menuTogglePill:", not self.pill_user_hidden)
+                self._menu_item(
+                    settings, "Show control bar (⌃⌥H)", "menuTogglePill:", not self.pill_user_hidden
+                )
             self._menu_item(settings, "Show step trail", "menuToggleTrail:", self.trail_on)
             self._menu_item(settings, "Clear step trail", "menuClearTrail:")
-            parent = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Dobby Settings", None, "")
+            parent = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                "Dobby Settings", None, ""
+            )
             parent.setSubmenu_(settings)
             menu.addItem_(parent)
         except Exception as exc:  # noqa: BLE001 - never break the menu bar
@@ -2725,7 +2998,7 @@ class OverlayController:
             sys.stderr.write(f"dobby.overlay: {exc}\n")
             self.ack(msg_id, False, str(exc))
 
-    def _set_intent(self, text: str, ms: Optional[float] = None) -> None:
+    def _set_intent(self, text: str, ms: float | None = None) -> None:
         self.intent_text = _short(text) if text else ""
         secs = style.intent_secs(ms, float(self.cfg["intent_ms"]), self.narrate)
         if not text:
@@ -2734,7 +3007,7 @@ class OverlayController:
             self.intent_until = time.monotonic() + secs if secs is not None else float("inf")
         self._refresh_tag()
 
-    def handle(self, msg: Dict[str, Any]) -> None:
+    def handle(self, msg: dict[str, Any]) -> None:
         op, msg_id = msg["op"], msg.get("id")
         if op == "cursor.move":
             self._mark_active()
@@ -2742,8 +3015,12 @@ class OverlayController:
             verb = msg.get("verb")
             if msg.get("probe"):
                 name, frame = self.probe.at(*target)
-                if (frame is not None and 3 <= frame[2] <= 1600 and 3 <= frame[3] <= 900
-                        and geometry.contains(frame, target)):
+                if (
+                    frame is not None
+                    and 3 <= frame[2] <= 1600
+                    and 3 <= frame[3] <= 900
+                    and geometry.contains(frame, target)
+                ):
                     self._show_box(frame)
                 else:
                     self._clear_box()
@@ -2774,9 +3051,10 @@ class OverlayController:
             self._mark_active()
             self._ripple(int(msg.get("count", 1)))
             if self.cursor is not None:
-                self.trail_points.append((self.step_no or len(self.trail_points) + 1, self.cursor,
-                                          time.monotonic()))
-                self.trail_points = self.trail_points[-int(self.cfg["trail_len"]):]
+                self.trail_points.append(
+                    (self.step_no or len(self.trail_points) + 1, self.cursor, time.monotonic())
+                )
+                self.trail_points = self.trail_points[-int(self.cfg["trail_len"]) :]
                 self._redraw_trail()
             AppHelper.callLater(0.5, self._clear_box)
             self.ack(msg_id)
@@ -2819,9 +3097,15 @@ class OverlayController:
             self.ack(msg_id)
         elif op == "confirm":
             self._mark_active()
-            self._start_confirm(msg_id, msg["text"], float(msg.get("secs", 30.0)),
-                                detail=str(msg.get("detail") or ""), allow=str(msg.get("allow") or "Allow"),
-                                deny=str(msg.get("deny") or "Deny"), kind=str(msg.get("kind") or "danger"))
+            self._start_confirm(
+                msg_id,
+                msg["text"],
+                float(msg.get("secs", 30.0)),
+                detail=str(msg.get("detail") or ""),
+                allow=str(msg.get("allow") or "Allow"),
+                deny=str(msg.get("deny") or "Deny"),
+                kind=str(msg.get("kind") or "danger"),
+            )
         elif op == "confirm.cancel":
             if self.pending_confirm is not None:
                 self._answer_confirm(False)
@@ -2873,7 +3157,7 @@ class OverlayController:
             self.ack(msg_id)
             self.quit()
 
-    def _real_mouse(self) -> Tuple[float, float]:
+    def _real_mouse(self) -> tuple[float, float]:
         loc = NSEvent.mouseLocation()  # Cocoa global, bottom-left origin
         return (float(loc.x), self.primary_h - float(loc.y))
 
@@ -2917,7 +3201,9 @@ def _stdin_loop(controller: OverlayController) -> None:
     AppHelper.callAfter(controller.quit)
 
 
-def _schedule(controller: OverlayController, steps: List[Tuple[float, Dict[str, Any]]], tail: float) -> None:
+def _schedule(
+    controller: OverlayController, steps: list[tuple[float, dict[str, Any]]], tail: float
+) -> None:
     for delay, msg in steps:
         AppHelper.callLater(delay, controller.handle, msg)
     end = (steps[-1][0] if steps else 0.0) + tail
@@ -2929,12 +3215,21 @@ def _demo(controller: OverlayController) -> None:
     w, h = float(screen.size.width), float(screen.size.height)
     front = NSWorkspace.sharedWorkspace().frontmostApplication()
     pid = int(front.processIdentifier()) if front else None
-    steps: List[Tuple[float, Dict[str, Any]]] = [
+    steps: list[tuple[float, dict[str, Any]]] = [
         (0.2, {"op": "cursor.move", "x": w * 0.3, "y": h * 0.3, "verb": "Click", "probe": True}),
         (0.9, {"op": "cursor.click"}),
         (1.4, {"op": "scan"}),
         (1.4, {"op": "cursor.state", "state": "thinking"}),
-        (2.4, {"op": "cursor.move", "x": w * 0.7, "y": h * 0.4, "verb": "Double-click", "probe": True}),
+        (
+            2.4,
+            {
+                "op": "cursor.move",
+                "x": w * 0.7,
+                "y": h * 0.4,
+                "verb": "Double-click",
+                "probe": True,
+            },
+        ),
         (3.1, {"op": "cursor.click", "count": 2}),
         (3.5, {"op": "intent", "text": "Type “hello”"}),
         (3.5, {"op": "cursor.state", "state": "typing"}),
@@ -2954,7 +3249,7 @@ def _demo(controller: OverlayController) -> None:
     _schedule(controller, steps, tail=3.0)
 
 
-def load_track(path: str) -> List[Dict[str, Any]]:
+def load_track(path: str) -> list[dict[str, Any]]:
     events = []
     with open(path) as fh:
         for line in fh:
@@ -2991,15 +3286,15 @@ def _replay(controller: OverlayController, path: str, speed: float) -> None:
     _schedule(controller, steps, tail=2.0)
 
 
-def _arg(argv: List[str], name: str) -> Optional[str]:
+def _arg(argv: list[str], name: str) -> str | None:
     if name in argv and argv.index(name) + 1 < len(argv):
         return argv[argv.index(name) + 1]
     return None
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     argv = list(argv or [])
-    cfg: Dict[str, Any] = {}
+    cfg: dict[str, Any] = {}
     raw = os.environ.get("DOBBY_OVERLAY_CONFIG")
     if raw:
         try:
@@ -3023,7 +3318,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         threading.Thread(target=_stdin_loop, args=(controller,), name="stdin", daemon=True).start()
         from dobby.parentwatch import watch_parent
 
-        watch_parent(lambda: AppHelper.callAfter(controller.quit))  # server died, pipe held elsewhere
+        watch_parent(
+            lambda: AppHelper.callAfter(controller.quit)
+        )  # server died, pipe held elsewhere
     controller.emit({"ready": True, "version": protocol.PROTOCOL_VERSION, "pid": os.getpid()})
     AppHelper.runEventLoop(installInterrupt=True)
     return 0

@@ -1,23 +1,19 @@
 """Unit and integration tests for enhanced hotswappable grounding and compound tools."""
 
-import pytest
 from PIL import Image, ImageDraw
 
-from dobby.types import BoundingBox, UIElement
+from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.perception.grounding.engine import GroundingEngine
-from dobby.perception.grounding.ensemble import compute_iou, EnsembleGroundingProvider
+from dobby.perception.grounding.ensemble import compute_iou
 from dobby.perception.grounding.template import TemplateGroundingProvider
 from dobby.perception.token_optimizer import TokenOptimizer
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.config import CONFIG
 from dobby.server import (
-    find_element,
     click_and_type,
-    find_and_click,
-    get_active_window,
     configure_vision,
+    get_active_window,
     get_vision_diagnostics,
 )
+from dobby.types import BoundingBox
 
 
 def test_iou_computation():

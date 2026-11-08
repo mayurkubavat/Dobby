@@ -4,20 +4,17 @@ ActionCache, WindowClipper, and ObstructionInterceptor.
 
 import os
 import tempfile
-import pytest
-from PIL import Image
 
-from dobby.types import BoundingBox, UIElement, WindowInfo
-from dobby.agent_loop.cache import ActionCache, CachedLocator
-from dobby.perception.window_clipper import WindowClipper
-from dobby.agent_loop.obstruction import ObstructionInterceptor
+from dobby.agent_loop.cache import ActionCache
 from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.config import CONFIG
+from dobby.agent_loop.obstruction import ObstructionInterceptor
+from dobby.perception.window_clipper import WindowClipper
 from dobby.server import (
     capture_window,
     dismiss_obstructions,
     manage_cache,
 )
+from dobby.types import BoundingBox, UIElement
 
 
 def test_action_cache_lifecycle():
@@ -28,7 +25,7 @@ def test_action_cache_lifecycle():
     try:
         cache = ActionCache(cache_file_path=cache_path)
         bbox = BoundingBox(x=100, y=200, width=80, height=35)
-        
+
         # 1. Record
         entry = cache.record(
             app_key="chrome",
@@ -100,10 +97,13 @@ def test_window_clipper(mock_hal):
 
 def test_obstruction_interceptor(mock_hal):
     """Verifies detection and dismissal of modal dialog buttons."""
+
     class MockATSPI:
         is_available = True
+
         def __init__(self, hal):
             self.hal = hal
+
         def inspect_desktop(self, filter_interactable=True):
             # Once clicked, the modal is dismissed
             if any(c[0] == 330 and c[1] == 215 for c in self.hal.clicks):

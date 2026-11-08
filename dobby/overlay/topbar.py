@@ -24,23 +24,23 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 STATUS_DIR = os.path.expanduser("~/.dobby/overlay/status")
 HIDDEN_PATH = os.path.expanduser("~/.dobby/overlay/menu_hidden.json")
 ICON_DIR = os.path.expanduser("~/.dobby/overlay/icons")
 
 # Palette A, "Elf Violet, tuned" (chosen Nov 2026).
-PALETTE: Dict[str, str] = {
-    "accent": "#7C5CFF",       # glow and icon on a light desktop
+PALETTE: dict[str, str] = {
+    "accent": "#7C5CFF",  # glow and icon on a light desktop
     "accent_dark": "#9B82FF",  # the same on a dark desktop
-    "fill": "#5B3FE0",         # filled buttons and tags, white text
+    "fill": "#5B3FE0",  # filled buttons and tags, white text
     "on_fill": "#FFFFFF",
     "ok": "#22A365",
-    "caution": "#F5A524",      # paused, needs you
-    "danger": "#F04438",       # stopped
-    "idle": "#9A98A6",         # sleeping / paused grey
+    "caution": "#F5A524",  # paused, needs you
+    "danger": "#F04438",  # stopped
+    "idle": "#9A98A6",  # sleeping / paused grey
     "surface_light": "#FBFAFF",
     "surface_dark": "#1B1826",
     "text_secondary": "#8A8799",
@@ -50,14 +50,31 @@ PALETTE: Dict[str, str] = {
 _FRESH_SECS = 30.0  # a helper republishes at least this often while it runs
 
 
-def publish(server_pid: int, *, mode: str, step: str = "", steps: int = 0, elapsed: float = 0.0,
-            turbo: bool = False, app: str = "", directory: str = STATUS_DIR) -> None:
+def publish(
+    server_pid: int,
+    *,
+    mode: str,
+    step: str = "",
+    steps: int = 0,
+    elapsed: float = 0.0,
+    turbo: bool = False,
+    app: str = "",
+    directory: str = STATUS_DIR,
+) -> None:
     """Write this helper's Dobby status (cheap; called on every bar refresh)."""
     if not server_pid:
         return
-    rec = {"pid": int(server_pid), "helper": os.getpid(), "mode": str(mode), "step": str(step)[:120],
-           "steps": int(steps), "elapsed": float(elapsed), "turbo": bool(turbo), "app": str(app)[:60],
-           "at": time.time()}
+    rec = {
+        "pid": int(server_pid),
+        "helper": os.getpid(),
+        "mode": str(mode),
+        "step": str(step)[:120],
+        "steps": int(steps),
+        "elapsed": float(elapsed),
+        "turbo": bool(turbo),
+        "app": str(app)[:60],
+        "at": time.time(),
+    }
     try:
         os.makedirs(directory, exist_ok=True)
         path = os.path.join(directory, f"{int(server_pid)}.json")
@@ -86,10 +103,10 @@ def _alive(pid: int) -> bool:
     return True
 
 
-def read_states(directory: str = STATUS_DIR, now: Optional[float] = None) -> Dict[int, dict]:
+def read_states(directory: str = STATUS_DIR, now: float | None = None) -> dict[int, dict]:
     """Published statuses by server pid. Drops files whose helper has exited."""
     now = time.time() if now is None else now
-    out: Dict[int, dict] = {}
+    out: dict[int, dict] = {}
     try:
         names = os.listdir(directory)
     except OSError:
@@ -124,7 +141,7 @@ def read_states(directory: str = STATUS_DIR, now: Optional[float] = None) -> Dic
 # (or asks) again. "Show N hidden" brings them all back.
 _ACTIVE_STATES = ("working", "awake", "confirm", "paused", "takeover")
 _FINISHED_STATES = ("ready", "waiting", "stopped")
-_last_active: Dict[int, float] = {}  # pid -> last time this process saw it busy
+_last_active: dict[int, float] = {}  # pid -> last time this process saw it busy
 
 
 def _idle_hide_default() -> float:
@@ -139,13 +156,13 @@ def _idle_hide_default() -> float:
 class Hiding:
     """Which rows the dropdown leaves out (shared through ``menu_hidden.json``)."""
 
-    pids: Dict[int, float] = field(default_factory=dict)  # hidden by hand (Stop, Clear finished) at
-    shown_at: float = 0.0       # "Show hidden": nothing hides automatically before this
-    idle_secs: float = 900.0    # asleep this long hides a row; 0 turns it off
-    path: Optional[str] = None  # where it is saved; None keeps it in memory (tests)
+    pids: dict[int, float] = field(default_factory=dict)  # hidden by hand (Stop, Clear finished) at
+    shown_at: float = 0.0  # "Show hidden": nothing hides automatically before this
+    idle_secs: float = 900.0  # asleep this long hides a row; 0 turns it off
+    path: str | None = None  # where it is saved; None keeps it in memory (tests)
 
     @classmethod
-    def load(cls, path: Optional[str] = None, idle_secs: Optional[float] = None) -> "Hiding":
+    def load(cls, path: str | None = None, idle_secs: float | None = None) -> Hiding:
         path = path or HIDDEN_PATH
         out = cls(idle_secs=_idle_hide_default() if idle_secs is None else idle_secs, path=path)
         try:
@@ -164,18 +181,21 @@ class Hiding:
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             tmp = f"{self.path}.{os.getpid()}.tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump({"pids": {str(k): v for k, v in self.pids.items()}, "shown_at": self.shown_at}, fh)
+                json.dump(
+                    {"pids": {str(k): v for k, v in self.pids.items()}, "shown_at": self.shown_at},
+                    fh,
+                )
             os.replace(tmp, self.path)
         except OSError:
             pass
 
-    def hide(self, pids: Iterable[int], now: Optional[float] = None) -> None:
+    def hide(self, pids: Iterable[int], now: float | None = None) -> None:
         now = time.time() if now is None else now
         for pid in pids:
             self.pids[int(pid)] = now
         self.save()
 
-    def show_all(self, now: Optional[float] = None) -> None:
+    def show_all(self, now: float | None = None) -> None:
         self.pids.clear()
         self.shown_at = time.time() if now is None else now
         self.save()
@@ -193,7 +213,9 @@ class Hiding:
             return False  # it needs the person: always on show
         at = self.pids.get(pid)
         if at is not None and last_active <= at:
-            return True  # hidden, and nothing new since (a stopped Dobby can read "working" briefly)
+            return (
+                True  # hidden, and nothing new since (a stopped Dobby can read "working" briefly)
+            )
         if state in _ACTIVE_STATES:
             return False
         if self.idle_secs > 0 and state in ("ready", "waiting"):
@@ -202,13 +224,14 @@ class Hiding:
         return False
 
 
-def finished_pids(view: "View") -> List[int]:
+def finished_pids(view: View) -> list[int]:
     """The rows "Clear finished" hides: asleep, waiting for a turn or stopped."""
     return [r.pid for r in view.rows if r.state in _FINISHED_STATES]
 
 
-def menu_action(key: str, view: Optional["View"] = None, pid: Optional[int] = None,
-                hiding: Optional[Hiding] = None) -> bool:
+def menu_action(
+    key: str, view: View | None = None, pid: int | None = None, hiding: Hiding | None = None
+) -> bool:
     """Handle the list-tidying keys. True when ``key`` was one of them."""
     if key not in ("clear_finished", "show_hidden", "hide"):
         return False
@@ -241,43 +264,54 @@ _ORDER = list(_STATES)
 class Row:
     pid: int
     name: str
-    state: str          # a key of _STATES
-    title: str          # "Mail Dobby"
-    detail: str         # "Working · Click ‘Send’ · step 7 · 0:42"
-    color: str          # icon fill (hex)
-    shape: str          # icon glyph: spark, moon, pause, alert, hand, stop, clock
-    own: bool           # the Dobby whose helper draws this menu
-    actions: List[Tuple[str, str]] = field(default_factory=list)  # (title, action key)
+    state: str  # a key of _STATES
+    title: str  # "Mail Dobby"
+    detail: str  # "Working · Click ‘Send’ · step 7 · 0:42"
+    color: str  # icon fill (hex)
+    shape: str  # icon glyph: spark, moon, pause, alert, hand, stop, clock
+    own: bool  # the Dobby whose helper draws this menu
+    actions: list[tuple[str, str]] = field(default_factory=list)  # (title, action key)
 
 
 @dataclass
 class View:
     header: str
     subtitle: str
-    rows: List[Row]
+    rows: list[Row]
     running: int
     working: int
-    attention: bool     # some Dobby is paused, stopped or asks Allow/Deny
-    all_actions: List[Tuple[str, str]] = field(default_factory=list)
-    hidden: int = 0     # rows left out (stopped, cleared or long asleep)
+    attention: bool  # some Dobby is paused, stopped or asks Allow/Deny
+    all_actions: list[tuple[str, str]] = field(default_factory=list)
+    hidden: int = 0  # rows left out (stopped, cleared or long asleep)
 
     def to_dict(self) -> dict:
         """Plain JSON for a native shell (the Swift Dobby.app) to draw as-is."""
         from dataclasses import asdict
 
         d = asdict(self)
-        d["icon_state"], d["icon_title"], d["tooltip"] = icon_state(self), icon_title(self), tooltip(self)
+        d["icon_state"], d["icon_title"], d["tooltip"] = (
+            icon_state(self),
+            icon_title(self),
+            tooltip(self),
+        )
         d["palette"] = dict(PALETTE)
         return d
 
     def signature(self) -> tuple:
         """Changes when the dropdown would look different (rebuild only then)."""
-        return (self.subtitle, tuple((r.pid, r.title, r.detail, r.color, r.shape) for r in self.rows))
+        return (
+            self.subtitle,
+            tuple((r.pid, r.title, r.detail, r.color, r.shape) for r in self.rows),
+        )
 
 
 def _clock(secs: float) -> str:
     secs = max(0, int(secs))
-    return f"{secs // 60}:{secs % 60:02d}" if secs < 3600 else f"{secs // 3600}h {secs % 3600 // 60:02d}m"
+    return (
+        f"{secs // 60}:{secs % 60:02d}"
+        if secs < 3600
+        else f"{secs // 3600}h {secs % 3600 // 60:02d}m"
+    )
 
 
 def _short(text: str, limit: int) -> str:
@@ -321,19 +355,25 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
-def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Mapping[str, object]],
-                own_pid: int = 0, palette: Mapping[str, str] = PALETTE,
-                hiding: Optional[Hiding] = None, now: Optional[float] = None) -> View:
+def topbar_view(
+    agents: Iterable[Mapping[str, object]],
+    states: Mapping[int, Mapping[str, object]],
+    own_pid: int = 0,
+    palette: Mapping[str, str] = PALETTE,
+    hiding: Hiding | None = None,
+    now: float | None = None,
+) -> View:
     """The dropdown: ``agents`` from ``dobby.control.commands.overview``,
     ``states`` from :func:`read_states`. With ``hiding``, stopped, cleared and
-    long-asleep Dobbys are left out (see :class:`Hiding`)."""
+    long-asleep Dobbys are left out (see :class:`Hiding`).
+    """
     now = time.time() if now is None else now
     hidden = 0
     from .style import agent_colors  # pure module
 
     agents = list(agents)
     colors = agent_colors(agents)
-    rows: List[Row] = []
+    rows: list[Row] = []
     for a in agents:
         pid = int(a.get("pid", 0) or 0)
         status = states.get(pid, {})
@@ -354,10 +394,19 @@ def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Map
                 continue
         halted = state in ("paused", "takeover")
         actions = [("Resume" if halted else "Pause", "pause_toggle"), ("Stop", "stop")]
-        rows.append(Row(pid=pid, name=str(a.get("name") or f"Dobby-{pid}"), state=state,
-                        title=_short(str(a.get("name") or f"Dobby-{pid}"), 32),
-                        detail=_detail(state, status), color=color, shape=shape,
-                        own=pid == own_pid, actions=actions))
+        rows.append(
+            Row(
+                pid=pid,
+                name=str(a.get("name") or f"Dobby-{pid}"),
+                state=state,
+                title=_short(str(a.get("name") or f"Dobby-{pid}"), 32),
+                detail=_detail(state, status),
+                color=color,
+                shape=shape,
+                own=pid == own_pid,
+                actions=actions,
+            )
+        )
     rows.sort(key=lambda r: (_ORDER.index(r.state), r.name.lower(), r.pid))
     running = len(rows)
     working = sum(r.state in ("working", "awake") for r in rows)
@@ -379,16 +428,28 @@ def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Map
         subtitle = " · ".join(bits)
     if hidden:
         subtitle += f" · {hidden} hidden"
-    all_actions: List[Tuple[str, str]] = []
+    all_actions: list[tuple[str, str]] = []
     if running > 1:
-        all_actions = [("Pause all", "pause_all"), ("Resume all", "resume_all"), ("Stop all", "stop_all")]
+        all_actions = [
+            ("Pause all", "pause_all"),
+            ("Resume all", "resume_all"),
+            ("Stop all", "stop_all"),
+        ]
     if hiding is not None:
         if any(r.state in _FINISHED_STATES for r in rows):
             all_actions.append(("Clear finished", "clear_finished"))
         if hidden:
             all_actions.append((f"Show {hidden} hidden", "show_hidden"))
-    return View(header="Dobby", subtitle=subtitle, rows=rows, running=running, working=working,
-                attention=attention, all_actions=all_actions, hidden=hidden)
+    return View(
+        header="Dobby",
+        subtitle=subtitle,
+        rows=rows,
+        running=running,
+        working=working,
+        attention=attention,
+        all_actions=all_actions,
+        hidden=hidden,
+    )
 
 
 def icon_state(view: View) -> str:
@@ -410,31 +471,42 @@ def tooltip(view: View) -> str:
 
 
 # ------------------------------------------------------------- icons
-def _rgba(hex_color: str, alpha: int = 255) -> Tuple[int, int, int, int]:
+def _rgba(hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
     h = hex_color.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha
 
 
 # Pointer and spark (same geometry as apps/macos/Sources/Dobby/Icons.swift),
 # in an 18 x 18 box, y down.
-_POINTER = [(3.6, 2.6), (3.6, 14.2), (6.5, 11.4), (8.6, 15.9), (10.7, 15.0), (8.7, 10.6), (12.8, 10.6)]
+_POINTER = [
+    (3.6, 2.6),
+    (3.6, 14.2),
+    (6.5, 11.4),
+    (8.6, 15.9),
+    (10.7, 15.0),
+    (8.7, 10.6),
+    (12.8, 10.6),
+]
 _SPARK_C, _SPARK_R = (14.0, 3.8), 2.9
 _DOT_C, _DOT_R, _DOT_RING = (14.6, 14.4), 3.0, 1.2
 
 
-def _spark_points(cx: float, cy: float, r: float, steps: int = 10) -> List[Tuple[float, float]]:
+def _spark_points(cx: float, cy: float, r: float, steps: int = 10) -> list[tuple[float, float]]:
     """A pinched four-point star: tips joined by quadratic curves whose
-    control points sit at centre ± 0.16·r."""
+    control points sit at centre ± 0.16·r.
+    """
     tips = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
     k = 0.16 * r
     ctrls = [(cx + k, cy - k), (cx + k, cy + k), (cx - k, cy + k), (cx - k, cy - k)]
-    pts: List[Tuple[float, float]] = []
+    pts: list[tuple[float, float]] = []
     for i in range(4):
         (x0, y0), (x1, y1), (qx, qy) = tips[i], tips[(i + 1) % 4], ctrls[i]
         for j in range(steps):
             t = j / steps
             u = 1 - t
-            pts.append((u * u * x0 + 2 * u * t * qx + t * t * x1, u * u * y0 + 2 * u * t * qy + t * t * y1))
+            pts.append(
+                (u * u * x0 + 2 * u * t * qx + t * t * x1, u * u * y0 + 2 * u * t * qy + t * t * y1)
+            )
     return pts
 
 
@@ -451,7 +523,9 @@ def _mark(d, s: float, pointer, spark, spark_shown: bool = True) -> None:
         d.polygon(_spark_points(_SPARK_C[0] * k, _SPARK_C[1] * k, _SPARK_R * k), fill=spark)
 
 
-def render_icon(state: str, size: int = 36, dark: bool = False, template: bool = False, count: int = 0):
+def render_icon(
+    state: str, size: int = 36, dark: bool = False, template: bool = False, count: int = 0
+):
     """The top-bar icon as a Pillow RGBA image (``size`` px square).
 
     ``template``: plain black (macOS tints it to the menu bar). Otherwise the
@@ -474,10 +548,16 @@ def render_icon(state: str, size: int = 36, dark: bool = False, template: bool =
         spark = _rgba(PALETTE["accent_dark"] if dark else PALETTE["accent"])
     _mark(d, s, pointer, spark, spark_shown=count <= 1)
     if state in ("working", "attention"):
-        dot = (0, 0, 0, 255) if template else _rgba(PALETTE["caution"] if state == "attention" else PALETTE["ok"])
+        dot = (
+            (0, 0, 0, 255)
+            if template
+            else _rgba(PALETTE["caution"] if state == "attention" else PALETTE["ok"])
+        )
         cx, cy, r, ring = _DOT_C[0] * k, _DOT_C[1] * k, _DOT_R * k, _DOT_RING * k
         clear = Image.new("L", (s, s), 0)
-        ImageDraw.Draw(clear).ellipse([cx - r - ring, cy - r - ring, cx + r + ring, cy + r + ring], fill=255)
+        ImageDraw.Draw(clear).ellipse(
+            [cx - r - ring, cy - r - ring, cx + r + ring, cy + r + ring], fill=255
+        )
         img.paste((0, 0, 0, 0), (0, 0), clear)  # clear the ring first
         d = ImageDraw.Draw(img)
         d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=dot)
@@ -503,14 +583,15 @@ _APP_K, _APP_OFF = 1024 / 18 * 0.72, (225, 156)
 _TILE_RADIUS = 186 / 824
 
 
-def _tile_xy(x: float, y: float, s: float) -> Tuple[float, float]:
+def _tile_xy(x: float, y: float, s: float) -> tuple[float, float]:
     return ((_APP_OFF[0] + x * _APP_K - 100) / 824 * s, (_APP_OFF[1] + y * _APP_K - 100) / 824 * s)
 
 
 def render_tile_icon(state: str, size: int = 44, count: int = 0):
     """The tray icon as a small Dobby.app tile: a rounded violet square with a
     white pointer and a gold spark, square like the Claude app's chips. Reads on
-    light and dark panels alike. Status dot and count badge as in :func:`render_icon`."""
+    light and dark panels alike. Status dot and count badge as in :func:`render_icon`.
+    """
     from PIL import Image, ImageDraw
 
     scale = 4
@@ -518,7 +599,9 @@ def render_tile_icon(state: str, size: int = 44, count: int = 0):
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     mask = Image.new("L", (s, s), 0)
     inset = s * 0.03
-    ImageDraw.Draw(mask).rounded_rectangle([inset, inset, s - inset, s - inset], radius=_TILE_RADIUS * s, fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [inset, inset, s - inset, s - inset], radius=_TILE_RADIUS * s, fill=255
+    )
     img.paste(_gradient(s, "#8E70FF", "#4A2FC8"), (0, 0), mask)
     d = ImageDraw.Draw(img)
     poly = [_tile_xy(x, y, s) for x, y in _POINTER]
@@ -547,7 +630,7 @@ def render_tile_icon(state: str, size: int = 44, count: int = 0):
     return img.resize((size, size), Image.LANCZOS)
 
 
-def _badge_text(d, centre: Tuple[float, float], r: float, text: str, color) -> None:
+def _badge_text(d, centre: tuple[float, float], r: float, text: str, color) -> None:
     from PIL import ImageFont
 
     try:
@@ -574,13 +657,26 @@ def _glyph(d, shape: str, s: float, color) -> None:
     c = s / 2
     if shape == "spark":  # four-point star
         a, b = s * 0.26, s * 0.07
-        d.polygon([(c, c - a), (c + b, c - b), (c + a, c), (c + b, c + b),
-                   (c, c + a), (c - b, c + b), (c - a, c), (c - b, c - b)], fill=color)
+        d.polygon(
+            [
+                (c, c - a),
+                (c + b, c - b),
+                (c + a, c),
+                (c + b, c + b),
+                (c, c + a),
+                (c - b, c + b),
+                (c - a, c),
+                (c - b, c - b),
+            ],
+            fill=color,
+        )
     elif shape == "moon":
         r = s * 0.22
         d.ellipse([c - r, c - r, c + r, c + r], fill=color)
         off = s * 0.11
-        d.ellipse([c - r + off, c - r - off * 0.6, c + r + off, c + r - off * 0.6], fill=(0, 0, 0, 0))
+        d.ellipse(
+            [c - r + off, c - r - off * 0.6, c + r + off, c + r - off * 0.6], fill=(0, 0, 0, 0)
+        )
     elif shape == "pause":
         w, h = s * 0.08, s * 0.22
         for x in (c - s * 0.08, c + s * 0.08):
@@ -590,16 +686,30 @@ def _glyph(d, shape: str, s: float, color) -> None:
         d.rounded_rectangle([c - a, c - a, c + a, c + a], radius=s * 0.04, fill=color)
     elif shape == "alert":
         w = s * 0.08
-        d.rounded_rectangle([c - w / 2, c - s * 0.24, c + w / 2, c + s * 0.06], radius=w / 2, fill=color)
+        d.rounded_rectangle(
+            [c - w / 2, c - s * 0.24, c + w / 2, c + s * 0.06], radius=w / 2, fill=color
+        )
         d.ellipse([c - w * 0.6, c + s * 0.13, c + w * 0.6, c + s * 0.13 + w * 1.2], fill=color)
     elif shape == "hand":  # an open palm: four fingers and a thumb
-        d.rounded_rectangle([c - s * 0.16, c - s * 0.02, c + s * 0.14, c + s * 0.24], radius=s * 0.08, fill=color)
+        d.rounded_rectangle(
+            [c - s * 0.16, c - s * 0.02, c + s * 0.14, c + s * 0.24], radius=s * 0.08, fill=color
+        )
         for i, x in enumerate((-0.13, -0.05, 0.03, 0.11)):
             top = c - s * (0.2 if i in (1, 2) else 0.15)
-            d.rounded_rectangle([c + s * x - s * 0.03, top, c + s * x + s * 0.03, c + s * 0.05],
-                                radius=s * 0.03, fill=color)
-        d.polygon([(c - s * 0.16, c + s * 0.06), (c - s * 0.27, c - s * 0.04), (c - s * 0.22, c - s * 0.08),
-                   (c - s * 0.12, c)], fill=color)
+            d.rounded_rectangle(
+                [c + s * x - s * 0.03, top, c + s * x + s * 0.03, c + s * 0.05],
+                radius=s * 0.03,
+                fill=color,
+            )
+        d.polygon(
+            [
+                (c - s * 0.16, c + s * 0.06),
+                (c - s * 0.27, c - s * 0.04),
+                (c - s * 0.22, c - s * 0.08),
+                (c - s * 0.12, c),
+            ],
+            fill=color,
+        )
     elif shape == "clock":
         r, w = s * 0.2, max(1.0, s * 0.05)
         d.ellipse([c - r, c - r, c + r, c + r], outline=color, width=int(w))
@@ -615,14 +725,16 @@ def render_row_icon(color: str, shape: str, size: int = 52, filled: bool = True)
     s = size * scale
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([0, 0, s - 1, s - 1], radius=s * 0.28, fill=_rgba(color, 255 if filled else 90))
+    d.rounded_rectangle(
+        [0, 0, s - 1, s - 1], radius=s * 0.28, fill=_rgba(color, 255 if filled else 90)
+    )
     glyph = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     _glyph(ImageDraw.Draw(glyph), shape, s, (255, 255, 255, 255))
     img.alpha_composite(glyph)
     return img.resize((size, size), Image.LANCZOS)
 
 
-def icon_file(kind: str, *parts: object, render=None, directory: str = ICON_DIR) -> Optional[str]:
+def icon_file(kind: str, *parts: object, render=None, directory: str = ICON_DIR) -> str | None:
     """Render once to ``<directory>/<kind>-<parts>.png`` and return its path.
 
     The name changes with the content, which AppIndicator needs (it caches
@@ -643,27 +755,55 @@ def icon_file(kind: str, *parts: object, render=None, directory: str = ICON_DIR)
         return None
 
 
-def bar_icon_path(state: str, size: int = 36, dark: bool = False, template: bool = False,
-                  count: int = 0, directory: str = ICON_DIR) -> Optional[str]:
+def bar_icon_path(
+    state: str,
+    size: int = 36,
+    dark: bool = False,
+    template: bool = False,
+    count: int = 0,
+    directory: str = ICON_DIR,
+) -> str | None:
     # "bar-ps": pointer and spark. A new look needs a new file name (icons are cached).
-    return icon_file("bar-ps", state, size, "dark" if dark else "light", "t" if template else "c",
-                     min(count, 10) if count > 1 else 0,
-                     render=lambda: render_icon(state, size, dark, template, count), directory=directory)
+    return icon_file(
+        "bar-ps",
+        state,
+        size,
+        "dark" if dark else "light",
+        "t" if template else "c",
+        min(count, 10) if count > 1 else 0,
+        render=lambda: render_icon(state, size, dark, template, count),
+        directory=directory,
+    )
 
 
-def tray_icon_path(state: str, size: int = 44, count: int = 0, directory: str = ICON_DIR) -> Optional[str]:
+def tray_icon_path(
+    state: str, size: int = 44, count: int = 0, directory: str = ICON_DIR
+) -> str | None:
     """The Linux tray's tile icon (see :func:`render_tile_icon`)."""
-    return icon_file("tray-tile", state, size, min(count, 10) if count > 1 else 0,
-                     render=lambda: render_tile_icon(state, size, count), directory=directory)
+    return icon_file(
+        "tray-tile",
+        state,
+        size,
+        min(count, 10) if count > 1 else 0,
+        render=lambda: render_tile_icon(state, size, count),
+        directory=directory,
+    )
 
 
-def row_icon_path(color: str, shape: str, size: int = 52, directory: str = ICON_DIR) -> Optional[str]:
-    return icon_file("row-sq", color, shape, size, render=lambda: render_row_icon(color, shape, size),
-                     directory=directory)
+def row_icon_path(color: str, shape: str, size: int = 52, directory: str = ICON_DIR) -> str | None:
+    return icon_file(
+        "row-sq",
+        color,
+        shape,
+        size,
+        render=lambda: render_row_icon(color, shape, size),
+        directory=directory,
+    )
 
 
-def dobby_mode(*, paused: bool, takeover: bool, confirming: bool, stopped: bool, working: bool,
-               awake: bool) -> str:
+def dobby_mode(
+    *, paused: bool, takeover: bool, confirming: bool, stopped: bool, working: bool, awake: bool
+) -> str:
     """The helper's own mode for :func:`publish`."""
     if confirming:
         return "confirm"
@@ -681,7 +821,24 @@ def dobby_mode(*, paused: bool, takeover: bool, confirming: bool, stopped: bool,
 
 
 __all__: Sequence[str] = (
-    "PALETTE", "STATUS_DIR", "HIDDEN_PATH", "Hiding", "finished_pids", "menu_action", "Row", "View", "publish", "clear", "read_states", "topbar_view",
-    "icon_state", "icon_title", "tooltip", "render_icon", "render_row_icon", "bar_icon_path",
-    "row_icon_path", "dobby_mode",
+    "HIDDEN_PATH",
+    "PALETTE",
+    "STATUS_DIR",
+    "Hiding",
+    "Row",
+    "View",
+    "bar_icon_path",
+    "clear",
+    "dobby_mode",
+    "finished_pids",
+    "icon_state",
+    "icon_title",
+    "menu_action",
+    "publish",
+    "read_states",
+    "render_icon",
+    "render_row_icon",
+    "row_icon_path",
+    "tooltip",
+    "topbar_view",
 )

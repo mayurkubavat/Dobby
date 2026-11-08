@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 # Tools a plan may call, and the toolset domain each needs enabled on the server.
 # Read-only perception tools are called by the runner itself, not by plans.
-ACTION_TOOLS: Dict[str, str] = {
+ACTION_TOOLS: dict[str, str] = {
     "click": "core",
     "find_and_click": "core",
     "type_text": "core",
@@ -27,10 +27,18 @@ ACTION_TOOLS: Dict[str, str] = {
 class Expect(BaseModel):
     """What must be true after a step. Checked cheapest first."""
 
-    text: List[str] = Field(default_factory=list, description="OCR text that must be on screen (Tier 0).")
-    text_absent: List[str] = Field(default_factory=list, description="OCR text that must not be on screen.")
-    question: Optional[str] = Field(default=None, description="Yes/no question for Gemma when text is not enough.")
-    allow_dialog: bool = Field(default=False, description="A new dialog after this step is expected.")
+    text: list[str] = Field(
+        default_factory=list, description="OCR text that must be on screen (Tier 0)."
+    )
+    text_absent: list[str] = Field(
+        default_factory=list, description="OCR text that must not be on screen."
+    )
+    question: str | None = Field(
+        default=None, description="Yes/no question for Gemma when text is not enough."
+    )
+    allow_dialog: bool = Field(
+        default=False, description="A new dialog after this step is expected."
+    )
 
     @field_validator("text", "text_absent", mode="before")
     @classmethod
@@ -45,23 +53,27 @@ class Expect(BaseModel):
 class Step(BaseModel):
     id: str = ""
     tool: str
-    args: Dict[str, Any] = Field(default_factory=dict)
+    args: dict[str, Any] = Field(default_factory=dict)
     expect: Expect = Field(default_factory=Expect)
     settle_ms: int = 400
-    retries: int = Field(default=2, description="Extra observe-and-check rounds before escalating. Never re-acts.")
+    retries: int = Field(
+        default=2, description="Extra observe-and-check rounds before escalating. Never re-acts."
+    )
 
     @field_validator("tool")
     @classmethod
     def _known(cls, v: str) -> str:
         if v not in ACTION_TOOLS:
-            raise ValueError(f"tool {v!r} is not allowed in a plan; allowed: {sorted(ACTION_TOOLS)}")
+            raise ValueError(
+                f"tool {v!r} is not allowed in a plan; allowed: {sorted(ACTION_TOOLS)}"
+            )
         return v
 
 
 class Plan(BaseModel):
     name: str = "plan"
     goal: str = ""
-    steps: List[Step]
+    steps: list[Step]
 
     def model_post_init(self, _ctx: Any) -> None:
         for i, step in enumerate(self.steps):
@@ -69,9 +81,9 @@ class Plan(BaseModel):
                 step.id = f"s{i + 1}"
 
     @property
-    def domains(self) -> List[str]:
+    def domains(self) -> list[str]:
         return sorted({ACTION_TOOLS[s.tool] for s in self.steps} - {"core"})
 
     @classmethod
-    def load(cls, path: str | Path) -> "Plan":
+    def load(cls, path: str | Path) -> Plan:
         return cls.model_validate(json.loads(Path(path).read_text(encoding="utf-8")))

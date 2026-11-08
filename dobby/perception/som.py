@@ -1,9 +1,9 @@
 """Set-of-Marks (SoM) visual badge and bounding box overlay generator."""
 
-from typing import List, Tuple, Dict
 from PIL import Image, ImageDraw, ImageFont
-from dobby.types import UIElement
+
 from dobby.config import CONFIG
+from dobby.types import UIElement
 
 # Vibrant badge color palette for high contrast across dark and light themes
 PALETTE = [
@@ -34,7 +34,7 @@ class SetOfMarksGenerator:
                 try:
                     self._font = ImageFont.truetype(font_path, font_size)
                     break
-                except IOError:
+                except OSError:
                     continue
         except Exception:
             self._font = None
@@ -45,11 +45,10 @@ class SetOfMarksGenerator:
     def annotate(
         self,
         image: Image.Image,
-        elements: List[UIElement],
+        elements: list[UIElement],
         scale_factor: float = 1.0,
-    ) -> Tuple[Image.Image, Dict[int, UIElement]]:
-        """
-        Draws bounding boxes and numeric ID badges on the image.
+    ) -> tuple[Image.Image, dict[int, UIElement]]:
+        """Draws bounding boxes and numeric ID badges on the image.
 
         Args:
             image: PIL image (may be scaled down).
@@ -63,7 +62,7 @@ class SetOfMarksGenerator:
         overlay = Image.new("RGBA", annotated.size, (255, 255, 255, 0))
         draw = ImageDraw.Draw(overlay)
 
-        mark_mapping: Dict[int, UIElement] = {}
+        mark_mapping: dict[int, UIElement] = {}
 
         for idx, elem in enumerate(elements):
             mark_id = idx + 1

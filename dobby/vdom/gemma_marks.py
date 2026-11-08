@@ -1,5 +1,4 @@
-"""
-Set-of-Marks labeling with local Gemma.
+"""Set-of-Marks labeling with local Gemma.
 
 Geometry comes from AT-SPI, the ONNX detector or CV contours. Gemma only sees
 the crop with numbered boxes drawn on it and answers with mark numbers:
@@ -17,19 +16,20 @@ from __future__ import annotations
 import logging
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
 from dobby.config import CONFIG
-from dobby.gemma.prompts import get_prompt
 from dobby.gemma.client import GemmaClient, GemmaError, encode_image
+from dobby.gemma.prompts import get_prompt
 from dobby.types import UIRole
 
 logger = logging.getLogger(__name__)
 
 # Relative box inside the crop: (x, y, w, h)
-Box = Tuple[int, int, int, int]
+Box = tuple[int, int, int, int]
 
 LABEL_ROLES = [
     UIRole.ICON_BUTTON.value,
@@ -47,7 +47,7 @@ LABEL_ROLES = [
     UIRole.SCHEMATIC_NET.value,
 ]
 
-_LABEL_SCHEMA: Dict[str, Any] = {
+_LABEL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "labels": {
@@ -66,7 +66,7 @@ _LABEL_SCHEMA: Dict[str, Any] = {
     "required": ["labels"],
 }
 
-_FIND_SCHEMA: Dict[str, Any] = {
+_FIND_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "mark": {"type": ["integer", "null"]},
@@ -92,9 +92,10 @@ def _font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def draw_marks(image: Image.Image, boxes: Sequence[Box], max_side: int, labels: Optional[Sequence[str]] = None) -> Image.Image:
-    """
-    Downscales ``image`` to ``max_side`` and draws numbered boxes (1-based, in
+def draw_marks(
+    image: Image.Image, boxes: Sequence[Box], max_side: int, labels: Sequence[str] | None = None
+) -> Image.Image:
+    """Downscales ``image`` to ``max_side`` and draws numbered boxes (1-based, in
     ``boxes`` order), or the given ``labels`` (e.g. letters for a logprob choice).
     Badges are drawn after the downscale so they stay legible.
     """
@@ -124,7 +125,14 @@ def _patch_dhash(image: Image.Image, box: Box) -> int:
 
     x, y, w, h = box
     pad = 3
-    crop = image.crop((max(0, x - pad), max(0, y - pad), min(image.width, x + w + pad), min(image.height, y + h + pad)))
+    crop = image.crop(
+        (
+            max(0, x - pad),
+            max(0, y - pad),
+            min(image.width, x + w + pad),
+            min(image.height, y + h + pad),
+        )
+    )
     return compute_dhash(crop)
 
 
@@ -134,10 +142,10 @@ class MarkLabelCache:
     def __init__(self, capacity: int = 2048, threshold: int = 4) -> None:
         self.capacity = capacity
         self.threshold = threshold
-        self._entries: "OrderedDict[Tuple[str, int], Tuple[str, str]]" = OrderedDict()
+        self._entries: OrderedDict[tuple[str, int], tuple[str, str]] = OrderedDict()
         self._lock = threading.Lock()
 
-    def get(self, app_key: str, dhash: int) -> Optional[Tuple[str, str]]:
+    def get(self, app_key: str, dhash: int) -> tuple[str, str] | None:
         with self._lock:
             exact = self._entries.get((app_key, dhash))
             if exact is not None:
@@ -165,10 +173,10 @@ class GemmaMarkLabeler:
     def __init__(
         self,
         client: GemmaClient,
-        vision_model: Optional[str] = None,
+        vision_model: str | None = None,
         max_side: int = CONFIG.gemma3_visual_max_side,
         max_marks: int = CONFIG.gemma3_max_marks,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> None:
         self.client = client
         self._vision_model = vision_model
@@ -184,14 +192,15 @@ class GemmaMarkLabeler:
 
         return self._vision_model or model_for("vision")
 
-    def label_marks(self, image: Image.Image, boxes: Sequence[Box], app_key: str = "default") -> Dict[int, Dict[str, str]]:
-        """
-        Returns ``{index_in_boxes: {"label", "role"}}`` for boxes Gemma could
+    def label_marks(
+        self, image: Image.Image, boxes: Sequence[Box], app_key: str = "default"
+    ) -> dict[int, dict[str, str]]:
+        """Returns ``{index_in_boxes: {"label", "role"}}`` for boxes Gemma could
         name. Cached patches are answered without a call; at most ``max_marks``
         uncached boxes are sent per call. Returns what it has on failure.
         """
-        results: Dict[int, Dict[str, str]] = {}
-        pending: List[Tuple[int, Box, int]] = []
+        results: dict[int, dict[str, str]] = {}
+        pending: list[tuple[int, Box, int]] = []
         for i, box in enumerate(boxes):
             if box[2] < 4 or box[3] < 4:
                 continue
@@ -235,15 +244,21 @@ class GemmaMarkLabeler:
                 self.cache.put(app_key, dh, label, role)
         return results
 
-    def find_mark(self, image: Image.Image, boxes: Sequence[Box], description: str) -> Dict[str, Any]:
-        """
-        Picks the box matching ``description``. Returns
+    def find_mark(
+        self, image: Image.Image, boxes: Sequence[Box], description: str
+    ) -> dict[str, Any]:
+        """Picks the box matching ``description``. Returns
         ``{"index": int|None, "confidence", "reason", "source"}`` where index is
         into ``boxes``; None when nothing matches or Gemma fails.
         """
         boxes = list(boxes)[: self.max_marks]
         if not boxes or not description.strip():
-            return {"index": None, "confidence": 0.0, "reason": "no candidates", "source": "fallback"}
+            return {
+                "index": None,
+                "confidence": 0.0,
+                "reason": "no candidates",
+                "source": "fallback",
+            }
         marked = draw_marks(image, boxes, self.max_side)
         spec = get_prompt("mark_find")
         system = spec.system
@@ -258,12 +273,27 @@ class GemmaMarkLabeler:
                 max_tokens=spec.max_tokens,
             )
         except GemmaError as e:
-            return {"index": None, "confidence": 0.0, "reason": f"Gemma unavailable: {e}", "source": "fallback"}
+            return {
+                "index": None,
+                "confidence": 0.0,
+                "reason": f"Gemma unavailable: {e}",
+                "source": "fallback",
+            }
         mark = data.get("mark")
         try:
             confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
         except (TypeError, ValueError):
             confidence = 0.0
         if not isinstance(mark, int) or not (1 <= mark <= len(boxes)):
-            return {"index": None, "confidence": confidence, "reason": str(data.get("reason", "")), "source": "gemma"}
-        return {"index": mark - 1, "confidence": confidence, "reason": str(data.get("reason", "")), "source": "gemma"}
+            return {
+                "index": None,
+                "confidence": confidence,
+                "reason": str(data.get("reason", "")),
+                "source": "gemma",
+            }
+        return {
+            "index": mark - 1,
+            "confidence": confidence,
+            "reason": str(data.get("reason", "")),
+            "source": "gemma",
+        }

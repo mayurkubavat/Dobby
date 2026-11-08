@@ -11,9 +11,14 @@ import sys
 def main() -> int:
     ap = argparse.ArgumentParser(prog="python -m dobby.adk", description=__doc__)
     ap.add_argument("plan", help="plan JSON file (see dobby/adk/plan.py)")
-    ap.add_argument("--in-process", action="store_true",
-                    help="call the tools in this process instead of starting the MCP server (for cassettes: DESKTOP_HAL=replay)")
-    ap.add_argument("--model", help="LiteLLM model id for the judges (default ollama_chat/<gemma3_text_model>)")
+    ap.add_argument(
+        "--in-process",
+        action="store_true",
+        help="call the tools in this process instead of starting the MCP server (for cassettes: DESKTOP_HAL=replay)",
+    )
+    ap.add_argument(
+        "--model", help="LiteLLM model id for the judges (default ollama_chat/<gemma3_text_model>)"
+    )
     ap.add_argument("--json", action="store_true", help="print the full report as JSON")
     args = ap.parse_args()
 
@@ -40,9 +45,14 @@ def main() -> int:
         print(json.dumps(report, indent=1, default=str))
     else:
         for row in report.get("steps", []):
-            print(f"{row['id']:<6} {row['tool']:<20} {row.get('status', '?'):<8} {row.get('tier', ''):<13} "
-                  f"{row.get('ms', 0):>6} ms  {row.get('detail') or (row.get('verdict') or {}).get('evidence', '')}")
-        print(f"\n{report.get('status')}" + (f": {report.get('reason')}" if report.get("reason") else ""))
+            print(
+                f"{row['id']:<6} {row['tool']:<20} {row.get('status', '?'):<8} {row.get('tier', ''):<13} "
+                f"{row.get('ms', 0):>6} ms  {row.get('detail') or (row.get('verdict') or {}).get('evidence', '')}"
+            )
+        print(
+            f"\n{report.get('status')}"
+            + (f": {report.get('reason')}" if report.get("reason") else "")
+        )
     return 0 if report.get("status") == "done" else 1
 
 

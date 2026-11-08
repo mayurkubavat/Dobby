@@ -30,4 +30,6 @@ def test_linux_allows_only_virtual_displays(tmp_path):
 
 
 def test_explicit_off_forces_guard():
-    assert not live_desktop_allowed({"DOBBY_LIVE_DESKTOP_TESTS": "0", "DOBBY_REPLAY": "1"}, platform="darwin")
+    assert not live_desktop_allowed(
+        {"DOBBY_LIVE_DESKTOP_TESTS": "0", "DOBBY_REPLAY": "1"}, platform="darwin"
+    )

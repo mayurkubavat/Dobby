@@ -1,6 +1,7 @@
 """Gemma prompt pack: registry, overrides, three-valued answers, OCR-checked evidence."""
 
-from PIL import Image
+from PIL import Image, ImageDraw
+from test_gemma3_sidecar import FakeOllama
 
 from dobby.gemma.client import GemmaClient
 from dobby.gemma.prompts import (
@@ -12,10 +13,6 @@ from dobby.gemma.prompts import (
     yes_no_user,
 )
 from dobby.vdom.gemma3_sidecar import Gemma3Grounder
-
-from test_gemma3_sidecar import FakeOllama
-
-from PIL import ImageDraw
 
 IMG = Image.new("RGB", (200, 100), (240, 240, 240))
 ImageDraw.Draw(IMG).rectangle([20, 20, 120, 60], fill=(30, 30, 30))  # not blank
@@ -36,7 +33,18 @@ def _ask(reply, ocr=None):
 
 
 def test_registry_has_every_gemma_call():
-    assert set(PROMPTS) == {"yes_no", "modal_triage", "mark_label", "mark_find", "ground_roi", "compress_history", "adk_verifier", "adk_triage", "yes_no_logprob", "decide_choice"}
+    assert set(PROMPTS) == {
+        "yes_no",
+        "modal_triage",
+        "mark_label",
+        "mark_find",
+        "ground_roi",
+        "compress_history",
+        "adk_verifier",
+        "adk_triage",
+        "yes_no_logprob",
+        "decide_choice",
+    }
     assert get_prompt("yes_no", prompt_dir="").tag == "yes_no@4"
     assert all(p["system"] for p in list_prompts())
 
@@ -77,7 +85,12 @@ def test_unsure_is_none_not_a_guess():
 
 def test_text_evidence_confirmed_by_ocr_keeps_confidence():
     res, fake = _ask(
-        {"answer": "yes", "confidence": 0.93, "evidence_type": "text", "evidence": "Synthesis Completed"},
+        {
+            "answer": "yes",
+            "confidence": 0.93,
+            "evidence_type": "text",
+            "evidence": "Synthesis Completed",
+        },
         ocr=["Synthesis Completed", "OK"],
     )
     assert res["answer"] is True and res["evidence_verified"] is True and res["confidence"] == 0.93
@@ -86,7 +99,12 @@ def test_text_evidence_confirmed_by_ocr_keeps_confidence():
 
 def test_hallucinated_text_evidence_is_capped():
     res, _ = _ask(
-        {"answer": "yes", "confidence": 0.95, "evidence_type": "text", "evidence": "Synthesis Completed"},
+        {
+            "answer": "yes",
+            "confidence": 0.95,
+            "evidence_type": "text",
+            "evidence": "Synthesis Completed",
+        },
         ocr=["Running synth_design", "Cancel"],
     )
     assert res["answer"] is True and res["evidence_verified"] is False
@@ -95,7 +113,12 @@ def test_hallucinated_text_evidence_is_capped():
 
 def test_visual_evidence_is_not_checked():
     res, _ = _ask(
-        {"answer": "no", "confidence": 0.8, "evidence_type": "visual", "evidence": "red status icon"},
+        {
+            "answer": "no",
+            "confidence": 0.8,
+            "evidence_type": "visual",
+            "evidence": "red status icon",
+        },
         ocr=["Status"],
     )
     assert res["answer"] is False and res["evidence_verified"] is None and res["confidence"] == 0.8
@@ -107,7 +130,11 @@ def test_bad_answer_falls_back():
 
 
 def test_verify_only_does_not_show_ocr_to_gemma():
-    fake = FakeOllama(replies=[{"answer": "yes", "confidence": 0.95, "evidence_type": "text", "evidence": "Saved"}])
+    fake = FakeOllama(
+        replies=[
+            {"answer": "yes", "confidence": 0.95, "evidence_type": "text", "evidence": "Saved"}
+        ]
+    )
     g = Gemma3Grounder(client=GemmaClient(transport=fake))
     res = g.ask_yes_no(IMG, "Was it saved?", verify_lines=["Unsaved changes"])
     assert "OCR text" not in fake.chat_calls[0]["messages"][1]["content"]
@@ -130,7 +157,16 @@ def test_ask_screen_verifies_with_ocr_by_default():
         def _recognize(self, image):
             return [OCRLine("Simulation finished", 10, 10, 150, 20, 0.97)]
 
-    fake = FakeOllama(replies=[{"answer": "yes", "confidence": 0.9, "evidence_type": "text", "evidence": "Simulation finished"}])
+    fake = FakeOllama(
+        replies=[
+            {
+                "answer": "yes",
+                "confidence": 0.9,
+                "evidence_type": "text",
+                "evidence": "Simulation finished",
+            }
+        ]
+    )
     hal = MagicMock()
     hal.get_active_window.return_value = None
     hal.capture_screen.return_value = IMG

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+import dobby.server as server
 from dobby.agent_loop.bicameral import BicameralStepController, VerificationTier
 from dobby.agent_loop.cache import ActionCache
 from dobby.crystallization.trace_compiler import TraceCompiler, replay_macro
@@ -24,10 +25,8 @@ from dobby.types import (
     DisplayMetrics,
     DisplayTopology,
     RelationalAnchor,
-    WindowInfo,
     logical_to_backing,
 )
-import dobby.server as server
 
 
 def test_logical_points_survive_retina_scale():
@@ -38,7 +37,9 @@ def test_logical_points_survive_retina_scale():
 def test_window_clip_keeps_display_left_of_origin():
     class _Hal:
         topology = DisplayTopology(
-            displays=[DisplayMetrics(display_id="left", origin=(-1920, 0), size=(1920, 1080), scale=1.0)],
+            displays=[
+                DisplayMetrics(display_id="left", origin=(-1920, 0), size=(1920, 1080), scale=1.0)
+            ],
             primary_id="left",
         )
 
@@ -58,7 +59,9 @@ def test_cassette_transition_must_match(tmp_path: Path):
         ScreenFrameState(frame_id="pre", ocr_boxes=[{"text": "Run"}]),
         ScreenFrameState(frame_id="post", ocr_boxes=[{"text": "Done"}]),
     ]
-    good = Transition("pre", "mouse_click", {"x": 10, "y": 12, "button": "left", "click_count": 1}, "post")
+    good = Transition(
+        "pre", "mouse_click", {"x": 10, "y": 12, "button": "left", "click_count": 1}, "post"
+    )
     hal = MockReplayHAL(states=frames, transitions=[good])
     hal.mouse_click(10, 12)
     assert hal.current_state.frame_id == "post"
@@ -147,7 +150,12 @@ def test_default_screenshot_is_marks_not_pixels():
         "mime_type": "image/jpeg",
         "image_base64": "abc",
         "marks": [
-            {"id": 1, "role": "push_button", "name": "Run", "bbox": {"x": 4, "y": 6, "width": 10, "height": 8}}
+            {
+                "id": 1,
+                "role": "push_button",
+                "name": "Run",
+                "bbox": {"x": 4, "y": 6, "width": 10, "height": 8},
+            }
         ],
     }
     res = server._screenshot_summary(payload, include_image=False)
