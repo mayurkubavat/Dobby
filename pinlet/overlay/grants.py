@@ -240,6 +240,36 @@ class AppGrants:
         raise AppBlocked(app, action, None, asked=True)
 
 
+def remember(app: str, tier: str = FULL, path: Path | None = None) -> Path:
+    """Saves ``app`` at ``tier`` in ``apps.json`` ("Always allow in this app").
+
+    Other rules and keys in the file are kept; the write is atomic and private.
+
+    Returns:
+        The path of the rules file.
+    """
+    if tier not in TIERS:
+        raise ValueError(f"unknown tier {tier!r}")
+    path = Path(path) if path is not None else DEFAULT_PATH
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    apps = data.get("apps") if isinstance(data.get("apps"), dict) else {}
+    for key in [k for k in apps if normalize(k) == normalize(app)]:
+        del apps[key]
+    apps[app] = tier
+    data["apps"] = apps
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+    return path
+
+
 def access_detail(app: str) -> str:
     """The second line of the "Let Pinlet use …?" prompt."""
     base = f"Pinlet can click and type in {app} until this session ends. Stop it any time from the bar."

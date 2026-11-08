@@ -21,6 +21,13 @@ The first public release will be 0.1.0. It contains:
 - `pinlet doctor` (`--json`): checks Python, packages, the launcher, the model,
   the skills, the shared Pinlet and each AI tool, with a fix for each problem.
 - `pinlet setup --repair`, `--remove` and `--json` (and `--list --json`).
+- A missed Allow/Deny no longer turns into Deny after 30 s while Pinlet.app
+  runs: the card hands it to the menu, where it waits with Allow and Deny for
+  up to `PINLET_PROMPT_HOLD` seconds (default 300). "Let Pinlet use …?" cards
+  and menu rows offer "Always allow in …", saved in `~/.pinlet/apps.json`.
+- Pinlet.app: the menu bar icon breathes while a Pinlet works (not with Reduce
+  Motion); optional finish sound and trackpad tap; VoiceOver hears when a
+  Pinlet starts, needs you, pauses or is done.
 - Pinlet.app installs its own engine: build.sh bundles the installer and the
   source, the Welcome window installs it on first launch and connects the AI
   tools found, and a newer bundled source updates the engine on launch. The

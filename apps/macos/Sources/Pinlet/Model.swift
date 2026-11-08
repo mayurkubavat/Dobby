@@ -197,7 +197,10 @@ struct Prompt: Equatable, Identifiable {
     var kind: String          // "danger" (a risky step) or "access" (may Pinlet use an app?)
     var pid: Int?
     var name: String
-    var secsLeft: Double
+    var secsLeft: Double      // on the card
+    var app: String           // "access": the app Pinlet asks to use
+    var missed: Bool          // the card ran out; it waits in the menu now
+    var holdLeft: Double      // until it is a Deny
 
     var isAccess: Bool { kind == "access" }
 
@@ -212,6 +215,9 @@ struct Prompt: Equatable, Identifiable {
         pid = (json["pid"] as? NSNumber)?.intValue
         name = json["name"] as? String ?? ""
         secsLeft = (json["secs_left"] as? NSNumber)?.doubleValue ?? 30
+        app = json["app"] as? String ?? ""
+        missed = json["missed"] as? Bool ?? false
+        holdLeft = (json["hold_left"] as? NSNumber)?.doubleValue ?? secsLeft
     }
 
     static func list(_ raw: Any?) -> [Prompt] {

@@ -9,7 +9,7 @@ import SwiftUI
 /// Pinlet's dark tint; earlier systems get the regular material. It takes the
 /// Look setting (dark by default, like the bar).
 final class PromptPanel {
-    var onAnswer: (_ promptID: Int, _ ok: Bool) -> Void = { _, _ in }
+    var onAnswer: (_ promptID: Int, _ ok: Bool, _ always: Bool) -> Void = { _, _, _ in }
 
     private var panel: KeyPanel?
     private(set) var shown: Prompt?
@@ -43,10 +43,10 @@ final class PromptPanel {
                               caution: Color(nsColor: Palette.color("caution", in: palette, fallback: Palette.caution)),
                               danger: Color(nsColor: Palette.color("danger", in: palette, fallback: Palette.danger)),
                               dark: dark) {
-            [weak self] ok in
+            [weak self] ok, always in
             guard let self, let shown = self.shown, shown.id == prompt.id else { return }
             self.hide()
-            self.onAnswer(prompt.id, ok)
+            self.onAnswer(prompt.id, ok, always)
         }
         let host = NSHostingView(rootView: card)
         let size = host.fittingSize
@@ -99,7 +99,8 @@ struct PromptCard: View {
     var caution: Color = .orange
     var danger: Color = .red
     var dark: Bool = true
-    let answer: (Bool) -> Void
+    let answer: (_ ok: Bool, _ always: Bool) -> Void
+    @State private var always = false
 
     private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
@@ -121,14 +122,19 @@ struct PromptCard: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if prompt.isAccess && !prompt.app.isEmpty {
+                    Toggle("Always allow in \(prompt.app)", isOn: $always)
+                        .toggleStyle(.checkbox)
+                        .font(.subheadline)
+                }
                 HStack(spacing: 8) {
                     Countdown(deadline: deadline)
                     Spacer(minLength: 12)
-                    Button(prompt.deny) { answer(false) }
+                    Button(prompt.deny) { answer(false, false) }
                         .keyboardShortcut(.cancelAction)
                         .controlSize(.large)
                     // A risky step never goes through on a stray Return: it takes Cmd+Return.
-                    Button(prompt.allow) { answer(true) }
+                    Button(prompt.allow) { answer(true, always) }
                         .keyboardShortcut(prompt.isAccess ? .defaultAction : KeyboardShortcut(.return, modifiers: .command))
                         .buttonStyle(.borderedProminent)
                         .tint(prompt.isAccess ? accent : danger)
@@ -153,7 +159,7 @@ private struct Countdown: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let left = max(0, Int(deadline.timeIntervalSince(context.date).rounded(.up)))
-            Text("Denies in \(left / 60):\(String(format: "%02d", left % 60))")
+            Text("Moves to the menu in \(left / 60):\(String(format: "%02d", left % 60))")
                 .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
         }
     }

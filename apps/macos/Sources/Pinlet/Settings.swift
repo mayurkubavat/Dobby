@@ -91,6 +91,9 @@ struct SettingsView: View {
     let restart: () -> Void
     @State private var loginItem = LoginItem.enabled
     @State private var notifyDone = Notifier.notifyWhenDone
+    @State private var finishSound = Notifier.finishSound
+    @State private var haptics = Notifier.haptics
+    @State private var announce = Notifier.announce
     @State private var changed = false
     @StateObject private var diagnostics = DiagnosticsModel()
 
@@ -142,6 +145,16 @@ struct SettingsView: View {
                 Section {
                     Toggle("Notify when a task is done", isOn: $notifyDone)
                         .onChange(of: notifyDone) { Notifier.notifyWhenDone = $0 }
+                    Toggle("Play a sound when a task is done", isOn: $finishSound)
+                        .onChange(of: finishSound) { Notifier.finishSound = $0 }
+                    Toggle("Tap the trackpad when Pinlet asks", isOn: $haptics)
+                        .onChange(of: haptics) { Notifier.haptics = $0 }
+                }
+                Section {
+                    Toggle("Announce progress with VoiceOver", isOn: $announce)
+                        .onChange(of: announce) { Notifier.announce = $0 }
+                } footer: {
+                    SettingsFooter("Only while VoiceOver is on: says when a Pinlet starts, needs you, pauses or is done.")
                 }
             }
             .modifier(SettingsForm())

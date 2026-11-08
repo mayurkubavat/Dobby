@@ -4,8 +4,11 @@ When the Mac app owns the shared Pinlet (``PINLET_APP_OWNED=1``) and is
 polling the control socket, :meth:`OverlayClient.confirm` hands the question
 here instead of drawing the overlay's pill. The app reads
 :func:`pending` (sent with every ``topbar`` reply), shows the card and answers
-with the control op ``answer``. No answer before the deadline is a Deny, as
-with the pill.
+with the control op ``answer``. The card counts down ``secs``; a question
+nobody answered then is "missed" and keeps waiting in the menu, with Allow and
+Deny there, for up to ``PINLET_PROMPT_HOLD`` seconds (default 300) before it is
+a Deny. For "may Pinlet use this app?" questions the answer can carry
+``always``, which saves the app as allowed in ``~/.pinlet/apps.json``.
 
 If the app stops polling (quit, crashed, an old build) the overlay's own pill
 is used again, so a prompt is never shown nowhere.
@@ -21,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 LISTEN_WINDOW_S = 3.0  # the app polls every second; three misses means it is gone
+DEFAULT_HOLD_S = 300.0  # a missed question waits in the menu this long
 
 _ids = itertools.count(1)
 _lock = threading.Lock()
@@ -40,9 +44,12 @@ class Prompt:
     kind: str = "danger"  # "danger" (a risky step) or "access" (may Pinlet use an app?)
     pid: int | None = None  # the client whose Pinlet asks, when known
     name: str = ""  # "Tibble · Claude Code"
+    app: str = ""  # for "access": the app Pinlet asks to use
     created: float = field(default_factory=time.time)
-    deadline: float = 0.0
+    card_deadline: float = 0.0  # the card counts down to this
+    deadline: float = 0.0  # then it waits in the menu until this
     answer: bool | None = None
+    always: bool = False
     done: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def as_dict(self, now: float | None = None) -> dict[str, Any]:
@@ -57,7 +64,10 @@ class Prompt:
             "kind": self.kind,
             "pid": self.pid,
             "name": self.name,
-            "secs_left": round(max(0.0, self.deadline - now), 1),
+            "app": self.app,
+            "secs_left": round(max(0.0, self.card_deadline - now), 1),
+            "missed": now >= self.card_deadline,
+            "hold_left": round(max(0.0, self.deadline - now), 1),
         }
 
 
@@ -67,6 +77,14 @@ def enabled() -> bool:
         os.environ.get("PINLET_APP_OWNED") == "1"
         and os.environ.get("PINLET_APP_PROMPTS", "1") != "0"
     )
+
+
+def hold_seconds() -> float:
+    """How long a missed question waits in the menu (``PINLET_PROMPT_HOLD``; 0 = no waiting)."""
+    try:
+        return max(0.0, float(os.environ.get("PINLET_PROMPT_HOLD", DEFAULT_HOLD_S)))
+    except ValueError:
+        return DEFAULT_HOLD_S
 
 
 def note_poll(now: float | None = None) -> None:
@@ -100,9 +118,15 @@ def ask(
     allow: str = "Allow",
     deny: str = "Deny",
     kind: str = "danger",
+    app: str = "",
 ) -> bool:
-    """Show the question in the app and wait for it. False on Deny or timeout."""
+    """Show the question in the app and wait for it. False on Deny or timeout.
+
+    The card counts down ``secs``; after that the question waits in the menu
+    until :func:`hold_seconds` have passed since it was asked.
+    """
     secs = max(1.0, float(secs))
+    total = max(secs, hold_seconds())
     p = Prompt(
         id=next(_ids),
         text=text,
@@ -110,26 +134,40 @@ def ask(
         allow=allow or "Allow",
         deny=deny or "Deny",
         kind=kind or "danger",
+        app=app or "",
         **_who(),
     )
-    p.deadline = p.created + secs
+    p.card_deadline = p.created + secs
+    p.deadline = p.created + total
     with _lock:
         _pending[p.id] = p
     try:
-        p.done.wait(secs)
+        p.done.wait(total)
     finally:
         with _lock:
             _pending.pop(p.id, None)
     return bool(p.answer)
 
 
-def answer(prompt_id: int, ok: bool) -> bool:
-    """The app's answer. False when that prompt is no longer waiting."""
+def answer(prompt_id: int, ok: bool, always: bool = False) -> bool:
+    """The app's answer. False when that prompt is no longer waiting.
+
+    ``always`` with Allow on an "access" question also saves the app as allowed
+    from now on (``~/.pinlet/apps.json``).
+    """
     with _lock:
         p = _pending.get(int(prompt_id))
     if p is None or p.done.is_set():
         return False
     p.answer = bool(ok)
+    p.always = bool(always and ok and p.kind == "access" and p.app)
+    if p.always:
+        try:
+            from pinlet.overlay.grants import remember
+
+            remember(p.app)
+        except OSError:
+            p.always = False
     p.done.set()
     return True
 

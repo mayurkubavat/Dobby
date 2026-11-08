@@ -289,6 +289,7 @@ class OverlayHAL:
             allow="Allow",
             deny="Don’t Allow",
             kind="access",
+            app=app,
         )
 
     def _gate(self, app: str | None, action: str) -> None:

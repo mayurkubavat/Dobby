@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         menu = StatusMenu(callbacks: .init(
             action: { [weak self] key, pid in self?.send(key, pid: pid) },
+            answer: { [weak self] id, ok, always in self?.answer(id, ok: ok, always: always) },
             restartEngine: { [weak self] in self?.engine.restart() },
             openLog: { NSWorkspace.shared.open(PinletPaths.daemonLog) },
             openSettings: { [weak self] in self?.settingsWindow.show() },
@@ -28,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: ActivityPanel.showRequest, object: nil, queue: .main) {
             [weak self] _ in self?.activity.show()
         }
-        promptPanel.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
+        promptPanel.onAnswer = { [weak self] id, ok, always in self?.answer(id, ok: ok, always: always) }
         notifier.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
         notifier.onOpenPrompt = { [weak self] in self?.promptPanel.focus() }
         notifier.start()
@@ -128,20 +129,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.engine.tick(reachable: view != nil)
                 // Reachable beats "starting": the socket answering means it is up.
                 let note = view == nil ? (self.note(for: state) ?? "Connecting…") : nil
-                self.menu.update(view: view ?? TopbarView.empty, engineNote: note)
-                self.activity.update(view ?? TopbarView.empty, reachable: view != nil)
                 let prompts = reply?.prompts ?? []
+                // A question whose card ran out keeps waiting in the menu, with Allow / Deny there.
+                self.menu.update(view: view ?? TopbarView.empty, engineNote: note,
+                                 waiting: prompts.filter(\.missed))
+                self.activity.update(view ?? TopbarView.empty, reachable: view != nil)
                 // One card at a time, the oldest question first; the rest wait their turn.
-                self.promptPanel.update(prompts.first, palette: view?.palette ?? [:])
+                self.promptPanel.update(prompts.first(where: { !$0.missed }), palette: view?.palette ?? [:])
                 self.notifier.update(prompts: prompts, rows: view?.rows ?? [])
             }
         }
     }
 
-    private func answer(_ promptID: Int, ok: Bool) {
+    private func answer(_ promptID: Int, ok: Bool, always: Bool = false) {
         if promptPanel.shown?.id == promptID { promptPanel.hide() }
         control.queue.async { [weak self] in
-            self?.control.answer(promptID, ok: ok)
+            self?.control.answer(promptID, ok: ok, always: always)
             DispatchQueue.main.async { self?.poll() }
         }
     }

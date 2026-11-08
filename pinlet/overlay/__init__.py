@@ -275,6 +275,7 @@ class DenyingOverlay(NullOverlay):
         allow: str = "Allow",
         deny: str = "Deny",
         kind: str = "danger",
+        app: str = "",
     ) -> bool:
         return False
 

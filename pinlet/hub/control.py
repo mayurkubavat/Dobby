@@ -244,7 +244,9 @@ def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -
 
             body = {
                 "answered": prompts.answer(
-                    int(request.get("prompt_id") or 0), bool(request.get("ok"))
+                    int(request.get("prompt_id") or 0),
+                    bool(request.get("ok")),
+                    always=bool(request.get("always")),
                 )
             }
         elif op == "action":

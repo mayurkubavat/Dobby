@@ -144,6 +144,7 @@ class NullOverlay:
         allow: str = "Allow",
         deny: str = "Deny",
         kind: str = "danger",
+        app: str = "",
     ) -> bool:
         """Asks the person Allow/Deny on the bar.
 
@@ -573,6 +574,7 @@ class OverlayClient(NullOverlay):
         allow: str = "Allow",
         deny: str = "Deny",
         kind: str = "danger",
+        app: str = "",
     ) -> bool:
         """Ask the user Allow/Deny on the pill. False on deny or timeout.
 
@@ -586,7 +588,7 @@ class OverlayClient(NullOverlay):
             if prompts.app_listening():  # Pinlet.app shows it as a native card + notification
                 self.intent("Waiting for you: " + text)
                 return prompts.ask(
-                    text, secs=secs, detail=detail, allow=allow, deny=deny, kind=kind
+                    text, secs=secs, detail=detail, allow=allow, deny=deny, kind=kind, app=app
                 )
         except ImportError:
             pass

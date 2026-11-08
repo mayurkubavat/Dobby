@@ -176,7 +176,8 @@ fi
 step "Writing the pinlet command"
 LAUNCHER="$("$PY" -c 'from pinlet import runtime; print(runtime.write_launcher())')" \
   || fail "could not write the launcher"
-if [ "$OS" = Linux ]; then
+# Only for the real launcher: a test run with PINLET_LAUNCHER leaves ~/.local/bin alone.
+if [ "$OS" = Linux ] && [ -z "${PINLET_LAUNCHER:-}" ]; then
   mkdir -p "$HOME/.local/bin"
   if [ ! -e "$HOME/.local/bin/pinlet" ] || [ -L "$HOME/.local/bin/pinlet" ]; then
     ln -sf "$LAUNCHER" "$HOME/.local/bin/pinlet"

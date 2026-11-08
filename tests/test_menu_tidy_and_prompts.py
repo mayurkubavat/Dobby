@@ -1,6 +1,7 @@
 """Menu list tidying (Stop / Clear finished / long asleep) and app prompts."""
 
 import contextvars
+import json
 import threading
 import time
 
@@ -152,6 +153,7 @@ def test_the_app_answers_through_the_control_socket(app_owned, monkeypatch):
 
 
 def test_timeout_and_stop_all_deny(app_owned, monkeypatch):
+    monkeypatch.setenv("PINLET_PROMPT_HOLD", "0")  # no waiting in the menu
     assert prompts.ask("Delete?", secs=1.0) is False  # nobody answered
     monkeypatch.setattr(control, "agents", list)
     t, out = _ask_in_thread(text="Pay?", secs=5)
@@ -184,3 +186,40 @@ def test_group_actions_only_offer_what_would_do_something():
     assert keys({}) == ["pause_all", "stop_all"]
     assert keys({1: {"mode": "paused"}, 2: {"mode": "paused"}}) == ["resume_all", "stop_all"]
     assert keys({1: {"mode": "paused"}}) == ["pause_all", "resume_all", "stop_all"]
+
+
+def test_a_missed_question_waits_in_the_menu(app_owned, monkeypatch):
+    monkeypatch.setenv("PINLET_PROMPT_HOLD", "30")
+    t, out = _ask_in_thread(text="Pay?", secs=1.0)
+    (p,) = prompts.pending()
+    assert not p["missed"] and p["hold_left"] > 25
+    time.sleep(1.2)
+    (p,) = prompts.pending()  # the card ran out, the question did not
+    assert p["missed"] and p["secs_left"] == 0 and t.is_alive()
+    assert prompts.answer(p["id"], True)
+    t.join(2)
+    assert out["ok"] is True
+
+
+def test_always_allow_saves_the_app(app_owned, monkeypatch, tmp_path):
+    from pinlet.overlay import grants
+
+    rules = tmp_path / "apps.json"
+    rules.write_text('{"apps": {"Terminal": "click"}, "default": "ask"}')
+    monkeypatch.setattr(grants, "DEFAULT_PATH", rules)
+    t, out = _ask_in_thread(text="Let Pinlet use Vivado?", secs=5, kind="access", app="Vivado")
+    (p,) = prompts.pending()
+    assert p["app"] == "Vivado"
+    assert control.handle(
+        {"id": 1, "op": "answer", "prompt_id": p["id"], "ok": True, "always": True}
+    )["answered"]
+    t.join(2)
+    saved = json.loads(rules.read_text())
+    assert out["ok"] is True and saved["apps"] == {"Terminal": "click", "Vivado": "full"}
+    assert grants.AppGrants(path=rules, env={}).standing("vivado") == "full"
+    # Always is only for Allow on an app question.
+    t, out = _ask_in_thread(text="Send?", secs=5, app="Mail")
+    (p,) = prompts.pending()
+    prompts.answer(p["id"], True, always=True)
+    t.join(2)
+    assert "Mail" not in json.loads(rules.read_text())["apps"]

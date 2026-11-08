@@ -18,6 +18,22 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         set { UserDefaults.standard.set(newValue, forKey: doneKey) }
     }
 
+    /// A short sound when a task is done (off by default).
+    static var finishSound: Bool {
+        get { UserDefaults.standard.bool(forKey: "finishSound") }
+        set { UserDefaults.standard.set(newValue, forKey: "finishSound") }
+    }
+    /// A tap on a Force Touch trackpad when Pinlet asks something (off by default).
+    static var haptics: Bool {
+        get { UserDefaults.standard.bool(forKey: "haptics") }
+        set { UserDefaults.standard.set(newValue, forKey: "haptics") }
+    }
+    /// With VoiceOver on, say when a Pinlet starts, needs you, pauses or is done (on by default).
+    static var announce: Bool {
+        get { UserDefaults.standard.object(forKey: "announce") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "announce") }
+    }
+
     /// A card left unanswered this long also goes to Notification Center.
     var promptGrace: TimeInterval = 5
     /// Work shorter than this is not worth a "Done".
@@ -27,6 +43,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private var promptSeen: [Int: Date] = [:]
     private var promptPosted = Set<Int>()
     private var workingSince: [Int: Date] = [:]
+    private var lastState: [Int: String] = [:]
 
     private enum ID {
         static let promptCategory = "pinlet.prompt"
@@ -64,6 +81,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             }
         }
         for p in prompts {
+            if promptSeen[p.id] == nil && Notifier.haptics {
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            }
             let first = promptSeen[p.id] ?? now
             promptSeen[p.id] = first
             guard !promptPosted.contains(p.id), now.timeIntervalSince(first) >= promptGrace else { continue }
@@ -84,6 +104,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         var seen = Set<Int>()
         for row in rows {
             seen.insert(row.pid)
+            if let before = lastState[row.pid], before != row.state { announce(row) }
+            lastState[row.pid] = row.state
             let busy = row.state == "working" || row.state == "awake"
             if busy {
                 if workingSince[row.pid] == nil { workingSince[row.pid] = now }
@@ -92,10 +114,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             }
         }
         for pid in Set(workingSince.keys).subtracting(seen) { workingSince[pid] = nil }  // stopped or hidden
+        for pid in Set(lastState.keys).subtracting(seen) { lastState[pid] = nil }
+    }
+
+    /// VoiceOver hears the bar's news: a Pinlet started, needs you, paused, or finished.
+    private func announce(_ row: TopbarView.Row) {
+        guard Notifier.announce, NSWorkspace.shared.isVoiceOverEnabled else { return }
+        let text = row.detail.isEmpty ? row.title : "\(row.title): \(row.detail)"
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
     }
 
     private func finished(_ row: TopbarView.Row, worked: TimeInterval) {
-        guard Notifier.notifyWhenDone, worked >= minWork else { return }
+        guard worked >= minWork else { return }
+        if Notifier.finishSound { NSSound(named: "Glass")?.play() }
+        guard Notifier.notifyWhenDone else { return }
         let content = UNMutableNotificationContent()
         content.title = "\(row.title) is done"
         let secs = Int(worked)

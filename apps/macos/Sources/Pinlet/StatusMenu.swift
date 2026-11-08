@@ -6,6 +6,7 @@ import AppKit
 final class StatusMenu: NSObject, NSMenuDelegate {
     struct Callbacks {
         var action: (_ key: String, _ pid: Int?) -> Void
+        var answer: (_ promptID: Int, _ ok: Bool, _ always: Bool) -> Void
         var restartEngine: () -> Void
         var openLog: () -> Void
         var openSettings: () -> Void
@@ -19,6 +20,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let callbacks: Callbacks
     private var view = TopbarView.empty
     private var engineNote: String?
+    private var waiting: [Prompt] = []
+    private var pulse: Timer?
 
     init(callbacks: Callbacks) {
         self.callbacks = callbacks
@@ -32,20 +35,23 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     /// New content from the shared Pinlet; `engineNote` replaces the subtitle
     /// when the engine itself is not running ("Starting…", a crash, setup).
-    func update(view: TopbarView, engineNote: String?) {
-        guard view != self.view || engineNote != self.engineNote else { return }
+    func update(view: TopbarView, engineNote: String?, waiting: [Prompt] = []) {
+        let ids = waiting.map(\.id)
+        guard view != self.view || engineNote != self.engineNote || ids != self.waiting.map(\.id) else { return }
         self.view = view
         self.engineNote = engineNote
+        self.waiting = waiting
         render()
     }
 
     private func render() {
         if let button = item.button {
-            let state = engineNote == nil ? view.iconState : "attention"
+            let state = engineNote == nil && waiting.isEmpty ? view.iconState : "attention"
             button.image = Icons.statusIcon(state: state, palette: view.palette)
             button.title = view.iconTitle.isEmpty ? "" : " \(view.iconTitle)"
             button.toolTip = engineNote.map { "Pinlet: \($0)" } ?? view.tooltip
             button.setAccessibilityLabel(button.toolTip)
+            setPulsing(state == "working")
         }
         rebuild()
     }
@@ -69,6 +75,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(details)
         }
         menu.addItem(.separator())
+        addWaitingPrompts()
         if view.rows.isEmpty && engineNote == nil && view.hidden == 0 {
             let empty = NSMenuItem(title: "Connect an AI app such as Claude or Cursor to start", action: nil, keyEquivalent: "")
             empty.isEnabled = false
@@ -103,6 +110,62 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(troubleshoot)
         menu.addItem(.separator())
         menu.addItem(item("Quit", #selector(quit), key: "q"))
+    }
+
+    /// A slow breathing of the menu bar icon while a Pinlet works (none with Reduce Motion).
+    private func setPulsing(_ on: Bool) {
+        let wanted = on && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        guard wanted != (pulse != nil) else { return }
+        pulse?.invalidate()
+        pulse = nil
+        guard let button = item.button else { return }
+        guard wanted else {
+            button.alphaValue = 1
+            return
+        }
+        var dim = true
+        let t = Timer(timeInterval: 1.1, repeats: true) { [weak button] _ in
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 1.0
+                button?.animator().alphaValue = dim ? 0.55 : 1
+            }
+            dim.toggle()
+        }
+        RunLoop.main.add(t, forMode: .common)
+        pulse = t
+    }
+
+    /// Questions whose card ran out: the question, then Allow / Deny (and Always Allow for an app).
+    private func addWaitingPrompts() {
+        guard !waiting.isEmpty else { return }
+        for prompt in waiting {
+            let head = NSMenuItem(title: prompt.text, action: nil, keyEquivalent: "")
+            head.isEnabled = false
+            head.image = NSImage(systemSymbolName: prompt.isAccess ? "hand.raised.fill" : "exclamationmark.triangle.fill",
+                                 accessibilityDescription: nil)
+            let who = prompt.name.isEmpty ? "Pinlet" : prompt.name
+            let mins = Int(prompt.holdLeft / 60)
+            head.toolTip = "\(who) is waiting for you" + (mins > 0 ? " (Deny in \(mins) min)" : "")
+            menu.addItem(head)
+            menu.addItem(promptItem(prompt.allow, id: prompt.id, ok: true, always: false))
+            if prompt.isAccess && !prompt.app.isEmpty {
+                menu.addItem(promptItem("Always Allow in \(prompt.app)", id: prompt.id, ok: true, always: true))
+            }
+            menu.addItem(promptItem(prompt.deny, id: prompt.id, ok: false, always: false))
+        }
+        menu.addItem(.separator())
+    }
+
+    private func promptItem(_ title: String, id: Int, ok: Bool, always: Bool) -> NSMenuItem {
+        let item = NSMenuItem(title: "    " + title, action: #selector(answerPrompt(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = ["id": id, "ok": ok, "always": always] as [String: Any]
+        return item
+    }
+
+    @objc private func answerPrompt(_ sender: NSMenuItem) {
+        guard let info = sender.representedObject as? [String: Any], let id = info["id"] as? Int else { return }
+        callbacks.answer(id, info["ok"] as? Bool ?? false, info["always"] as? Bool ?? false)
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

@@ -169,7 +169,9 @@ class Overlay(NullOverlay):
         self.answers = list(answers)
         self.calls = []
 
-    def confirm(self, text, secs=30.0, detail="", allow="Allow", deny="Deny", kind="danger"):
+    def confirm(
+        self, text, secs=30.0, detail="", allow="Allow", deny="Deny", kind="danger", app=""
+    ):
         self.calls.append(("confirm", text, kind))
         return self.answers.pop(0) if self.answers else True
 
