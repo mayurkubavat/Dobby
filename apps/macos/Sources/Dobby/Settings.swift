@@ -14,7 +14,8 @@ final class AppSettings: ObservableObject {
 
     // Engine settings (applied when Dobby restarts).
     @Published var personality: String = "" { didSet { store("personality", personality) } }  // "", off, subtle, elf
-    @Published var glass: String = "" { didSet { store("glass", glass) } }                     // "", clear, regular, 0
+    @Published var glass: String = "" { didSet { store("glass", glass) } }                     // "", auto, clear, regular, 0
+    @Published var theme: String = "" { didSet { store("theme", theme) } }                     // "", dark, light, auto
     @Published var hideIdleMinutes: Int = -1 { didSet { store("hideIdleMinutes", hideIdleMinutes) } }  // -1 = default
     @Published var appPrompts: Bool = true { didSet { store("appPrompts", appPrompts) } }
 
@@ -24,6 +25,7 @@ final class AppSettings: ObservableObject {
         var env: [String: String] = [:]
         if !personality.isEmpty { env["DOBBY_PERSONALITY"] = personality }
         if !glass.isEmpty { env["DOBBY_OVERLAY_GLASS"] = glass }
+        if !theme.isEmpty { env["DOBBY_OVERLAY_THEME"] = theme }
         if hideIdleMinutes >= 0 { env["DOBBY_MENU_HIDE_IDLE"] = String(hideIdleMinutes * 60) }
         if !appPrompts { env["DOBBY_APP_PROMPTS"] = "0" }
         return env
@@ -36,8 +38,24 @@ final class AppSettings: ObservableObject {
         defer { loading = false }
         personality = defaults.string(forKey: "personality") ?? ""
         glass = defaults.string(forKey: "glass") ?? ""
+        theme = defaults.string(forKey: "theme") ?? ""
         hideIdleMinutes = defaults.object(forKey: "hideIdleMinutes") as? Int ?? -1
         appPrompts = defaults.object(forKey: "appPrompts") as? Bool ?? true
+    }
+
+    /// The look of Dobby's own windows (the Allow/Deny card): dark unless the
+    /// theme says light, or nil to follow macOS ("auto").
+    static func appearanceName(for theme: String) -> NSAppearance.Name? {
+        switch theme {
+        case "light": return .aqua
+        case "auto": return nil
+        default: return .darkAqua
+        }
+    }
+
+    /// The current theme's appearance, read straight from the defaults.
+    static func currentAppearance(defaults: UserDefaults = .standard) -> NSAppearance? {
+        appearanceName(for: defaults.string(forKey: "theme") ?? "").flatMap { NSAppearance(named: $0) }
     }
 
     private func store(_ key: String, _ value: Any) {
@@ -85,10 +103,17 @@ struct SettingsView: View {
                     Text("Elf").tag("elf")
                 }
                 .onChange(of: settings.personality) { _ in changed = true }
+                Picker("Look", selection: $settings.theme) {
+                    Text("Default (dark)").tag("")
+                    Text("Dark").tag("dark")
+                    Text("Light").tag("light")
+                    Text("Match macOS").tag("auto")
+                }
+                .onChange(of: settings.theme) { _ in changed = true }
                 Picker("Bar glass", selection: $settings.glass) {
-                    Text("Default (clear)").tag("")
-                    Text("Clear").tag("clear")
-                    Text("Regular").tag("regular")
+                    Text("Default (clear at rest, regular with text)").tag("")
+                    Text("Always clear").tag("clear")
+                    Text("Always regular").tag("regular")
                     Text("Frosted (no glass)").tag("0")
                 }
                 .onChange(of: settings.glass) { _ in changed = true }

@@ -161,6 +161,16 @@ def _desktop_is_dark() -> bool:
         return False
 
 
+# "dark" (default), "light" or "auto" (follow the desktop); X11Overlay sets it
+# from its config (DOBBY_OVERLAY_THEME).
+_THEME = "dark"
+
+
+def _overlay_is_dark() -> bool:
+    """Whether the bar and prompts draw their dark look (``style.overlay_dark``)."""
+    return style.overlay_dark(_THEME, _desktop_is_dark() if _THEME == "auto" else False)
+
+
 def _confirm_css(kind: str, dark: bool) -> bytes:
     t = _CONFIRM_THEMES["dark" if dark else "light"]
     who = _CONFIRM_DANGER if kind == "danger" else t["accent"]
@@ -205,7 +215,7 @@ def _confirm_window(
         win.set_visual(screen.get_rgba_visual())  # round corners without black wedges
         win.set_app_paintable(False)
     provider = Gtk.CssProvider()
-    provider.load_from_data(_confirm_css(kind, _desktop_is_dark()))
+    provider.load_from_data(_confirm_css(kind, _overlay_is_dark()))
     win.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
     def styled(widget, cls):
@@ -431,7 +441,7 @@ class _Bar:
                 "size-allocate", lambda _w, alloc: self._round(alloc.width, alloc.height)
             )
         provider = Gtk.CssProvider()
-        provider.load_from_data(_bar_css(_desktop_is_dark(), self.composited))
+        provider.load_from_data(_bar_css(_overlay_is_dark(), self.composited))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
@@ -442,7 +452,7 @@ class _Bar:
                 settings.connect(
                     f"notify::{prop}",
                     lambda *_: self._css.load_from_data(
-                        _bar_css(_desktop_is_dark(), self.composited)
+                        _bar_css(_overlay_is_dark(), self.composited)
                     ),
                 )
         except Exception:  # noqa: BLE001 - theme following is a nicety
@@ -740,6 +750,8 @@ class X11Overlay:
     def __init__(self, cfg: dict[str, Any], out=None) -> None:
         self.cfg = dict(DEFAULT_CONFIG)
         self.cfg.update(cfg or {})
+        global _THEME
+        _THEME = style.normalize_theme(self.cfg.get("theme"))
         self.out = out or sys.stdout
         self._wlock = threading.Lock()
         screen = Gdk.Screen.get_default()

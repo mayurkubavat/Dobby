@@ -317,3 +317,33 @@ class TestTagFlip:
 
     def test_no_screen_no_flip(self):
         assert style.tag_flip((5000, 5000), 100, CHIP_H, ARROW_W, ARROW_H, None) == (False, False)
+
+
+# ------------------------------------------------------------- dark look + glass
+def test_theme_defaults_to_the_dark_look():
+    assert style.normalize_theme(None) == "dark"
+    assert style.normalize_theme("LIGHT") == "light"
+    assert style.normalize_theme("sepia") == "dark"
+    assert style.overlay_dark("dark", desktop_dark=False) is True
+    assert style.overlay_dark(None, desktop_dark=False) is True
+    assert style.overlay_dark("light", desktop_dark=True) is False
+    assert style.overlay_dark("auto", desktop_dark=True) is True
+    assert style.overlay_dark("auto", desktop_dark=False) is False
+
+
+def test_glass_is_clear_at_rest_and_regular_with_text():
+    assert style.glass_style("auto", compact=True) == "clear"
+    assert style.glass_style("auto", compact=False) == "regular"
+    assert style.glass_style(None, compact=False) == "regular"
+    assert style.glass_style("clear", compact=False) == "clear"
+    assert style.glass_style("regular", compact=True) == "regular"
+    assert style.normalize_glass("0") == "off"
+    assert style.normalize_glass("frosted?") == "auto"
+
+
+def test_dark_regular_glass_gets_the_strongest_tint_and_a_rim():
+    assert style.glass_tint(True, "regular") > style.glass_tint(True, "clear")
+    assert style.glass_tint(True, "regular") > style.glass_tint(False, "regular")
+    assert style.glass_rim(True, compact=True) == 0.0
+    assert style.glass_rim(True, compact=False) == 0.35
+    assert style.glass_rim(False, compact=False) == 0.28

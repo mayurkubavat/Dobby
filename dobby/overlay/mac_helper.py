@@ -201,8 +201,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # edges) or "classic" (the look before those).
     "style": "modern",
     # Modern bar on macOS 26+: Liquid Glass (NSGlassEffectView) instead of the
-    # frosted HUD material. "clear" (default) or "regular" where the OS has it; "off" never.
-    "liquid_glass": "clear",
+    # frosted HUD material. "auto" (default: clear while sleeping, regular with
+    # text), "clear" or "regular" where the OS has it; "off" never.
+    "liquid_glass": "auto",
+    # "dark" (default), "light", or "auto" to follow macOS (style.overlay_dark).
+    "theme": "dark",
     # One colour per running Dobby (from the agent registry). Off when
     # DOBBY_OVERLAY_COLOR fixes the colour ("color_fixed").
     "agent_colors": True,
@@ -1008,18 +1011,19 @@ def _desktop_dark() -> bool:
         return True
 
 
-# Palette tint laid over Liquid Glass; the glass stays readable without a dark slab.
-_GLASS_TINT_DARK = 0.18
-_GLASS_TINT_LIGHT = 0.10
 # Modern bar corners: a rounded rectangle like the Claude app's chat box, not a capsule.
 _BAR_RADIUS = 12.0
 _GLASS_STYLES = {"clear": 1, "regular": 0}  # NSGlassEffectViewStyle
 
 
 def _liquid_glass(cfg: dict[str, Any], height: float):
-    """A clear (or regular) NSGlassEffectView (macOS 26+ Liquid Glass), or None where unavailable or off."""
-    choice = str(cfg.get("liquid_glass", "clear")).lower()
-    if choice in ("off", "false", "0", "no"):
+    """A Liquid Glass NSGlassEffectView (macOS 26+), or None where unavailable or off.
+
+    It starts clear (the sleeping chip) unless ``regular`` is pinned; ``_Pill.show_spec``
+    switches the style as the bar gains or loses text (``style.glass_style``).
+    """
+    choice = style.normalize_glass(cfg.get("liquid_glass", "auto"))
+    if choice == "off":
         return None
     try:
         glass_cls = objc.lookUpClass("NSGlassEffectView")
@@ -1028,7 +1032,7 @@ def _liquid_glass(cfg: dict[str, Any], height: float):
     try:
         glass = glass_cls.alloc().initWithFrame_(((0, 0), (300, height)))
         glass.setCornerRadius_(min(_BAR_RADIUS, height / 2))
-        glass.setStyle_(_GLASS_STYLES.get(choice, _GLASS_STYLES["clear"]))
+        glass.setStyle_(_GLASS_STYLES[style.glass_style(choice, compact=True)])
         glass.setAutoresizingMask_(18)  # width + height follow the bar
         return glass
     except Exception as exc:  # noqa: BLE001 - fall back to the frosted bar
@@ -1067,7 +1071,8 @@ class _Pill:
         _configure_overlay_window(win, cfg, click_through=False)
         if not cfg.get("pill_in_recordings"):
             win.setSharingType_(NSWindowSharingNone)  # never in screenshots, so no capture blink
-        self.dark = _desktop_dark()
+        self.dark = self._wants_dark()
+        self.glass_kind = "clear"
         view = _PillView.alloc().initWithFrame_(((0, 0), (300, self.H)))
         view.dobby_target = target
         view.setWantsLayer_(True)
@@ -1166,8 +1171,13 @@ class _Pill:
         self._apply_theme(self.dark)
 
     # ------------------------------------------------------------- theme
+    def _wants_dark(self) -> bool:
+        """The dark look unless the theme setting says light, or auto on a light desktop."""
+        theme = self.cfg.get("theme", "dark")
+        return style.overlay_dark(theme, _desktop_dark() if theme == "auto" else False)
+
     def _apply_theme(self, dark: bool) -> None:
-        """Palette "Elf Violet, tuned": light or dark bar, following macOS."""
+        """Palette "Elf Violet, tuned": the dark or light bar (``theme``)."""
         self.dark = dark
         t = style.bar_theme(dark)
         name = NSAppearanceNameDarkAqua if dark else "NSAppearanceNameAqua"
@@ -1175,12 +1185,7 @@ class _Pill:
         bg = tuple(c / 255.0 for c in t["bg"])
         if self.glass is not None:
             # A faint palette tint on the glass keeps Dobby's colour without hiding the lensing.
-            try:
-                self.glass.setTintColor_(
-                    _ns_color(bg, _GLASS_TINT_DARK if dark else _GLASS_TINT_LIGHT)
-                )
-            except Exception:  # noqa: BLE001
-                pass
+            self._tint_glass()
             if self.tint is not None:
                 self.tint.layer().setBackgroundColor_(None)
         elif self.tint is not None:
@@ -1204,8 +1209,32 @@ class _Pill:
         if self.menu_glyph is not None:
             self.menu_btn.setImage_(self.menu_glyph)
 
+    def _tint_glass(self) -> None:
+        """Lay the palette tint for the current appearance and glass style over the glass."""
+        bg = tuple(c / 255.0 for c in style.bar_theme(self.dark)["bg"])
+        try:
+            self.glass.setTintColor_(_ns_color(bg, style.glass_tint(self.dark, self.glass_kind)))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _set_glass(self, compact: bool, rgb) -> None:
+        """Clear glass on the sleeping chip, regular once there is text; a thin rim in Dobby's colour."""
+        kind = style.glass_style(self.cfg.get("liquid_glass", "auto"), compact)
+        if kind != self.glass_kind:
+            self.glass_kind = kind
+            try:
+                self.glass.setStyle_(_GLASS_STYLES[kind])
+            except Exception:  # noqa: BLE001
+                pass
+            self._tint_glass()
+        rim = style.glass_rim(self.dark, compact)
+        layer = self.view.layer()
+        layer.setBorderWidth_(1.0 if rim else 0.0)
+        if rim:
+            layer.setBorderColor_(_cg(rgb, rim))
+
     def _follow_theme(self) -> None:
-        dark = _desktop_dark()
+        dark = self._wants_dark()
         if dark != self.dark:
             self._apply_theme(dark)
 
@@ -1329,7 +1358,9 @@ class _Pill:
             self.dot.setCornerRadius_(4)
             x += 14.0
         self.dot.setBackgroundColor_(_cg(rgb, spec.dot_alpha))
-        if self.glass is None:  # Liquid Glass draws its own edge
+        if self.glass is not None:
+            self._set_glass(spec.compact, rgb)
+        else:
             self.view.layer().setBorderColor_(
                 _cg(rgb, 0.55 if (self.modern and spec.compact) else 0.7)
             )

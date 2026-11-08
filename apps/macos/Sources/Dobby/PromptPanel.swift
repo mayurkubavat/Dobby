@@ -5,8 +5,9 @@ import SwiftUI
 ///
 /// A non-activating panel: it takes the keyboard (Return / Esc) without
 /// bringing Dobby.app forward, so the app Dobby works in stays the active one.
-/// On macOS 26 the card is Liquid Glass (regular, since it carries text);
-/// earlier systems get the regular material.
+/// On macOS 26 the card is Liquid Glass (regular, since it carries text) with
+/// Dobby's dark tint; earlier systems get the regular material. It takes the
+/// Look setting (dark by default, like the bar).
 final class PromptPanel {
     var onAnswer: (_ promptID: Int, _ ok: Bool) -> Void = { _, _ in }
 
@@ -35,8 +36,13 @@ final class PromptPanel {
     }
 
     private func present(_ prompt: Prompt, palette: [String: String]) {
+        let appearance = AppSettings.currentAppearance()
+        let dark = (appearance ?? NSApp.effectiveAppearance).bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let card = PromptCard(prompt: prompt, deadline: deadline,
-                              accent: Color(nsColor: Palette.color("fill", in: palette, fallback: Palette.fill))) {
+                              accent: Color(nsColor: Palette.color("fill", in: palette, fallback: Palette.fill)),
+                              caution: Color(nsColor: Palette.color("caution", in: palette, fallback: Palette.caution)),
+                              danger: Color(nsColor: Palette.color("danger", in: palette, fallback: Palette.danger)),
+                              dark: dark) {
             [weak self] ok in
             guard let self, let shown = self.shown, shown.id == prompt.id else { return }
             self.hide()
@@ -45,6 +51,8 @@ final class PromptPanel {
         let host = NSHostingView(rootView: card)
         let size = host.fittingSize
         let panel = self.panel ?? KeyPanel()
+        panel.appearance = appearance
+        host.appearance = appearance
         panel.contentView = host
         let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) })
             ?? NSScreen.main ?? NSScreen.screens.first
@@ -88,6 +96,9 @@ struct PromptCard: View {
     let prompt: Prompt
     let deadline: Date
     let accent: Color
+    var caution: Color = .orange
+    var danger: Color = .red
+    var dark: Bool = true
     let answer: (Bool) -> Void
 
     private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -96,7 +107,7 @@ struct PromptCard: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: prompt.isAccess ? "hand.raised.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(prompt.isAccess ? accent : Color.orange)
+                .foregroundStyle(prompt.isAccess ? accent : caution)
                 .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
@@ -120,7 +131,7 @@ struct PromptCard: View {
                     Button(prompt.allow) { answer(true) }
                         .keyboardShortcut(prompt.isAccess ? .defaultAction : KeyboardShortcut(.return, modifiers: .command))
                         .buttonStyle(.borderedProminent)
-                        .tint(prompt.isAccess ? accent : Color.red)
+                        .tint(prompt.isAccess ? accent : danger)
                         .controlSize(.large)
                 }
                 .padding(.top, 4)
@@ -128,7 +139,7 @@ struct PromptCard: View {
         }
         .padding(16)
         .frame(width: 420, alignment: .leading)
-        .modifier(CardBackground(shape: shape))
+        .modifier(CardBackground(shape: shape, dark: dark, rim: prompt.isAccess ? accent : danger))
         .padding(10)  // room for the shadow
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Dobby asks: \(prompt.text)")
@@ -149,14 +160,25 @@ private struct Countdown: View {
 }
 
 /// Liquid Glass on macOS 26 (built with the macOS 26 SDK), the regular material before.
+///
+/// The glass carries the same palette tint as the bar's regular glass (dark
+/// `#1B1826` at 34%, light `#FBFAFF` at 18%) and a thin rim in the card's colour.
 private struct CardBackground: ViewModifier {
     let shape: RoundedRectangle
+    var dark: Bool = true
+    var rim: Color = .clear
+
+    private var tint: Color {
+        dark ? Color(red: 27 / 255, green: 24 / 255, blue: 38 / 255).opacity(0.34)
+             : Color(red: 251 / 255, green: 250 / 255, blue: 1).opacity(0.18)
+    }
 
     @ViewBuilder
     func body(content: Content) -> some View {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
-            content.glassEffect(.regular, in: shape)
+            content.glassEffect(.regular.tint(tint), in: shape)
+                .overlay(shape.strokeBorder(rim.opacity(dark ? 0.35 : 0.28), lineWidth: 1))
         } else {
             content.background(.regularMaterial, in: shape)
                 .overlay(shape.strokeBorder(Color.primary.opacity(0.08)))

@@ -987,6 +987,16 @@ def test_overlay_config_awake_secs():
 def test_glass_env_turns_liquid_glass_off():
     from dobby.overlay import overlay_config
 
-    assert overlay_config({}).get("liquid_glass", "clear") == "clear"
+    assert overlay_config({}).get("liquid_glass", "auto") == "auto"
     assert overlay_config({"DOBBY_OVERLAY_GLASS": "0"})["liquid_glass"] == "off"
     assert overlay_config({"DOBBY_OVERLAY_GLASS": "regular"})["liquid_glass"] == "regular"
+    assert overlay_config({"DOBBY_OVERLAY_GLASS": "auto"})["liquid_glass"] == "auto"
+
+
+def test_theme_env_picks_the_dark_light_or_desktop_look():
+    from dobby.overlay import overlay_config
+
+    assert "theme" not in overlay_config({})  # helpers default to dark
+    assert overlay_config({"DOBBY_OVERLAY_THEME": "Light"})["theme"] == "light"
+    assert overlay_config({"DOBBY_OVERLAY_THEME": "auto"})["theme"] == "auto"
+    assert "theme" not in overlay_config({"DOBBY_OVERLAY_THEME": "purple"})

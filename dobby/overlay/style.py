@@ -71,6 +71,69 @@ def bar_theme(dark: bool) -> dict[str, object]:
     return BAR_THEMES["dark" if dark else "light"]
 
 
+# Light or dark bar: "dark" (default, the Dobby look from the design system),
+# "light", or "auto" to follow the desktop. ``DOBBY_OVERLAY_THEME`` picks it.
+THEMES = ("dark", "light", "auto")
+
+
+def normalize_theme(value: object) -> str:
+    """One of :data:`THEMES`; anything else is the default, ``"dark"``."""
+    value = str(value or "").strip().lower()
+    return value if value in THEMES else "dark"
+
+
+def overlay_dark(theme: object, desktop_dark: bool) -> bool:
+    """Whether the overlay draws its dark look for this theme setting and desktop."""
+    theme = normalize_theme(theme)
+    if theme == "auto":
+        return bool(desktop_dark)
+    return theme == "dark"
+
+
+# Liquid Glass (macOS 26+). "auto" (default): clear glass while the bar is the
+# empty sleeping chip over the desktop, regular glass as soon as it carries text
+# to read (Apple: clear only over rich backgrounds with little content).
+# "clear" or "regular" pin one style; "off" draws the frosted bar instead.
+GLASS_CHOICES = ("auto", "clear", "regular", "off")
+
+# Palette tint over the glass, by (appearance, glass style). Regular glass with
+# narration gets a stronger tint so the words read over a bright desktop.
+GLASS_TINT = {
+    ("dark", "clear"): 0.18,
+    ("dark", "regular"): 0.34,
+    ("light", "clear"): 0.10,
+    ("light", "regular"): 0.18,
+}
+
+
+def normalize_glass(value: object) -> str:
+    """One of :data:`GLASS_CHOICES` (``0``/``false``/``no`` mean ``"off"``); default ``"auto"``."""
+    value = str(value or "").strip().lower()
+    if value in ("0", "false", "no", "off"):
+        return "off"
+    return value if value in GLASS_CHOICES else "auto"
+
+
+def glass_style(choice: object, compact: bool) -> str:
+    """``"clear"`` or ``"regular"`` glass for a bar; ``compact`` is the sleeping chip."""
+    choice = normalize_glass(choice)
+    if choice in ("clear", "regular"):
+        return choice
+    return "clear" if compact else "regular"
+
+
+def glass_tint(dark: bool, glass: str) -> float:
+    """Opacity of the palette tint laid over the glass."""
+    return GLASS_TINT[("dark" if dark else "light", "regular" if glass == "regular" else "clear")]
+
+
+def glass_rim(dark: bool, compact: bool) -> float:
+    """Opacity of the thin Dobby-colour rim over the glass: none on the sleeping chip."""
+    if compact:
+        return 0.0
+    return 0.35 if dark else 0.28
+
+
 def hex_rgb01(value: str) -> tuple[float, float, float]:
     """Converts ``#RRGGBB`` to an ``(r, g, b)`` tuple of floats in 0..1."""
     v = value.lstrip("#")

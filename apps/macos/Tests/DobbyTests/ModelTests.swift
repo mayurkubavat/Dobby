@@ -58,3 +58,18 @@ import Testing
     #expect(StatusMenu.menuTitle("Clear finished") == "Clear Finished")
     #expect(StatusMenu.menuTitle("Pause all") == "Pause All")
 }
+
+@Test func lookDefaultsToDarkAndPassesThemeToEngine() throws {
+    #expect(AppSettings.appearanceName(for: "") == .darkAqua)
+    #expect(AppSettings.appearanceName(for: "dark") == .darkAqua)
+    #expect(AppSettings.appearanceName(for: "light") == .aqua)
+    #expect(AppSettings.appearanceName(for: "auto") == nil)
+
+    let defaults = try #require(UserDefaults(suiteName: "dobby.tests.look"))
+    defaults.removePersistentDomain(forName: "dobby.tests.look")
+    let settings = AppSettings(defaults: defaults)
+    #expect(settings.engineEnvironment()["DOBBY_OVERLAY_THEME"] == nil)
+    defaults.set("light", forKey: "theme")
+    #expect(settings.engineEnvironment()["DOBBY_OVERLAY_THEME"] == "light")
+    defaults.removePersistentDomain(forName: "dobby.tests.look")
+}
