@@ -38,6 +38,9 @@ The first public release will be 0.1.0. It contains:
   policy, recent activity, redacted log tails, a playbook) to
   `~/.pinlet/logs/` and starts Claude Code, Codex, Gemini CLI or Cursor's
   `agent` on it. `--print` only prints it.
+- Pinlet.app notifies when an AI finishes and waits in `wait_for_wake`
+  ("Tibble is waiting for you", with the reason it gave), and when three tool
+  calls in a row fail ("Tibble is having trouble"; Settings can turn it off).
 
 ### Changed
 

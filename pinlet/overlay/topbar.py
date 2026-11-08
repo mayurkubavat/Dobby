@@ -285,6 +285,8 @@ class Row:
     own: bool  # the Pinlet whose helper draws this menu
     actions: list[tuple[str, str]] = field(default_factory=list)  # (title, action key)
     queued: int = 0  # instructions from the person the AI has not picked up yet
+    failures: int = 0  # tool calls in a row that failed (shared sessions)
+    reason: str = ""  # what a listening Pinlet's AI said it waits for
 
 
 @dataclass
@@ -434,6 +436,8 @@ def topbar_view(
                 own=pid == own_pid,
                 actions=actions,
                 queued=queued,
+                failures=int(status.get("failures") or 0),
+                reason=_short(str(status.get("reason") or ""), 120) if state == "listening" else "",
             )
         )
     rows.sort(key=lambda r: (_ORDER.index(r.state), r.name.lower(), r.pid))

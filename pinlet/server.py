@@ -365,6 +365,7 @@ def _journal(tool: str, outcome: str, secs: float) -> None:
 
         info = _sessions.CURRENT.get()
         if info is not None:
+            _sessions.note_outcome(outcome, info)
             who = {
                 "agent": info.agent_key[:12] or None,
                 "session": info.id,
@@ -2574,6 +2575,11 @@ async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> dict[str, Any
 
     import anyio.to_thread
 
+    from pinlet.hub import sessions as _sessions
+
+    info = _sessions.CURRENT.get()
+    if info is not None:  # the menu and the app's "waiting for you" banner show it
+        info.waiting_for = " ".join(str(reason or "").split())[:200]
     cancel = threading.Event()
     try:
         return await anyio.to_thread.run_sync(
@@ -2584,6 +2590,9 @@ async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> dict[str, Any
     except BaseException:
         cancel.set()  # the client cancelled: take the waiting bar down
         raise
+    finally:
+        if info is not None:
+            info.waiting_for = ""
 
 
 def _exit_orphaned() -> None:

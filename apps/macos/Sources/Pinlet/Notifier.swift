@@ -5,7 +5,9 @@ import UserNotifications
 ///
 /// * "Pinlet needs you": an Allow/Deny question nobody answered on the card
 ///   within a few seconds, with Allow and Deny right on the banner;
-/// * "Done": a Pinlet that worked for a while went back to sleep.
+/// * "Done" or "Waiting for you": a Pinlet that worked for a while went back to
+///   sleep, or its AI now waits in wait_for_wake (with the reason it gave);
+/// * "Having trouble": several tool calls in a row failed.
 ///
 /// Banners need a real, signed app bundle; under `swift run` this is a no-op.
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
@@ -16,6 +18,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     static var notifyWhenDone: Bool {
         get { UserDefaults.standard.object(forKey: doneKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: doneKey) }
+    }
+
+    /// "Having trouble" banners when tool calls keep failing (on by default).
+    static var notifyTrouble: Bool {
+        get { UserDefaults.standard.object(forKey: "notifyTrouble") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "notifyTrouble") }
     }
 
     /// A short sound when a task is done (off by default).
@@ -38,12 +46,15 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     var promptGrace: TimeInterval = 5
     /// Work shorter than this is not worth a "Done".
     var minWork: TimeInterval = 20
+    /// This many failed calls in a row is "having trouble".
+    var troubleAfter = 3
 
     private var center: UNUserNotificationCenter?
     private var promptSeen: [Int: Date] = [:]
     private var promptPosted = Set<Int>()
     private var workingSince: [Int: Date] = [:]
     private var lastState: [Int: String] = [:]
+    private var troubled = Set<Int>()
 
     private enum ID {
         static let promptCategory = "pinlet.prompt"
@@ -109,10 +120,17 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             let busy = row.state == "working" || row.state == "awake"
             if busy {
                 if workingSince[row.pid] == nil { workingSince[row.pid] = now }
-            } else if let since = workingSince.removeValue(forKey: row.pid), row.state == "ready" {
+            } else if row.state == "ready" || row.state == "listening",
+                      let since = workingSince.removeValue(forKey: row.pid) {
                 finished(row, worked: now.timeIntervalSince(since))
             }
+            if row.failures >= troubleAfter {
+                if troubled.insert(row.pid).inserted { trouble(row) }
+            } else {
+                troubled.remove(row.pid)
+            }
         }
+        troubled.formIntersection(seen)
         for pid in Set(workingSince.keys).subtracting(seen) { workingSince[pid] = nil }  // stopped or hidden
         for pid in Set(lastState.keys).subtracting(seen) { lastState[pid] = nil }
     }
@@ -130,13 +148,31 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         if Notifier.finishSound { NSSound(named: "Glass")?.play() }
         guard Notifier.notifyWhenDone else { return }
         let content = UNMutableNotificationContent()
-        content.title = "\(row.title) is done"
         let secs = Int(worked)
-        content.body = "Worked for \(secs / 60):\(String(format: "%02d", secs % 60))."
+        let took = "Worked for \(secs / 60):\(String(format: "%02d", secs % 60))."
+        if row.state == "listening" && !row.reason.isEmpty {
+            content.title = "\(row.title) is waiting for you"
+            content.body = "\(row.reason)\n\(took)"
+        } else {
+            content.title = "\(row.title) is done"
+            content.body = took
+        }
         content.categoryIdentifier = ID.doneCategory
         content.threadIdentifier = "pinlet-\(row.pid)"
         if #available(macOS 12.0, *) { content.interruptionLevel = .active }
         post("done-\(row.pid)-\(Int(Date().timeIntervalSince1970))", content)
+    }
+
+    private func trouble(_ row: TopbarView.Row) {
+        guard Notifier.notifyTrouble else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "\(row.title) is having trouble"
+        content.body = "\(row.failures) steps in a row failed. Open the activity panel to see what it is doing, or stop it."
+        content.categoryIdentifier = ID.doneCategory
+        content.threadIdentifier = "pinlet-\(row.pid)"
+        content.sound = .default
+        if #available(macOS 12.0, *) { content.interruptionLevel = .active }
+        post("trouble-\(row.pid)-\(Int(Date().timeIntervalSince1970))", content)
     }
 
     private func post(_ id: String, _ content: UNNotificationContent) {

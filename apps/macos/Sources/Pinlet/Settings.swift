@@ -91,6 +91,7 @@ struct SettingsView: View {
     let restart: () -> Void
     @State private var loginItem = LoginItem.enabled
     @State private var notifyDone = Notifier.notifyWhenDone
+    @State private var notifyTrouble = Notifier.notifyTrouble
     @State private var finishSound = Notifier.finishSound
     @State private var haptics = Notifier.haptics
     @State private var announce = Notifier.announce
@@ -145,6 +146,8 @@ struct SettingsView: View {
                 Section {
                     Toggle("Notify when a task is done", isOn: $notifyDone)
                         .onChange(of: notifyDone) { Notifier.notifyWhenDone = $0 }
+                    Toggle("Notify when a Pinlet keeps failing", isOn: $notifyTrouble)
+                        .onChange(of: notifyTrouble) { Notifier.notifyTrouble = $0 }
                     Toggle("Play a sound when a task is done", isOn: $finishSound)
                         .onChange(of: finishSound) { Notifier.finishSound = $0 }
                     Toggle("Tap the trackpad when Pinlet asks", isOn: $haptics)

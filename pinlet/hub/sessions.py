@@ -40,6 +40,10 @@ class SessionInfo:
     agent_key: str = ""
     # PINLET_TOOL_TIMEOUT_S from the client's own config (None = not set).
     tool_timeout_s: float | None = None
+    # Tool calls in a row that ended in an error (a Deny or Stop is not one).
+    failures: int = 0
+    # The reason the AI gave wait_for_wake while it waits ("" when not waiting).
+    waiting_for: str = ""
 
     @property
     def turbo(self) -> bool:
@@ -91,6 +95,17 @@ def note_call(tool: str) -> None:
     info.calls += 1
     info.last_call = time.time()
     info.last_tool = tool
+
+
+def note_outcome(outcome: str, info: SessionInfo | None = None) -> None:
+    """Counts failures in a row: ``error`` adds one, ``ok`` resets, a handoff kind leaves it."""
+    info = info or CURRENT.get()
+    if info is None:
+        return
+    if outcome == "error":
+        info.failures += 1
+    elif outcome == "ok":
+        info.failures = 0
 
 
 def rename(name: str | None) -> None:

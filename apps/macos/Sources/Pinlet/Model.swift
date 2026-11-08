@@ -12,6 +12,10 @@ struct TopbarView: Equatable {
         var color: String
         var shape: String
         var actions: [Action]
+        /// Tool calls in a row that failed (shared sessions).
+        var failures = 0
+        /// What a waiting Pinlet's AI said it waits for ("" otherwise).
+        var reason = ""
     }
 
     struct Action: Equatable {
@@ -62,7 +66,9 @@ struct TopbarView: Equatable {
                 detail: r["detail"] as? String ?? "",
                 color: r["color"] as? String ?? "#0EA5C6",
                 shape: r["shape"] as? String ?? "moon",
-                actions: TopbarView.actions(r["actions"]))
+                actions: TopbarView.actions(r["actions"]),
+                failures: (r["failures"] as? NSNumber)?.intValue ?? 0,
+                reason: r["reason"] as? String ?? "")
         }
         running = (json["running"] as? NSNumber)?.intValue ?? rows.count
         working = (json["working"] as? NSNumber)?.intValue ?? 0

@@ -195,6 +195,8 @@ def session_states(
             "elapsed": float(s.get("elapsed") or 0),
             "app": s.get("app") or "",
             "last_call": float(s.get("last_call") or 0.0),
+            "failures": int(s.get("failures") or 0),
+            "reason": str(s.get("waiting_for") or ""),
         }
     return out
 
