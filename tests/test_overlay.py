@@ -877,7 +877,7 @@ def test_annotate_chip_grows_with_detail_and_uses_risk_colour():
     detailed = annotate(bg, TrackState(cursor=(10, 0), intent="Click “Run Synthesis”"))
     assert right_edge(detailed) > right_edge(plain) + 60
     red = annotate(bg, TrackState(cursor=(10, 0), risk="danger"))
-    r, g, b = red.getpixel((30, 22 + 18))
+    r, g, _b = red.getpixel((30, 22 + 18))
     assert r > 200 and g < 150
 
 
@@ -891,7 +891,7 @@ def test_overlay_config_pill_options():
 
 
 def test_client_start_async_starts_one_helper(fake_client):
-    client, log = fake_client
+    client, _log = fake_client
     client.start_async()
     client.start_async()
     deadline = time.time() + 5

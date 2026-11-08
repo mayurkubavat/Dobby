@@ -76,7 +76,7 @@ def main() -> int:
     ocr = get_ocr_engine()
     if img is not None:
         lines, ms, err = timed(lambda: ocr.recognize(img))
-        lines2, ms2, _ = timed(lambda: ocr.recognize(img))
+        _lines2, ms2, _ = timed(lambda: ocr.recognize(img))
         report["ocr"] = {
             "engine": ocr.name,
             "available": ocr.is_available,

@@ -59,7 +59,7 @@ def test_standing_rules_from_apps_json(tmp_path):
     path = tmp_path / "apps.json"
     path.write_text(json.dumps({"apps": {"Terminal": "click", "Vivado": "full"}, "default": "ask"}))
     g = AppGrants(path=path, env={})
-    never = lambda app, detail: pytest.fail("must not ask")  # noqa: E731
+    never = lambda app, detail: pytest.fail("must not ask")
     g.check("Vivado", "type", never)
     g.check("Terminal", "click", never)
     with pytest.raises(AppBlocked) as err:
@@ -189,7 +189,7 @@ class Desk:
         self.done = []
 
     def list_windows(self):
-        box = lambda x: SimpleNamespace(x=x, y=0, width=100, height=100)  # noqa: E731
+        box = lambda x: SimpleNamespace(x=x, y=0, width=100, height=100)
         return [
             SimpleNamespace(title="Vivado", app_name="vivado", bbox=box(0)),
             SimpleNamespace(title="Inbox", app_name="Mail", bbox=box(100)),
@@ -226,7 +226,7 @@ def test_first_click_in_an_app_asks_then_acts(tmp_path):
 
 
 def test_app_is_the_window_under_the_point(tmp_path):
-    hal, ov, desk = _hal(tmp_path, answers=[False])
+    hal, _ov, desk = _hal(tmp_path, answers=[False])
     with pytest.raises(OverlayBlocked) as err:
         hal.mouse_click(150, 10)
     assert "Mail" in str(err.value)
@@ -247,7 +247,7 @@ def test_click_only_app_refuses_typing_without_asking(tmp_path):
 
 def test_send_button_asks_allow_deny(tmp_path):
     (tmp_path / "apps.json").write_text(json.dumps({"default": "full"}))
-    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}  # noqa: E731
+    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}
     hal, ov, desk = _hal(tmp_path, answers=[False], hit=hit)
     with pytest.raises(OverlayDenied):
         hal.mouse_click(10, 10)
@@ -257,15 +257,15 @@ def test_send_button_asks_allow_deny(tmp_path):
 
 def test_ordinary_button_does_not_ask(tmp_path):
     (tmp_path / "apps.json").write_text(json.dumps({"default": "full"}))
-    hit = lambda x, y: {"role": "button", "name": "Run Synthesis", "secure": False}  # noqa: E731
-    hal, ov, desk = _hal(tmp_path, hit=hit)
+    hit = lambda x, y: {"role": "button", "name": "Run Synthesis", "secure": False}
+    hal, ov, _desk = _hal(tmp_path, hit=hit)
     hal.mouse_click(10, 10)
     assert not [c for c in ov.calls if c[0] == "confirm"]
 
 
 def test_password_field_is_handed_to_the_person(tmp_path):
     (tmp_path / "apps.json").write_text(json.dumps({"default": "full"}))
-    hit = lambda x, y: {"role": "password text", "name": "Password", "secure": True}  # noqa: E731
+    hit = lambda x, y: {"role": "password text", "name": "Password", "secure": True}
     hal, ov, desk = _hal(tmp_path, hit=hit)
     hal.mouse_click(10, 10)
     with pytest.raises(OverlayBlocked) as err:
@@ -277,8 +277,8 @@ def test_password_field_is_handed_to_the_person(tmp_path):
 
 def test_typing_names_the_field(tmp_path):
     (tmp_path / "apps.json").write_text(json.dumps({"default": "full"}))
-    hit = lambda x, y: {"role": "text", "name": "Search", "secure": False}  # noqa: E731
-    hal, ov, desk = _hal(tmp_path, hit=hit)
+    hit = lambda x, y: {"role": "text", "name": "Search", "secure": False}
+    hal, ov, _desk = _hal(tmp_path, hit=hit)
     hal.mouse_click(10, 10)
     hal.keyboard_type("clk_div")
     assert ("intent", "Type “clk_div” into ‘Search’") in ov.calls
@@ -318,7 +318,7 @@ def test_overlay_config_follows_the_mode():
 
 
 def test_turbo_hal_never_prompts(tmp_path):
-    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}  # noqa: E731
+    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}
     ov, desk = Overlay(answers=[False]), Desk()
     OverlayHAL(desk, ov, hit_test=hit).mouse_click(150, 10)
     assert desk.done == [("click", 150, 10)]
@@ -343,7 +343,7 @@ def test_wrap_hal_turns_prompts_on_only_in_secure(monkeypatch):
 def test_one_shared_dobby_serves_turbo_and_secure_clients(tmp_path):
     from dobby.mode import is_secure, session_mode
 
-    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}  # noqa: E731
+    hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}
 
     class Turbo(Overlay):
         def set_turbo(self, on):

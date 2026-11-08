@@ -275,7 +275,7 @@ def test_menu_offers_wake_and_sleep(make):
 
 
 def test_non_owner_helper_shows_awake(make):
-    a, _ = make()
+    _a, _ = make()
     b, _ = make()
     assert not b.bar_owner.owned and not b.pill.window.isVisible()
     b.wake()
@@ -352,7 +352,7 @@ def test_wake_from_menu_while_paused_resumes_for_a_waiting_ai(make):
 
 
 def test_non_owner_helper_shows_its_waiting_ai(make):
-    a, _ = make()
+    _a, _ = make()
     b, out = make()
     assert not b.bar_owner.owned and not b.pill.window.isVisible()
     b.last_action = time.monotonic() - 3600

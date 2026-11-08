@@ -132,9 +132,6 @@ from Quartz import (
 
 from ..personality import Voice
 from . import geometry, inputlock, protocol, style, topbar
-
-_kCGEventSourceUserData = 42
-DOBBY_EVENT_TAG = 0x444F4242  # same value as dobby.hal.macos.DOBBY_EVENT_TAG
 from .barlock import (
     BAR_LOCK,
     BarRow,
@@ -156,6 +153,9 @@ from .menu import (
     status_of,
     takes_over,
 )
+
+_kCGEventSourceUserData = 42
+DOBBY_EVENT_TAG = 0x444F4242  # same value as dobby.hal.macos.DOBBY_EVENT_TAG
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "color": "#7C5CFF",  # Dobby violet; deliberately not Claude's orange
@@ -290,7 +290,7 @@ class _AXProbe:
     def __init__(self) -> None:
         self.ok = False
         try:
-            import ApplicationServices as AS  # noqa: N812
+            import ApplicationServices as AS
 
             self.AS = AS
             self.system = AS.AXUIElementCreateSystemWide()
@@ -2363,7 +2363,7 @@ class OverlayController:
         if view is None:
             self.pill.hide()
         else:
-            mode, text, primary, secondary, color, dot_alpha = view
+            mode, _text, _primary, _secondary, color, _dot_alpha = view
             rgb = self.rgb if color == "risk" else self.colors[color]
             now = time.monotonic()
             spec = style.bar_spec(

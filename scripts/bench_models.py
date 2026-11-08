@@ -24,10 +24,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dobby.config import CONFIG  # noqa: E402
-from dobby.gemma.client import GemmaClient  # noqa: E402
-from dobby.local_models import KNOWN_MODELS, ROLES, model_for, profile  # noqa: E402
-from dobby.model_bench import bench_model, markdown  # noqa: E402
+from dobby.config import CONFIG
+from dobby.gemma.client import GemmaClient
+from dobby.local_models import KNOWN_MODELS, ROLES, model_for, profile
+from dobby.model_bench import bench_model, markdown
 
 
 def main() -> int:

@@ -5,17 +5,15 @@ sub-pane bounding box routing, and web application automation macros.
 """
 
 import time
+from typing import Any
+
+from dobby.plugins.base import BaseUIAppPlugin
+from dobby.types import FeatureDescriptor, SubPaneROI
 
 
 def _send_hotkey(hal, combo: str) -> None:
     parts = [p.strip().lower() for p in combo.split("+")]
     hal.keyboard_hotkey(parts)
-
-
-from typing import Any
-
-from dobby.plugins.base import BaseUIAppPlugin
-from dobby.types import FeatureDescriptor, SubPaneROI
 
 
 class ChromeBrowserPlugin(BaseUIAppPlugin):

@@ -8,11 +8,11 @@ import pytest
 
 pytest.importorskip("google.adk")
 
-from google.adk.models import BaseLlm, LlmRequest, LlmResponse  # noqa: E402
-from google.genai import types  # noqa: E402
+from google.adk.models import BaseLlm, LlmRequest, LlmResponse
+from google.genai import types
 
-from dobby.adk.plan import ACTION_TOOLS, Plan  # noqa: E402
-from dobby.adk.runner import run_plan  # noqa: E402
+from dobby.adk.plan import ACTION_TOOLS, Plan
+from dobby.adk.runner import run_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 

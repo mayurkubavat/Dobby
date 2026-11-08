@@ -258,7 +258,7 @@ def _xvfb():
     if not shutil.which("Xvfb"):
         pytest.skip("needs Xvfb")
     pytest.importorskip("Xlib")
-    disp = ":%d" % (90 + os.getpid() % 50)
+    disp = f":{90 + os.getpid() % 50}"
     proc = subprocess.Popen(["Xvfb", disp, "-screen", "0", "800x600x24"], stderr=subprocess.DEVNULL)
     time.sleep(1.0)
     if proc.poll() is not None:

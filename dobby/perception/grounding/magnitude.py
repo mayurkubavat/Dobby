@@ -94,7 +94,7 @@ def ground_magnitude_icon(
     found = match_magnitude(search, template)
     if found is None:
         return None
-    score, (x, y), (tw, th) = found
+    _score, (x, y), (tw, th) = found
     digest = hashlib.sha256(template.tobytes()).hexdigest()[:12]
     if anchor is not None:
         anchor.magnitude_sha = digest

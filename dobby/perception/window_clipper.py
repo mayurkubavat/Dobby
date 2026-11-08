@@ -72,7 +72,7 @@ class WindowClipper:
         filtered: list[UIElement] = []
 
         for elem in elements:
-            bx, by, bw, bh = elem.bbox.x, elem.bbox.y, elem.bbox.width, elem.bbox.height
+            _bx, _by, _bw, _bh = elem.bbox.x, elem.bbox.y, elem.bbox.width, elem.bbox.height
             # Check if element centroid or bbox intersects window
             cx, cy = elem.bbox.center
             if wx <= cx <= wx + ww and wy <= cy <= wy + wh:

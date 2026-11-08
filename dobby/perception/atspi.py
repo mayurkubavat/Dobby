@@ -404,7 +404,7 @@ class ATSPIInspector:
             return None
         try:
             apps = self._apps_at(x, y)
-            for app, win, origin in self._toplevels(apps):
+            for _app, win, origin in self._toplevels(apps):
                 comp = win.get_component_iface()
                 box = self._extents(comp, origin) if comp is not None else None
                 if box is None or not (
@@ -568,20 +568,19 @@ class ATSPIInspector:
                     and h > 8
                     and w * h >= CONFIG.som_min_element_area
                     and not is_collapsed_menu
-                ):
-                    if not filter_interactable or is_interactable or role == "dialog":
-                        if not name.strip():
-                            name = _safe(lambda: node.get_description()) or ""
-                        elements.append(
-                            UIElement(
-                                id=len(elements) + 1,
-                                role=role,
-                                name=name.strip()[:200],
-                                bbox=BoundingBox(x=x, y=y, width=w, height=h),
-                                interactable=is_interactable,
-                                states=self._states(node),
-                            )
+                ) and (not filter_interactable or is_interactable or role == "dialog"):
+                    if not name.strip():
+                        name = _safe(lambda: node.get_description()) or ""
+                    elements.append(
+                        UIElement(
+                            id=len(elements) + 1,
+                            role=role,
+                            name=name.strip()[:200],
+                            bbox=BoundingBox(x=x, y=y, width=w, height=h),
+                            interactable=is_interactable,
+                            states=self._states(node),
                         )
+                    )
             for c in range(node.get_child_count()):
                 child = node.get_child_at_index(c)
                 if child is not None and self._showing(child):

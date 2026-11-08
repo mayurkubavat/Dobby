@@ -260,9 +260,7 @@ def takes_over(
         return False
     if not (working or paused or takeover):
         return False
-    if turbo and not paused:
-        return False
-    return True
+    return not (turbo and not paused)
 
 
 def idle_cleanup(

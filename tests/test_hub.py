@@ -55,7 +55,7 @@ def test_sessions_registry():
         sessions.rename("claude-code")
     finally:
         sessions.CURRENT.reset(token)
-    snap = [s for s in sessions.snapshot() if s["id"] == info.id][0]
+    snap = next(s for s in sessions.snapshot() if s["id"] == info.id)
     assert snap["name"] == "claude-code" and snap["calls"] == 1 and snap["turbo"] is True
     sessions.close_session(info)
     assert not [s for s in sessions.snapshot() if s["id"] == info.id]

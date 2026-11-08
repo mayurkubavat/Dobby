@@ -142,7 +142,7 @@ def test_atspi_places_gtk4_widgets_on_screen(hal, inspector, spawn):
 
 
 def test_atspi_defaults_to_active_app(hal, inspector, spawn):
-    a, _ = spawn("--entry")
+    _a, _ = spawn("--entry")
     b, _ = spawn("--info")
     hal.focus_window(b.window_id)
     time.sleep(0.3)
@@ -161,7 +161,7 @@ def test_atspi_hit_test_finds_button(hal, inspector, spawn):
 
 def test_atspi_hit_test_reports_covering_window(hal, inspector, spawn):
     """The topmost window at a point answers, even when it is not the app being inspected."""
-    below, _ = spawn("--entry")
+    _below, _ = spawn("--entry")
     above, _ = spawn("--info")
     hal.focus_window(above.window_id)
     time.sleep(0.3)

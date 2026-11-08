@@ -26,7 +26,7 @@ import contextvars
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from . import names
 from .controller import ControlBusy, ControlChanged, ControlError, Controller, ControlStopped
@@ -67,9 +67,7 @@ def control_enabled(env: dict[str, str] | None = None) -> bool:
         return False
     if flag in _TRUE:
         return True
-    if "PYTEST_CURRENT_TEST" in env or env.get("DOBBY_REPLAY", "").lower() in _TRUE:
-        return False
-    return True
+    return not ("PYTEST_CURRENT_TEST" in env or env.get("DOBBY_REPLAY", "").lower() in _TRUE)
 
 
 def control_root(env: dict[str, str] | None = None) -> Path:

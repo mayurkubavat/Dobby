@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import multiprocessing as mp
 import os
@@ -128,7 +129,7 @@ def test_busy_step_is_never_split(tmp_path):
 def test_dead_holder_loses_lease_at_once(tmp_path):
     c = Clock()
     dead = set()
-    alive = lambda p: p not in dead  # noqa: E731
+    alive = lambda p: p not in dead
     a = make(tmp_path, c, "Claude", 1, alive=alive)
     b = make(tmp_path, c, "Agy", 2, alive=alive)
     with a.tool_scope():
@@ -463,7 +464,7 @@ def test_two_processes_never_overlap(tmp_path):
     rows = [ln.split() for ln in log.read_text().splitlines()]
     rows = sorted((float(t0), float(t1), who) for who, t0, t1 in rows)
     assert len(rows) == 32
-    for (s0, e0, w0), (s1, e1, w1) in zip(rows, rows[1:]):
+    for (_s0, e0, w0), (s1, _e1, w1) in itertools.pairwise(rows):
         assert s1 >= e0, f"{w0} and {w1} acted at the same time"
     # each two-step tool stayed in one turn: steps come in same-agent pairs
     whos = [w for _, _, w in rows]

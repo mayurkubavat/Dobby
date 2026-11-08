@@ -140,7 +140,7 @@ class Controller:
         deadline = self._clock() + wait
         notified = False
         while True:
-            ok, reason, info = self._try()
+            ok, _reason, info = self._try()
             if ok:
                 if notified and self.on_wait:
                     self.on_wait(None)

@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dobby.hal.cassette_replay import discover_cassettes, replay_cassette  # noqa: E402
+from dobby.hal.cassette_replay import discover_cassettes, replay_cassette
 
 
 def main() -> int:

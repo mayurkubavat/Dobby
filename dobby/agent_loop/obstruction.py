@@ -221,7 +221,7 @@ class ObstructionInterceptor:
         """
         # 1. Check window hierarchy for transient dialog windows
         try:
-            windows = self.hal.list_windows()
+            self.hal.list_windows()
             active_win = self.hal.get_active_window()
             active_title = active_win.title if active_win else ""
 
@@ -388,7 +388,7 @@ class ObstructionInterceptor:
         else:
             # Fuzzy match on label
             query = (button_label or button_id or "").lower().strip()
-            for key, btn in self.pending_buttons.items():
+            for _key, btn in self.pending_buttons.items():
                 if query in btn.label.lower():
                     target_btn = btn
                     break

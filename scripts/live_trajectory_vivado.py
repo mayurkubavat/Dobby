@@ -105,7 +105,7 @@ def main():
 
     t0 = time.monotonic()
     result = engine.execute_trajectory(spec)
-    elapsed_total = (time.monotonic() - t0) * 1000.0
+    (time.monotonic() - t0) * 1000.0
 
     print(f"\nTrajectory Name: {result.trajectory_name}")
     print(f"Overall Success: {result.success}")
@@ -138,7 +138,7 @@ def main():
         (r for r in result.step_results if r.step_id == "8_capture_final_waves"), None
     )
     if post_wave_step and post_wave_step.success:
-        pane_crop = hal.capture_screen()
+        hal.capture_screen()
         # Sub-pane bounding box
         roi = controller.get_active_plugin().get_sub_pane(
             "waveform_canvas", hal.get_active_window().bbox

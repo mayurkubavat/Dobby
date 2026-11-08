@@ -55,6 +55,6 @@ class SemanticGroundingProvider(BaseGroundingProvider):
         for elem in all_elements:
             name = (elem.name or "").lower()
             role = (elem.role or "").lower()
-            if (fuzzy and (q in name or q in role)) or (not fuzzy and (q == name or q == role)):
+            if (fuzzy and (q in name or q in role)) or (not fuzzy and (q in (name, role))):
                 matches.append(elem)
         return matches

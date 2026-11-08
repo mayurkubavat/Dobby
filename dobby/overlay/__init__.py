@@ -76,7 +76,7 @@ import contextlib
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..mode import is_secure
 from ..personality import normalize_level
@@ -131,9 +131,7 @@ def overlay_enabled(env: dict[str, str] | None = None, platform: str = sys.platf
         return False
     if flag in _TRUE:
         return True
-    if "PYTEST_CURRENT_TEST" in env or env.get("DOBBY_REPLAY", "").lower() in _TRUE:
-        return False
-    return True
+    return not ("PYTEST_CURRENT_TEST" in env or env.get("DOBBY_REPLAY", "").lower() in _TRUE)
 
 
 def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:

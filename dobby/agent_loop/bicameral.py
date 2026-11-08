@@ -261,30 +261,28 @@ class BicameralStepController:
         if "assert_screen_text" in expected_outcome:
             target = expected_outcome["assert_screen_text"]
             ocr_res = self._read_text(target)
-            if ocr_res is not None:
-                if ocr_res.get("count", 0) > 0:
-                    return StepExecutionVerdict(
-                        success=True,
-                        tier_used=VerificationTier.TIER0_DETERMINISTIC,
-                        confidence=1.0,
-                        reason=f"Tier 0 match: Text '{target}' confirmed on screen.",
-                        tokens_consumed=0,
-                        action_result=dispatch_res,
-                    )
+            if ocr_res is not None and ocr_res.get("count", 0) > 0:
+                return StepExecutionVerdict(
+                    success=True,
+                    tier_used=VerificationTier.TIER0_DETERMINISTIC,
+                    confidence=1.0,
+                    reason=f"Tier 0 match: Text '{target}' confirmed on screen.",
+                    tokens_consumed=0,
+                    action_result=dispatch_res,
+                )
 
         if "assert_screen_text_not_present" in expected_outcome:
             target = expected_outcome["assert_screen_text_not_present"]
             ocr_res = self._read_text(target)
-            if ocr_res is not None:
-                if ocr_res.get("count", 0) == 0:
-                    return StepExecutionVerdict(
-                        success=True,
-                        tier_used=VerificationTier.TIER0_DETERMINISTIC,
-                        confidence=1.0,
-                        reason=f"Tier 0 match: Text '{target}' confirmed dismissed/absent.",
-                        tokens_consumed=0,
-                        action_result=dispatch_res,
-                    )
+            if ocr_res is not None and ocr_res.get("count", 0) == 0:
+                return StepExecutionVerdict(
+                    success=True,
+                    tier_used=VerificationTier.TIER0_DETERMINISTIC,
+                    confidence=1.0,
+                    reason=f"Tier 0 match: Text '{target}' confirmed dismissed/absent.",
+                    tokens_consumed=0,
+                    action_result=dispatch_res,
+                )
 
         # Check AX diff if supported
         ax_diff: dict[str, Any] = {}

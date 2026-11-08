@@ -21,7 +21,7 @@ class Clock:
         return self.t
 
 
-NOON = lambda: dt.datetime(2026, 11, 2, 12, 0)  # noqa: E731
+NOON = lambda: dt.datetime(2026, 11, 2, 12, 0)
 
 
 def voice(level="elf", **kw):

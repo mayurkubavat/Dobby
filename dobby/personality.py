@@ -153,7 +153,7 @@ class Voice:
         self.subtle = dict(SUBTLE)
         for key in self.subtle:
             if lines and lines.get(key):
-                self.subtle[key] = tuple(lines[key])[0]
+                self.subtle[key] = next(iter(lines[key]))
         self.rng = random.Random(seed)
         self.clock = clock
         self.today = today

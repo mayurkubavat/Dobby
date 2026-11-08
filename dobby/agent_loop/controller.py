@@ -1053,7 +1053,7 @@ class FeedbackLoopController:
         verify_delta: bool = True,
     ) -> FindElementResult:
         """Iteratively scrolls the viewport until the query element is discovered."""
-        for scroll_idx in range(max_scrolls):
+        for _scroll_idx in range(max_scrolls):
             res = self.find_element(query=query)
             if res.found:
                 return res

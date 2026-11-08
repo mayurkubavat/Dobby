@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Union
+from typing import Any
 
 from dobby.gemma.decide import Decision, Noul
 
@@ -102,7 +102,7 @@ class GateResult:
         }
 
 
-Authorization = Union[None, bool, float, Noul]
+Authorization = None | bool | float | Noul
 
 
 def _auth_p(authorized: Authorization) -> float:

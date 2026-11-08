@@ -90,20 +90,29 @@ ignore = [
     "D105",     # magic methods
     "D107",     # __init__: document the class instead
     "SIM105",   # contextlib.suppress is not clearer than try/except/pass
+    "SIM102",   # nested ifs leave room for a comment on each condition
     "SIM108",   # ternaries are not always clearer
+    "C408",     # dict(a=1) reads fine
+    "B905",     # zip() over sequences of known equal length
+    "RUF005",   # (*a, b) is not clearer than a + (b,)
+    "RUF012",   # class-level constant tables are never mutated
+    "RUF046",   # int(round(x)) is explicit on purpose
+    "SIM115",   # lock and log files are held open on purpose
+    "E731",     # small lambdas in tests and fakes
+    "E741",     # `l` for a line or label in short comprehensions
     "RUF001", "RUF002", "RUF003",  # typographic quotes, dashes and arrows are intentional in UI text
 ]
 # Codes from linters ruff does not run here; keep their noqa comments.
 external = ["BLE001", "WPS433"]
-unfixable = [
-    "RUF100",   # review unused noqa by hand
-]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D"]
+"tests/**" = ["D", "B008", "B023", "SIM117"]
 "scripts/**" = ["D"]
 "examples/**" = ["D"]
 "apps/**" = ["D"]
+# Lambdas here are called on the spot inside the loop, so late binding is safe.
+"dobby/perception/atspi.py" = ["B023"]
+"dobby/hub/daemon.py" = ["B023"]

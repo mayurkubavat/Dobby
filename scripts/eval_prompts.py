@@ -32,7 +32,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+from PIL import Image, ImageDraw, ImageFont
 
 
 def _font(size: int):
@@ -242,7 +242,7 @@ def main() -> int:
             )
 
     n = len(rows)
-    count = lambda k: sum(1 for r in rows if r["outcome"] == k)  # noqa: E731
+    count = lambda k: sum(1 for r in rows if r["outcome"] == k)
     report = {
         "prompt": get_prompt("yes_no_logprob" if args.logprobs else "yes_no").tag,
         "logprob_answers": sum(1 for r in rows if r["source"] == "gemma_logprobs"),

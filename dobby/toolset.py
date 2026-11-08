@@ -20,6 +20,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+# Notify callbacks scheduled on the running loop; held so they finish.
+_PENDING_NOTIFIES: set[Any] = set()
+
 
 class OutputMode(str, Enum):
     """Payload output mode for MCP tools."""
@@ -218,7 +221,10 @@ class ToolSetManager:
 
                     try:
                         loop = asyncio.get_running_loop()
-                        loop.create_task(res)
+                        task = loop.create_task(res)
+                        # Keep a reference so the task is not garbage-collected mid-flight.
+                        _PENDING_NOTIFIES.add(task)
+                        task.add_done_callback(_PENDING_NOTIFIES.discard)
                     except RuntimeError:
                         asyncio.run(res)
             except Exception:

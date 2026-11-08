@@ -379,7 +379,7 @@ def bench_model(
     if not client.has_model(model):
         return {"model": model, "installed": False, "tasks": []}
     decider = GemmaDecider(client, model=model, timeout=timeout)
-    enc = lambda im: encode_image(im, quality=90)  # noqa: E731
+    enc = lambda im: encode_image(im, quality=90)
     out = []
     for task in tasks:
         start = time.perf_counter()

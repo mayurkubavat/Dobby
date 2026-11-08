@@ -295,7 +295,7 @@ def test_tag_click_area_never_covers_the_pointer_tip(tip, width):
 
 
 def test_tag_click_area_sits_below_the_arrow():
-    x, y, w, h = geometry.chip_rect((100, 100), 80, ARROW_W, ARROW_H, CHIP_H)
+    _x, y, _w, _h = geometry.chip_rect((100, 100), 80, ARROW_W, ARROW_H, CHIP_H)
     assert y >= 100 + ARROW_H  # clear of the arrow body too
 
 

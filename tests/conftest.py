@@ -146,7 +146,7 @@ def _guard_real_desktop_input():
     mp = pytest.MonkeyPatch()
     if sys.platform == "darwin":
         try:
-            import Quartz  # noqa: F401
+            import Quartz
 
             for name in ("CGEventPost", "CGEventPostToPid", "CGEventPostToPSN"):
                 if hasattr(Quartz, name):

@@ -62,7 +62,6 @@ class TrajectoryEngine:
         )
 
         overall_success = True
-        failed_step_id: str | None = None
         status_message = "Trajectory completed successfully"
 
         for step in traj_spec.steps:
@@ -107,7 +106,6 @@ class TrajectoryEngine:
                 )
                 if not step.continue_on_failure:
                     overall_success = False
-                    failed_step_id = step.step_id
                     status_message = f"Trajectory aborted at step '{step.step_id}': {step_result.error or step_result.message}"
                     if traj_spec.stop_on_failure:
                         break
