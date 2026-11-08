@@ -12,5 +12,7 @@ references/
 !plugins/dobby/skills/*/references/
 
 # Local agent notes (kept out of the repo)
+# Local model files (downloaded, not part of the repo)
+/models/
 AGENTS.md
 STATUS.md
