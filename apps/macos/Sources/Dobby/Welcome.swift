@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// First-run window: the two permissions Dobby needs, each with a live
