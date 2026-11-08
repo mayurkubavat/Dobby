@@ -58,6 +58,21 @@ def test_sessions_registry():
 
 
 # ------------------------------------------------------------ end to end
+@pytest.fixture
+def short_sock():
+    """A socket path short enough for AF_UNIX (104 bytes on macOS).
+
+    pytest's tmp_path under /var/folders is often longer than that, so the
+    daemon cannot bind and never listens.
+    """
+    import shutil
+    import tempfile
+
+    short = Path(tempfile.mkdtemp(prefix="dby", dir="/tmp" if os.path.isdir("/tmp") else None))
+    yield short / "run" / "dobby.sock"
+    shutil.rmtree(short, ignore_errors=True)
+
+
 def _rpc(sock, buf, msg):
     sock.sendall((json.dumps(msg) + "\n").encode())
     if "id" not in msg:
@@ -97,8 +112,8 @@ def _client(path, name, mode, info_name=None):
 
 
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
-def test_two_clients_share_one_dobby(tmp_path):
-    sock_path = tmp_path / "run" / "dobby.sock"
+def test_two_clients_share_one_dobby(tmp_path, short_sock):
+    sock_path = short_sock
     env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
            "HOME": str(tmp_path)}
     root = Path(__file__).resolve().parents[1]
@@ -174,8 +189,8 @@ def test_app_config_keeps_dobby_settings_not_secrets():
 
 
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
-def test_control_connection_end_to_end(tmp_path):
-    sock_path = tmp_path / "run" / "dobby.sock"
+def test_control_connection_end_to_end(tmp_path, short_sock):
+    sock_path = short_sock
     env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
            "HOME": str(tmp_path), "DOBBY_CONTROL_DIR": str(tmp_path / "control")}
     root = Path(__file__).resolve().parents[1]
@@ -226,10 +241,10 @@ def test_each_dobby_gets_its_own_name(tmp_path):
 
 
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
-def test_clients_connecting_at_once_get_different_names(tmp_path):
+def test_clients_connecting_at_once_get_different_names(tmp_path, short_sock):
     import threading
 
-    sock_path = tmp_path / "run" / "dobby.sock"
+    sock_path = short_sock
     env = {**os.environ, "DOBBY_SOCKET": str(sock_path), "DOBBY_OVERLAY": "0", "DOBBY_IDLE_EXIT": "0",
            "HOME": str(tmp_path), "DOBBY_CONTROL": "1", "DOBBY_CONTROL_DIR": str(tmp_path / "control")}
     root = Path(__file__).resolve().parents[1]
