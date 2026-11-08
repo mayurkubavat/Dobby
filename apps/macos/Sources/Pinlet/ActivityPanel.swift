@@ -20,6 +20,10 @@ final class ActivityPanel {
     /// (pid, text) → sends the instruction; calls back with the reply or nil.
     var onTell: (_ pid: Int, _ text: String, _ done: @escaping ([String: Any]?) -> Void) -> Void = { _, _, done in done(nil) }
     var onAction: (_ key: String, _ pid: Int?) -> Void = { _, _ in }
+    /// Fetches the journal and agent messages (control op "activity").
+    var onFetchFeed: (_ done: @escaping ([String: Any]?) -> Void) -> Void = { done in done(nil) }
+    private var lastFeed = Date.distantPast
+    private var fetchingFeed = false
 
     private let model = ActivityModel()
     private var panel: ActivityWindow?
@@ -30,6 +34,7 @@ final class ActivityPanel {
     func update(_ view: TopbarView, reachable: Bool) {
         model.absorb(view, reachable: reachable)
         guard isShown else { return }
+        if Date().timeIntervalSince(lastFeed) > 3 { fetchFeed() }
         DispatchQueue.main.async { [weak self] in self?.fit() }  // after SwiftUI lays out the change
     }
 
@@ -45,6 +50,19 @@ final class ActivityPanel {
 
     func toggle() {
         isShown ? hide() : show()
+    }
+
+    /// The journal and agent messages, at most every 3 s while the panel is open.
+    private func fetchFeed() {
+        guard !fetchingFeed else { return }
+        fetchingFeed = true
+        lastFeed = Date()
+        onFetchFeed { [weak self] reply in
+            guard let self else { return }
+            self.fetchingFeed = false
+            if let reply { self.model.absorbFeed(reply) }
+            DispatchQueue.main.async { [weak self] in self?.fit() }
+        }
     }
 
     func show(selecting pid: Int? = nil) {
@@ -66,6 +84,7 @@ final class ActivityPanel {
             panel.makeKeyAndOrderFront(nil)
         }
         model.focusField += 1
+        fetchFeed()
     }
 
     func hide() {
@@ -167,6 +186,51 @@ final class ActivityModel: ObservableObject {
     @Published private(set) var recent: [Int: [String]] = [:]
 
     static let recentLimit = 6
+    static let feedLimit = 5
+
+    /// One line of the shared history: a journal sentence or an agent's message.
+    struct FeedItem: Equatable, Identifiable {
+        var id: String
+        var time: Date?
+        var text: String
+        var message: Bool
+    }
+
+    /// The activity journal and agent-to-agent messages, newest first.
+    @Published private(set) var feed: [FeedItem] = []
+
+    func absorbFeed(_ reply: [String: Any]) {
+        var items: [FeedItem] = []
+        for line in reply["lines"] as? [[String: Any]] ?? [] {
+            guard let text = line["text"] as? String, !text.isEmpty else { continue }
+            let end = line["end"] as? String ?? line["start"] as? String ?? ""
+            items.append(FeedItem(id: "j\(end)\(text)", time: ActivityModel.parseTime(end),
+                                  text: text, message: false))
+        }
+        for msg in reply["messages"] as? [[String: Any]] ?? [] {
+            guard let text = msg["text"] as? String, !text.isEmpty else { continue }
+            let from = (msg["from"] as? String ?? "An agent").components(separatedBy: " · ").first ?? "An agent"
+            let to = (msg["to"] as? String ?? "an agent").components(separatedBy: " · ").first ?? "an agent"
+            let verb = (msg["kind"] as? String) == "handoff" ? "handed control to" : "to"
+            let t = (msg["t"] as? NSNumber)?.doubleValue
+            items.append(FeedItem(id: "m\(t ?? 0)\(text)", time: t.map { Date(timeIntervalSince1970: $0) },
+                                  text: "\(from) \(verb) \(to): \(text)", message: true))
+        }
+        items.sort { ($0.time ?? .distantPast) > ($1.time ?? .distantPast) }
+        let kept = Array(items.prefix(ActivityModel.feedLimit))
+        if kept != feed { feed = kept }
+    }
+
+    private static let isoFull: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoPlain = ISO8601DateFormatter()
+
+    static func parseTime(_ text: String) -> Date? {
+        isoFull.date(from: text) ?? isoPlain.date(from: text)
+    }
 
     func absorb(_ view: TopbarView, reachable: Bool) {
         if view != self.view { self.view = view }
@@ -254,6 +318,9 @@ struct ActivityView: View {
                 if let row = model.selectedRow, let lines = model.recent[row.pid], !lines.isEmpty {
                     recentSteps(lines)
                 }
+            }
+            if !model.feed.isEmpty { feedList }
+            if !model.view.rows.isEmpty {
                 field
                 statusLine
             }
@@ -299,6 +366,27 @@ struct ActivityView: View {
                         .font(.callout)
                         .foregroundStyle(item.offset == lines.count - 1 ? .primary : .secondary)
                         .lineLimit(2)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var feedList: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Earlier").font(.caption).foregroundStyle(.secondary)
+            ForEach(model.feed) { item in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: item.message ? "bubble.left.and.bubble.right" : "clock")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
+                        .accessibilityLabel(item.message ? "Agent message" : "Activity")
+                    Text(item.text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Spacer(minLength: 4)
+                    if let time = item.time {
+                        Text(time, style: .time).font(.caption2).foregroundStyle(.tertiary)
+                    }
                 }
             }
         }

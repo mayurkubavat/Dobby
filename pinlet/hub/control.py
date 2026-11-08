@@ -16,7 +16,9 @@ then one JSON request per line, each answered with the same ``id``::
     {"id": 6, "op": "tell", "pid": 4242, "text": "use the March file"}  -> {"queued": 1, "woke": false}
 
 ``activity`` returns ``lines``: the activity journal grouped into sentences
-("Tibble · Cursor clicked 4 times in Safari"), oldest first (see :mod:`pinlet.journal`).
+("Tibble · Cursor clicked 4 times in Safari"), oldest first (see :mod:`pinlet.journal`),
+and ``messages``: the last messages agents sent each other (``from``, ``to``, ``text``,
+``kind``, ``t``; see :mod:`pinlet.control.peers`).
 
 ``topbar`` also returns ``prompts``: the Allow/Deny questions waiting for the
 app's card (see :mod:`pinlet.hub.prompts`).
@@ -245,9 +247,13 @@ def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -
             body = {"prompts": prompts.pending()}
         elif op == "activity":
             from pinlet import journal
+            from pinlet.control import peers
 
             limit = int(request.get("limit") or 200)
-            body = {"lines": journal.summarize(journal.read(max(1, min(limit, 2000))))}
+            body = {
+                "lines": journal.summarize(journal.read(max(1, min(limit, 2000)))),
+                "messages": peers.recent_messages(_root(), 10),
+            }
         elif op == "answer":
             from . import prompts
 

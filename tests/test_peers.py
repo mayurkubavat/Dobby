@@ -144,3 +144,17 @@ def test_the_tools_send_and_hand_over(tmp_path, monkeypatch):
     assert out["handed_over"] and out["to"] == "Pip · Cursor"
     notes = inbox.take_notes(tmp_path, other)
     assert [n["kind"] for n in notes] == ["message", "handoff"]
+
+
+def test_the_panel_sees_recent_agent_messages(tmp_path):
+    me, _ = _agents(tmp_path)
+    target = peers.find(peers.roster(tmp_path, me_pid=me), "Pip")
+    for i in range(peers.RECENT_KEEP + 3):
+        peers.deliver(tmp_path, target, f"note  {i}\n", {"name": "Tibble · Gemini", "pid": me})
+    kept = peers.recent_messages(tmp_path)
+    assert len(kept) == peers.RECENT_KEEP
+    assert kept[-1]["text"] == f"note {peers.RECENT_KEEP + 2}"
+    assert kept[-1]["from"] == "Tibble · Gemini" and "Pip" in kept[-1]["to"]
+    assert len(peers.recent_messages(tmp_path, 2)) == 2
+    assert oct((tmp_path / "agent_messages.json").stat().st_mode & 0o777) == "0o600"
+    assert peers.recent_messages(tmp_path / "nowhere") == []

@@ -25,6 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             quit: { [weak self] in self?.quit() }))
         activity.onAction = { [weak self] key, pid in self?.send(key, pid: pid) }
         activity.onTell = { [weak self] pid, text, done in self?.tell(pid, text, done: done) }
+        activity.onFetchFeed = { [weak self] done in
+            self?.control.queue.async { [weak self] in
+                let reply = self?.control.activity()
+                DispatchQueue.main.async { done(reply) }
+            }
+        }
         hotKey = HotKey { [weak self] in self?.activity.toggle() }
         NotificationCenter.default.addObserver(forName: ActivityPanel.showRequest, object: nil, queue: .main) {
             [weak self] _ in self?.activity.show()

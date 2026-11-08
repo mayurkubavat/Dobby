@@ -139,6 +139,13 @@ final class ControlClient {
         request("tell", ["pid": pid, "text": text])
     }
 
+    /// The activity journal in sentences and the latest agent-to-agent messages
+    /// (control op "activity"), or nil when the shared Pinlet is not reachable.
+    func activity(limit: Int = 300) -> [String: Any]? {
+        guard let reply = request("activity", ["limit": limit]), reply["ok"] as? Bool == true else { return nil }
+        return reply
+    }
+
     @discardableResult
     func action(_ key: String, pid: Int? = nil) -> Bool {
         var fields: [String: Any] = ["key": key]

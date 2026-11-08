@@ -13,6 +13,8 @@ receiving AI is told so (see ``pinlet.server.AGENT_NOTE``).
 
 from __future__ import annotations
 
+import json
+import os
 import threading
 import time
 from collections import deque
@@ -20,9 +22,10 @@ from pathlib import Path
 from typing import Any
 
 from . import inbox, names, registry
-from .lease import LeaseStore, polling
+from .lease import LeaseStore, file_lock, polling
 
 RATE_PER_MIN = 10  # messages one agent may send per minute
+RECENT_KEEP = 30  # agent-to-agent messages kept for the activity panel
 _sent: dict[str, deque[float]] = {}
 _sent_lock = threading.Lock()
 
@@ -116,6 +119,7 @@ def deliver(
     """Queues ``text`` for ``target`` from ``sender``; wakes it when it waits for a wake."""
     pid = int(target["pid"])
     inbox.add(root, pid, text, sender=sender, kind=kind)
+    _remember(root, sender, target, text, kind)
     woke = bool(inbox.read(root, pid)["listening"])
     if woke:
         inbox.request_wake(root, pid)
@@ -124,3 +128,44 @@ def deliver(
         "to": target["name"],
         "delivery": "now (it was waiting)" if woke else "with its next Pinlet tool call",
     }
+
+
+def _recent_path(root: Path) -> Path:
+    return Path(root) / "agent_messages.json"
+
+
+def _remember(
+    root: Path, sender: dict[str, Any], target: dict[str, Any], text: str, kind: str
+) -> None:
+    """Keeps the message for the person's activity panel (the last ``RECENT_KEEP``)."""
+    path = _recent_path(root)
+    entry = {
+        "t": time.time(),
+        "from": str(sender.get("name") or "An agent"),
+        "to": str(target.get("name") or "an agent"),
+        "kind": kind,
+        "text": " ".join(str(text).split())[:300],
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with file_lock(path.with_suffix(".lock")):
+            kept = recent_messages(root) + [entry]
+            tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(kept[-RECENT_KEEP:], fh)
+            os.replace(tmp, path)
+    except OSError:
+        pass  # the message itself was delivered; the panel just misses it
+
+
+def recent_messages(root: Path, limit: int = RECENT_KEEP) -> list[dict[str, Any]]:
+    """The latest messages agents sent each other, oldest first (``from``, ``to``, ``text``)."""
+    try:
+        data = json.loads(_recent_path(root).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    rows = (
+        [m for m in data if isinstance(m, dict) and m.get("text")] if isinstance(data, list) else []
+    )
+    return rows[-max(0, limit) :] if limit else []
