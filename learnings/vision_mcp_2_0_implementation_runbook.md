@@ -63,8 +63,8 @@ flowchart TD
 ## 2. Phase-by-Phase Deliverables
 
 ### Phase 1 (P0): Event-Driven Quiescence & Semantic Verification Engine
-* **Source**: [`dobby/hal/quiescence.py`](file:///home/mk/DV/git/Vision/dobby/hal/quiescence.py)
-* **Tests**: [`tests/test_quiescence.py`](file:///home/mk/DV/git/Vision/tests/test_quiescence.py)
+* **Source**: [`dobby/hal/quiescence.py`](../dobby/hal/quiescence.py)
+* **Tests**: [`tests/test_quiescence.py`](../tests/test_quiescence.py)
 * **Git Commit**: `dabb67d`
 * **Capabilities**:
   * Loads `libX11.so.6`, `libXdamage.so.1`, and `libXfixes.so.3` via Python `ctypes`.
@@ -73,8 +73,8 @@ flowchart TD
   * Evaluates declarative `PostConditionContract` (e.g. `TEXT_APPEARED`, `WINDOW_SPAWNED`, `AT_SPI_STATE_PRESENT`, `CURSOR_CHANGED`) instead of relying solely on image pixel differences.
 
 ### Phase 2 (P3): Semantic Modal Triage & Policy Router
-* **Source**: [`dobby/agent_loop/obstruction.py`](file:///home/mk/DV/git/Vision/dobby/agent_loop/obstruction.py)
-* **Tests**: [`tests/test_modal_triage.py`](file:///home/mk/DV/git/Vision/tests/test_modal_triage.py)
+* **Source**: [`dobby/agent_loop/obstruction.py`](../dobby/agent_loop/obstruction.py)
+* **Tests**: [`tests/test_modal_triage.py`](../tests/test_modal_triage.py)
 * **Git Commit**: `aa6f96c`
 * **Capabilities**:
   * 4-Tier safety classification:
@@ -85,8 +85,8 @@ flowchart TD
   * MCP tools: `dismiss_obstructions()` and zero-token `resolve_modal_dialog(button_id, button_label)`.
 
 ### Phase 3 (P2): GUI-to-Script Skill Crystallization Engine
-* **Source**: [`dobby/crystallization/`](file:///home/mk/DV/git/Vision/dobby/crystallization/)
-* **Tests**: [`tests/test_crystallization.py`](file:///home/mk/DV/git/Vision/tests/test_crystallization.py)
+* **Source**: [`dobby/crystallization/`](../dobby/crystallization/)
+* **Tests**: [`tests/test_crystallization.py`](../tests/test_crystallization.py)
 * **Git Commit**: `bd0835d`
 * **Capabilities**:
   * `JournalCorrelator`: Tracks inotify/byte-offsets on EDA journal files (`vivado.jou`, `novas.cmd`), bracketing physical actions and stripping viewport noise.
@@ -95,8 +95,8 @@ flowchart TD
   * MCP tools: `start_skill_recording()`, `stop_skill_recording()`, `crystallize_skill()`, `execute_crystallized_skill()`, `list_crystallized_skills()`.
 
 ### Phase 4 (P1): Local Neural Grounding Sidecar & Unified Virtual DOM (vDOM)
-* **Source**: [`dobby/vdom/fusion.py`](file:///home/mk/DV/git/Vision/dobby/vdom/fusion.py), [`dobby/vdom/query.py`](file:///home/mk/DV/git/Vision/dobby/vdom/query.py), [`dobby/vdom/sidecar.py`](file:///home/mk/DV/git/Vision/dobby/vdom/sidecar.py)
-* **Tests**: [`tests/test_vdom_and_layout.py`](file:///home/mk/DV/git/Vision/tests/test_vdom_and_layout.py)
+* **Source**: [`dobby/vdom/fusion.py`](../dobby/vdom/fusion.py), [`dobby/vdom/query.py`](../dobby/vdom/query.py), [`dobby/vdom/sidecar.py`](../dobby/vdom/sidecar.py)
+* **Tests**: [`tests/test_vdom_and_layout.py`](../tests/test_vdom_and_layout.py)
 * **Git Commit**: `d5b97c9`
 * **Capabilities**:
   * `LocalNeuralGrounder`: Shared memory DMA ring buffer (`/dev/shm/vision_mcp_fb`) for sub-30ms frame inspection without socket marshaling.
@@ -105,8 +105,8 @@ flowchart TD
   * MCP tools: `capture_vdom()`, `query_vdom()`.
 
 ### Phase 5 (P4): Dynamic Anchor-Relative Sub-Pane Resolution
-* **Source**: [`dobby/vdom/layout.py`](file:///home/mk/DV/git/Vision/dobby/vdom/layout.py), [`dobby/plugins/vivado.py`](file:///home/mk/DV/git/Vision/dobby/plugins/vivado.py)
-* **Tests**: [`tests/test_vdom_and_layout.py`](file:///home/mk/DV/git/Vision/tests/test_vdom_and_layout.py)
+* **Source**: [`dobby/vdom/layout.py`](../dobby/vdom/layout.py), [`dobby/plugins/vivado.py`](../dobby/plugins/vivado.py)
+* **Tests**: [`tests/test_vdom_and_layout.py`](../tests/test_vdom_and_layout.py)
 * **Git Commit**: `d5b97c9`
 * **Capabilities**:
   * Replaces fragile static pixel bounding boxes with topological constraints anchored to persistent vDOM elements (`tab_item[name*="Tcl Console"]`, `:sash_divider`, window edges).
@@ -117,12 +117,12 @@ flowchart TD
 
 ## 3. Test Suite Verification
 
-Full test suite execution using `/home/mk/DV/git/Vision/.venv/bin/python3 -m pytest tests/`:
+Full test suite execution using `.venv/bin/python3 -m pytest tests/`:
 
 ```text
 ============================= test session starts ==============================
 platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.7.0
-rootdir: /home/mk/DV/git/Vision
+rootdir: /path/to/Dobby
 configfile: pyproject.toml
 plugins: anyio-4.15.1, typeguard-4.4.4
 collected 62 items
@@ -207,12 +207,12 @@ tests/test_vivado_plugin.py .....                                        [100%]
 
 ### 8.2 Standard UI Semantic Classes
 The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
-1. `push_button` $\rightarrow$ [`UIRole.PUSH_BUTTON`](file:///home/mk/DV/git/Vision/dobby/types.py#L334)
-2. `icon_button` $\rightarrow$ [`UIRole.ICON_BUTTON`](file:///home/mk/DV/git/Vision/dobby/types.py#L346)
-3. `text_input` $\rightarrow$ [`UIRole.TEXT_INPUT`](file:///home/mk/DV/git/Vision/dobby/types.py#L338)
-4. `checkbox` $\rightarrow$ [`UIRole.CHECK_BOX`](file:///home/mk/DV/git/Vision/dobby/types.py#L336)
-5. `tab_item` $\rightarrow$ [`UIRole.TAB_ITEM`](file:///home/mk/DV/git/Vision/dobby/types.py#L333)
-6. `container_viewport` $\rightarrow$ [`UIRole.PANEL`](file:///home/mk/DV/git/Vision/dobby/types.py#L331)
+1. `push_button` $\rightarrow$ [`UIRole.PUSH_BUTTON`](../dobby/types.py#L334)
+2. `icon_button` $\rightarrow$ [`UIRole.ICON_BUTTON`](../dobby/types.py#L346)
+3. `text_input` $\rightarrow$ [`UIRole.TEXT_INPUT`](../dobby/types.py#L338)
+4. `checkbox` $\rightarrow$ [`UIRole.CHECK_BOX`](../dobby/types.py#L336)
+5. `tab_item` $\rightarrow$ [`UIRole.TAB_ITEM`](../dobby/types.py#L333)
+6. `container_viewport` $\rightarrow$ [`UIRole.PANEL`](../dobby/types.py#L331)
 
 ### 8.3 Vectorized Transformation & Inversion Pipeline
 1. **Letterbox Transformation**:
@@ -227,11 +227,11 @@ The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
 - Generated via `build_default_ui_detector_model()`:
   - ONNX IR version: `ir_version = 10` (compatible with ONNX Runtime 1.31.0).
   - Opset version: `opset 17`.
-  - Stored at [`dobby/models/ui_detector_fast.onnx`](file:///home/mk/DV/git/Vision/dobby/models/ui_detector_fast.onnx) (159 KB).
+  - Stored at [`dobby/models/ui_detector_fast.onnx`](../dobby/models/ui_detector_fast.onnx) (159 KB).
 - Graceful Fallback: Seamless fallback to OpenCV contouring if ONNX Runtime is unavailable or model loading fails.
 
 ### 8.5 Verification & Test Coverage
-- Verified with 7 dedicated unit tests in [`tests/test_fast_detector.py`](file:///home/mk/DV/git/Vision/tests/test_fast_detector.py).
+- Verified with 7 dedicated unit tests in [`tests/test_fast_detector.py`](../tests/test_fast_detector.py).
 - Full regression suite: **75/75 passing tests** (100% pass rate).
 
 ---
@@ -246,19 +246,19 @@ The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
   3. **Localized Neighborhood Drift Recovery**: If visual verification detects drift, searches within a localized bounding radius ($\pm 60\text{ px}$) using normalized cross-correlation (`cv2.matchTemplate`). If matched ($\ge 0.78$ score), the locator is **auto-reanchored** with $(\Delta x, \Delta y)$ drift compensation, avoiding expensive full-screen re-grounding.
 
 ### 9.2 Telemetry & Proactive Health Checks
-- Extended [`CachedLocator`](file:///home/mk/DV/git/Vision/dobby/agent_loop/cache.py#L123-L151) schema:
+- Extended [`CachedLocator`](../dobby/agent_loop/cache.py#L123-L151) schema:
   - `heal_count`: Number of successful localized auto-reanchoring recoveries.
   - `window_offset`: `(offset_x, offset_y)` relative to host window top-left.
   - `visual_dhash`: 64-bit gradient hash for sub-millisecond pre-flight verification.
   - `template_b64`: Compact base64-encoded thumbnail for micro-template matching.
   - `last_drift`: `(dx, dy)` drift vector recorded during healing.
-- Extended [`manage_cache`](file:///home/mk/DV/git/Vision/dobby/server.py#L133-L167) tool:
+- Extended [`manage_cache`](../dobby/server.py#L133-L167) tool:
   - `action='verify'`: Proactively evaluates all cached locators for an active application against the live screen.
   - `action='heal'`: Proactively re-anchors drifting locators in place and persists updated coordinates.
   - `action='stats'`: Emits `entries_count`, `total_hits`, `total_heals`, `healed_ratio`, and per-entry drift telemetry.
 
 ### 9.3 Verification & Test Coverage
-- Verified with 8 dedicated unit and integration tests in [`tests/test_action_cache_healing.py`](file:///home/mk/DV/git/Vision/tests/test_action_cache_healing.py).
+- Verified with 8 dedicated unit and integration tests in [`tests/test_action_cache_healing.py`](../tests/test_action_cache_healing.py).
 - Full regression suite: **83/83 passing tests** (100% pass rate).
 
 ---
@@ -267,7 +267,7 @@ The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
 
 ### 10.1 Motivation & Architecture
 - **Problem**: Multi-step autonomous GUI interactions (e.g., focusing applications, adjusting waveform zoom, triggering simulation runs, capturing sub-panes, querying vDOM hierarchies, and asserting logs) previously required round-trips to multimodal LLMs for every single action. Each turn consumed 1,600+ visual/prompt tokens and added 3–5 seconds of network and model decoding latency. A routine 9-step simulation workflow incurred 14,000+ tokens and took 30–50 seconds.
-- **Solution**: A high-speed, declarative Local Macro & Trajectory Dispatcher ([`TrajectoryEngine`](file:///home/mk/DV/git/Vision/dobby/agent_loop/trajectory.py#L35)) that batches and executes entire multi-step action sequences locally at native OS speeds:
+- **Solution**: A high-speed, declarative Local Macro & Trajectory Dispatcher ([`TrajectoryEngine`](../dobby/agent_loop/trajectory.py#L35)) that batches and executes entire multi-step action sequences locally at native OS speeds:
   1. **Sub-second Execution**: Dispatches atomic OS actions (`click`, `hotkey`, `scroll`, `type_text`, `focus_window`) with 0.1ms to 100ms latency.
   2. **Zero Multimodal Token Consumption**: Runs completely offline without LLM round-trips between steps, saving 1,600 tokens per executed step.
   3. **Jinja2 Dynamic Context Interpolation**: Lifts parameters into declarative variables (`{{target_app}}`, `{{sim_time}}`) and enables data chaining across step outputs (`{{steps.step_id.output.var}}`).
@@ -331,7 +331,7 @@ The dispatcher was validated against the live, running Vivado 2025.1 CDC FIFO si
 - **Multimodal Visual Tokens Saved**: **14,400 tokens** (0 LLM round-trips during execution)
 
 ### 10.4 Verification & Test Coverage
-- Verified with 6 dedicated unit and integration tests in [`tests/test_trajectory.py`](file:///home/mk/DV/git/Vision/tests/test_trajectory.py):
+- Verified with 6 dedicated unit and integration tests in [`tests/test_trajectory.py`](../tests/test_trajectory.py):
   1. `test_trajectory_spec_validation`: Verifies schema parsing and step construction.
   2. `test_trajectory_templating_and_variables`: Verifies Jinja2 runtime variable substitution.
   3. `test_trajectory_multi_step_execution`: Verifies sequential multi-primitive dispatch.
@@ -369,7 +369,7 @@ flowchart LR
      - `verdi.add_signal`: Tcl command / drag-and-drop signal addition.
      - `verdi.command_exec`: Sourcing Tcl commands to Verdi CLI.
   3. Skill Crystallization:
-     - Track `novas.cmd` / `verdi.cmd` byte offsets using [`JournalCorrelator`](file:///home/mk/DV/git/Vision/dobby/crystallization/correlator.py#L25) to compile Verdi GUI workflows into reusable zero-token Tcl scripts.
+     - Track `novas.cmd` / `verdi.cmd` byte offsets using [`JournalCorrelator`](../dobby/crystallization/correlator.py#L25) to compile Verdi GUI workflows into reusable zero-token Tcl scripts.
 
 ### 11.2 Frontier 2: Interactive SoM Visual Debugger (`debug_vdom_overlay`)
 - **Motivation**: Debugging complex spatial layouts, OCR misalignments, or AT-SPI2 hierarchy issues currently requires inspecting raw logs or text trees.
@@ -390,7 +390,7 @@ flowchart LR
      - OS-level undo (`Ctrl+Z`, `u` in vim, `undo` in EDA consoles).
      - Navigational recovery (`Alt+Left`, browser back, window reopen).
      - File system rollback via Git stash or copy-on-write temp trees.
-  4. Declarative Integration: Flag `rollback_on_failure: bool = True` in [`TrajectoryStep`](file:///home/mk/DV/git/Vision/dobby/types.py#L425) to automatically restore pre-trajectory state if assertions fail.
+  4. Declarative Integration: Flag `rollback_on_failure: bool = True` in [`TrajectoryStep`](../dobby/types.py#L425) to automatically restore pre-trajectory state if assertions fail.
 
 ### 11.4 Frontier 4: C-Native `/dev/shm` Zero-Copy Frame Streaming Daemon (`shm_streamer`)
 - **Motivation**: Python `mss`/`Xlib` frame extraction incurs 10–18ms per capture. Continuous visual tracking (e.g., watching a running waveform or real-time simulation progress) requires 60+ FPS capture with sub-millisecond overhead.

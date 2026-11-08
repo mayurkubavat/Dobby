@@ -1641,11 +1641,11 @@ def start_skill_recording(
         controller.journal_correlator.set_journal_path(journal_path)
     elif not controller.journal_correlator.journal_path:
         candidates = [
-            "/home/mk/DV/vivado_fifo/vivado.jou",
+            os.environ.get("DOBBY_JOURNAL_PATH", ""),
             os.path.abspath("vivado.jou"),
         ]
         for c in candidates:
-            if os.path.exists(c):
+            if c and os.path.exists(c):
                 controller.journal_correlator.set_journal_path(c)
                 break
 

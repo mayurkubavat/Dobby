@@ -71,7 +71,7 @@ def test_chrome_plugin_detection():
     assert plugin.detect("random title", app_name="google-chrome") is True
 
     # Non-matches
-    assert plugin.detect("mk@linux: ~/DV") is False
+    assert plugin.detect("user@linux: ~/DV") is False
     assert plugin.detect("Antigravity IDE") is False
     assert plugin.detect("Verdi - nWave") is False
 

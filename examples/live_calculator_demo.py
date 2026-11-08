@@ -11,6 +11,7 @@ This script executes a full perception-action-verification closed loop:
 """
 
 import base64
+import os
 import subprocess
 import time
 
@@ -71,7 +72,8 @@ def run_demo():
         print(f"  ✓ Total Interactive Marks Tagged: {len(initial_snap['marks'])}")
 
         # Save initial annotated image
-        artifact_dir = "/home/mk/.gemini/antigravity-ide/brain/9ea50fa0-3064-4f78-960e-940658aea791"
+        artifact_dir = os.path.expanduser(os.environ.get("DOBBY_ARTIFACT_DIR", "artifacts"))
+        os.makedirs(artifact_dir, exist_ok=True)
         initial_img_data = base64.b64decode(initial_snap["image_base64"])
         with open(f"{artifact_dir}/demo_som_initial.jpg", "wb") as f:
             f.write(initial_img_data)

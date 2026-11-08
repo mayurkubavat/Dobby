@@ -45,12 +45,12 @@ During automated web navigation in Google Chrome, permission modals (e.g. `gemin
 ## 2. Window Raising via Desktop Taskbar Clicks
 
 ### The Problem
-When the AI agent executes background terminal commands or Python test runners, the terminal window (`mk@linux: ~/DV`) can seize active X11 input focus, rendering the Chrome browser inactive (`is_active: false`).
+When the AI agent executes background terminal commands or Python test runners, the terminal window (`user@linux: ~/DV`) can seize active X11 input focus, rendering the Chrome browser inactive (`is_active: false`).
 
 ### The Solution
 * In environments where `_NET_ACTIVE_WINDOW` ClientMessage dispatching is blocked by window manager focus-stealing prevention policies, **clicking the application's icon in the bottom desktop panel** is 100% reliable.
 * In our XFCE/MATE panel ($y \in [1860, 1898]$):
-  * Item 1: Terminal (`mk@linux`) $\rightarrow x \in [0, 350]$
+  * Item 1: Terminal (`user@linux`) $\rightarrow x \in [0, 350]$
   * Item 4: DevTools $\rightarrow x \in [1150, 1400]$
   * Item 5: **Google Chrome (`Google Gemini`)** $\rightarrow x \approx 1650, y = 1879$.
 * Clicking at $(1650, 1879)$ produced a **75.29% visual delta**, instantly bringing Chrome back to the absolute foreground.

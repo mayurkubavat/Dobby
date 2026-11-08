@@ -10,13 +10,17 @@ import os
 import sys
 import time
 
-# Ensure Vision MCP is on path
-sys.path.insert(0, "/home/mk/DV/git/Vision")
+# Run from a clone without installing: put the repo root on the path.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dobby.agent_loop.controller import FeedbackLoopController
 from dobby.agent_loop.trajectory import TrajectoryEngine
 from dobby.hal.factory import get_desktop_hal
 from dobby.types import TrajectorySpec, TrajectoryStep
+
+# The Vivado project folder (holding vivado.log and vivado.jou) and where to save results.
+VIVADO_DIR = os.path.expanduser(os.environ.get("DOBBY_VIVADO_DIR", "~/vivado_fifo"))
+ARTIFACT_DIR = os.path.expanduser(os.environ.get("DOBBY_ARTIFACT_DIR", "artifacts"))
 
 
 def main():
@@ -61,7 +65,9 @@ def main():
                 step_id="4_verify_log_pre",
                 action="run_terminal_command",
                 parameters={
-                    "command": "python3 -c \"lines = open('/home/mk/DV/vivado_fifo/vivado.log').readlines(); print(f'LOG_LINES={len(lines)}')\""
+                    "command": "python3 -c \"lines = open('"
+                    + os.path.join(VIVADO_DIR, "vivado.log")
+                    + "').readlines(); print(f'LOG_LINES={len(lines)}')\""
                 },
                 assertions=[{"assert_exit_code": 0}],
             ),
@@ -95,7 +101,7 @@ def main():
             TrajectoryStep(
                 step_id="9_sync_tcl_journal",
                 action="run_terminal_command",
-                parameters={"command": "tail -n 15 /home/mk/DV/vivado_fifo/vivado.jou"},
+                parameters={"command": "tail -n 15 " + os.path.join(VIVADO_DIR, "vivado.jou")},
                 assertions=[{"assert_exit_code": 0}],
             ),
         ],
@@ -125,7 +131,8 @@ def main():
         )
 
     # Save artifacts
-    brain_dir = "/home/mk/.gemini/antigravity-cli/brain/d1c5946d-6fd6-48b0-8b1d-d7068560536d"
+    brain_dir = ARTIFACT_DIR
+    os.makedirs(brain_dir, exist_ok=True)
     if result.final_screenshot_b64:
         screen_bytes = base64.b64decode(result.final_screenshot_b64)
         out_path = os.path.join(brain_dir, "live_trajectory_final_screen.png")

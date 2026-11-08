@@ -15,7 +15,7 @@ The launching app is Claude (Claude Desktop), Antigravity, or your terminal for 
 
 The server command is the venv's entry point:
 
-`/Users/mkubavat/Silicon/DV/git/dobby/.venv/bin/dobby`
+`/path/to/Dobby/.venv/bin/dobby` (the `.venv` of your clone)
 
 | Client | How |
 | --- | --- |
@@ -27,7 +27,7 @@ Entry for the two JSON files:
 
 ```json
 "Dobby": {
-  "command": "/Users/mkubavat/Silicon/DV/git/dobby/.venv/bin/dobby"
+  "command": "/path/to/Dobby/.venv/bin/dobby"
 }
 ```
 

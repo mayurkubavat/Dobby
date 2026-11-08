@@ -1,10 +1,8 @@
 {
   "mcpServers": {
-    "vision-control": {
-      "command": "/home/mk/DV/git/Vision/.venv/bin/python3",
-      "args": ["-m", "dobby.server"],
+    "Dobby": {
+      "command": "dobby",
       "env": {
-        "DISPLAY": ":20",
         "PYTHONUNBUFFERED": "1"
       }
     }

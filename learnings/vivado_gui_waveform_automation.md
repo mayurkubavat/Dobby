@@ -51,7 +51,7 @@ The agent performed:
 [TB EMPTY CHECK] After reads: empty=1, full=0, count=0
 [TB CONCURRENT] Performing concurrent read and write operations...
 [TB FINISH] Synchronous FIFO verification completed successfully!
-$finish called at time : 550 ns : File "/home/mk/DV/vivado_fifo/fifo_tb.sv" Line 113
+$finish called at time : 550 ns : File "/home/user/DV/vivado_fifo/fifo_tb.sv" Line 113
 ```
 
 ---
