@@ -39,3 +39,16 @@ import Testing
     #expect(DobbyURL.action(for: URL(string: "dobby://stop")!) == nil)
     #expect(DobbyURL.action(for: URL(string: "https://pause-all")!) == nil)
 }
+
+@Test func promptsDecodePythonJSON() throws {
+    let raw: [[String: Any]] = [
+        ["id": 3, "text": "Allow Dobby to press Send?", "detail": "In Mail", "allow": "Allow", "deny": "Deny",
+         "kind": "danger", "pid": 4242, "name": "Tibble · Claude Code", "secs_left": 24.5],
+        ["id": 4, "text": "Let Dobby use Notes?", "kind": "access", "pid": NSNull()],
+        ["text": "no id"],
+    ]
+    let prompts = Prompt.list(raw)
+    #expect(prompts.count == 2)
+    #expect(prompts[0].pid == 4242 && prompts[0].secsLeft == 24.5 && !prompts[0].isAccess)
+    #expect(prompts[1].isAccess && prompts[1].pid == nil && prompts[1].allow == "Allow" && prompts[1].secsLeft == 30)
+}

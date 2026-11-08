@@ -501,6 +501,14 @@ class OverlayClient(NullOverlay):
         "danger" is a risky step. ``detail`` explains; ``allow``/``deny``
         are the button titles.
         """
+        try:
+            from dobby.hub import prompts
+
+            if prompts.app_listening():  # Dobby.app shows it as a native card + notification
+                self.intent("Waiting for you: " + text)
+                return prompts.ask(text, secs=secs, detail=detail, allow=allow, deny=deny, kind=kind)
+        except ImportError:
+            pass
         if not self._ensure_started():
             return True  # helper unusable: behave like NullOverlay
         extra = {"detail": detail or None, "allow": allow if allow != "Allow" else None,

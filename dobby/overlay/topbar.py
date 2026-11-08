@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 STATUS_DIR = os.path.expanduser("~/.dobby/overlay/status")
+HIDDEN_PATH = os.path.expanduser("~/.dobby/overlay/menu_hidden.json")
 ICON_DIR = os.path.expanduser("~/.dobby/overlay/icons")
 
 # Palette A, "Elf Violet, tuned" (chosen Nov 2026).
@@ -116,6 +117,111 @@ def read_states(directory: str = STATUS_DIR, now: Optional[float] = None) -> Dic
     return out
 
 
+# ------------------------------------------------------ tidying the list
+# A Dobby lives as long as its AI client, so a day of work leaves a pile of
+# sleeping rows. Stopped Dobbys, "Clear finished" and Dobbys asleep for a
+# while drop out of the dropdown; any of them comes back the moment it works
+# (or asks) again. "Show N hidden" brings them all back.
+_ACTIVE_STATES = ("working", "awake", "confirm", "paused", "takeover")
+_FINISHED_STATES = ("ready", "waiting", "stopped")
+_last_active: Dict[int, float] = {}  # pid -> last time this process saw it busy
+
+
+def _idle_hide_default() -> float:
+    """``DOBBY_MENU_HIDE_IDLE``: seconds asleep before a row hides (0 = never)."""
+    try:
+        return max(0.0, float(os.environ.get("DOBBY_MENU_HIDE_IDLE", "900")))
+    except ValueError:
+        return 900.0
+
+
+@dataclass
+class Hiding:
+    """Which rows the dropdown leaves out (shared through ``menu_hidden.json``)."""
+
+    pids: Dict[int, float] = field(default_factory=dict)  # hidden by hand (Stop, Clear finished) at
+    shown_at: float = 0.0       # "Show hidden": nothing hides automatically before this
+    idle_secs: float = 900.0    # asleep this long hides a row; 0 turns it off
+    path: Optional[str] = None  # where it is saved; None keeps it in memory (tests)
+
+    @classmethod
+    def load(cls, path: Optional[str] = None, idle_secs: Optional[float] = None) -> "Hiding":
+        path = path or HIDDEN_PATH
+        out = cls(idle_secs=_idle_hide_default() if idle_secs is None else idle_secs, path=path)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            out.pids = {int(k): float(v) for k, v in (data.get("pids") or {}).items()}
+            out.shown_at = float(data.get("shown_at") or 0.0)
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        return out
+
+    def save(self) -> None:
+        if not self.path:
+            return
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            tmp = f"{self.path}.{os.getpid()}.tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump({"pids": {str(k): v for k, v in self.pids.items()}, "shown_at": self.shown_at}, fh)
+            os.replace(tmp, self.path)
+        except OSError:
+            pass
+
+    def hide(self, pids: Iterable[int], now: Optional[float] = None) -> None:
+        now = time.time() if now is None else now
+        for pid in pids:
+            self.pids[int(pid)] = now
+        self.save()
+
+    def show_all(self, now: Optional[float] = None) -> None:
+        self.pids.clear()
+        self.shown_at = time.time() if now is None else now
+        self.save()
+
+    def prune(self, live: Iterable[int]) -> None:
+        live = set(int(p) for p in live)
+        gone = [p for p in self.pids if p not in live]
+        for p in gone:
+            del self.pids[p]
+        if gone:
+            self.save()
+
+    def hidden(self, pid: int, state: str, last_active: float, now: float) -> bool:
+        if state in ("confirm", "paused", "takeover"):
+            return False  # it needs the person: always on show
+        at = self.pids.get(pid)
+        if at is not None and last_active <= at:
+            return True  # hidden, and nothing new since (a stopped Dobby can read "working" briefly)
+        if state in _ACTIVE_STATES:
+            return False
+        if self.idle_secs > 0 and state in ("ready", "waiting"):
+            since = max(last_active, self.shown_at)
+            return since > 0 and now - since >= self.idle_secs
+        return False
+
+
+def finished_pids(view: "View") -> List[int]:
+    """The rows "Clear finished" hides: asleep, waiting for a turn or stopped."""
+    return [r.pid for r in view.rows if r.state in _FINISHED_STATES]
+
+
+def menu_action(key: str, view: Optional["View"] = None, pid: Optional[int] = None,
+                hiding: Optional[Hiding] = None) -> bool:
+    """Handle the list-tidying keys. True when ``key`` was one of them."""
+    if key not in ("clear_finished", "show_hidden", "hide"):
+        return False
+    hiding = hiding or Hiding.load()
+    if key == "show_hidden":
+        hiding.show_all()
+    elif key == "hide" and pid is not None:
+        hiding.hide([pid])
+    elif key == "clear_finished" and view is not None:
+        hiding.hide(finished_pids(view))
+    return True
+
+
 # ------------------------------------------------------------- the view
 # Row states, most urgent first. (key, label, icon shape, colour key)
 _STATES = {
@@ -153,6 +259,7 @@ class View:
     working: int
     attention: bool     # some Dobby is paused, stopped or asks Allow/Deny
     all_actions: List[Tuple[str, str]] = field(default_factory=list)
+    hidden: int = 0     # rows left out (stopped, cleared or long asleep)
 
     def to_dict(self) -> dict:
         """Plain JSON for a native shell (the Swift Dobby.app) to draw as-is."""
@@ -215,9 +322,13 @@ def _plural(n: int, word: str) -> str:
 
 
 def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Mapping[str, object]],
-                own_pid: int = 0, palette: Mapping[str, str] = PALETTE) -> View:
+                own_pid: int = 0, palette: Mapping[str, str] = PALETTE,
+                hiding: Optional[Hiding] = None, now: Optional[float] = None) -> View:
     """The dropdown: ``agents`` from ``dobby.control.commands.overview``,
-    ``states`` from :func:`read_states`."""
+    ``states`` from :func:`read_states`. With ``hiding``, stopped, cleared and
+    long-asleep Dobbys are left out (see :class:`Hiding`)."""
+    now = time.time() if now is None else now
+    hidden = 0
     from .style import agent_colors  # pure module
 
     agents = list(agents)
@@ -230,6 +341,17 @@ def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Map
         _label, shape, color_key = _STATES[state]
         agent_color = colors.get(pid) or str(a.get("color") or palette["accent"])
         color = agent_color if color_key == "agent" else palette[color_key]
+        if status.get("last_call"):
+            # A shared session: its last tool call is the real activity time
+            # ("working" lingers for a while after it).
+            _last_active[pid] = max(_last_active.get(pid, 0.0), float(status["last_call"]))
+        elif state in _ACTIVE_STATES:
+            _last_active[pid] = now
+        if hiding is not None:
+            last = max(_last_active.get(pid, 0.0), float(a.get("started") or 0.0))
+            if hiding.hidden(pid, state, last, now):
+                hidden += 1
+                continue
         halted = state in ("paused", "takeover")
         actions = [("Resume" if halted else "Pause", "pause_toggle"), ("Stop", "stop")]
         rows.append(Row(pid=pid, name=str(a.get("name") or f"Dobby-{pid}"), state=state,
@@ -241,7 +363,7 @@ def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Map
     working = sum(r.state in ("working", "awake") for r in rows)
     attention = any(r.state in ("confirm", "paused", "takeover", "stopped") for r in rows)
     if not running:
-        subtitle = "No Dobby is running"
+        subtitle = "No Dobby is running" if not hidden else "Nothing going on"
     else:
         bits = [f"{running} running" if running > 1 else "1 running"]
         if working:
@@ -255,11 +377,18 @@ def topbar_view(agents: Iterable[Mapping[str, object]], states: Mapping[int, Map
         if not working and not needs and not paused:
             bits.append("all sleeping" if running > 1 else "sleeping")
         subtitle = " · ".join(bits)
+    if hidden:
+        subtitle += f" · {hidden} hidden"
     all_actions: List[Tuple[str, str]] = []
     if running > 1:
         all_actions = [("Pause all", "pause_all"), ("Resume all", "resume_all"), ("Stop all", "stop_all")]
+    if hiding is not None:
+        if any(r.state in _FINISHED_STATES for r in rows):
+            all_actions.append(("Clear finished", "clear_finished"))
+        if hidden:
+            all_actions.append((f"Show {hidden} hidden", "show_hidden"))
     return View(header="Dobby", subtitle=subtitle, rows=rows, running=running, working=working,
-                attention=attention, all_actions=all_actions)
+                attention=attention, all_actions=all_actions, hidden=hidden)
 
 
 def icon_state(view: View) -> str:
@@ -552,7 +681,7 @@ def dobby_mode(*, paused: bool, takeover: bool, confirming: bool, stopped: bool,
 
 
 __all__: Sequence[str] = (
-    "PALETTE", "STATUS_DIR", "Row", "View", "publish", "clear", "read_states", "topbar_view",
+    "PALETTE", "STATUS_DIR", "HIDDEN_PATH", "Hiding", "finished_pids", "menu_action", "Row", "View", "publish", "clear", "read_states", "topbar_view",
     "icon_state", "icon_title", "tooltip", "render_icon", "render_row_icon", "bar_icon_path",
     "row_icon_path", "dobby_mode",
 )

@@ -10,7 +10,8 @@ let package = Package(
         .executableTarget(
             name: "Dobby",
             path: "Sources/Dobby",
-            linkerSettings: [.linkedFramework("AppKit"), .linkedFramework("ServiceManagement")]
+            linkerSettings: [.linkedFramework("AppKit"), .linkedFramework("ServiceManagement"),
+                             .linkedFramework("SwiftUI"), .linkedFramework("UserNotifications")]
         ),
         .testTarget(name: "DobbyTests", dependencies: ["Dobby"], path: "Tests/DobbyTests"),
     ]

@@ -4,6 +4,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let engine = Engine()
     private let control = ControlClient()
     private var menu: StatusMenu!
+    private let promptPanel = PromptPanel()
+    private let notifier = Notifier()
     private var timer: Timer?
     private var polling = false
 
@@ -13,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             restartEngine: { [weak self] in self?.engine.restart() },
             openLog: { NSWorkspace.shared.open(DobbyPaths.daemonLog) },
             quit: { [weak self] in self?.quit() }))
+        promptPanel.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
+        notifier.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
+        notifier.onOpenPrompt = { [weak self] in self?.promptPanel.focus() }
+        notifier.start()
         engine.onChange = { [weak self] _ in self?.poll() }
         engine.start()
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.poll() }
@@ -50,14 +56,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let state = engine.state
         control.queue.async { [weak self] in
             guard let self else { return }
-            let view = self.control.topbar()
+            let reply = self.control.poll()
             DispatchQueue.main.async {
                 self.polling = false
+                let view = reply?.view
                 self.engine.tick(reachable: view != nil)
                 // Reachable beats "starting": the socket answering means it is up.
                 let note = view == nil ? (self.note(for: state) ?? "Connecting…") : nil
                 self.menu.update(view: view ?? TopbarView.empty, engineNote: note)
+                let prompts = reply?.prompts ?? []
+                // One card at a time, the oldest question first; the rest wait their turn.
+                self.promptPanel.update(prompts.first, palette: view?.palette ?? [:])
+                self.notifier.update(prompts: prompts, rows: view?.rows ?? [])
             }
+        }
+    }
+
+    private func answer(_ promptID: Int, ok: Bool) {
+        if promptPanel.shown?.id == promptID { promptPanel.hide() }
+        control.queue.async { [weak self] in
+            self?.control.answer(promptID, ok: ok)
+            DispatchQueue.main.async { self?.poll() }
         }
     }
 

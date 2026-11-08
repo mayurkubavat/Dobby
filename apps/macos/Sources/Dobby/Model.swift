@@ -150,3 +150,38 @@ enum DobbyURL {
         return (key, pid)
     }
 }
+
+/// An Allow/Deny question waiting for the app's card (dobby/hub/prompts.py).
+struct Prompt: Equatable, Identifiable {
+    var id: Int
+    var text: String
+    var detail: String
+    var allow: String
+    var deny: String
+    var kind: String          // "danger" (a risky step) or "access" (may Dobby use an app?)
+    var pid: Int?
+    var name: String
+    var secsLeft: Double
+
+    var isAccess: Bool { kind == "access" }
+
+    init?(json: [String: Any]) {
+        guard let id = (json["id"] as? NSNumber)?.intValue, let text = json["text"] as? String else { return nil }
+        self.id = id
+        self.text = text
+        detail = json["detail"] as? String ?? ""
+        allow = (json["allow"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Allow"
+        deny = (json["deny"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Deny"
+        kind = json["kind"] as? String ?? "danger"
+        pid = (json["pid"] as? NSNumber)?.intValue
+        name = json["name"] as? String ?? ""
+        secsLeft = (json["secs_left"] as? NSNumber)?.doubleValue ?? 30
+    }
+
+    static func list(_ raw: Any?) -> [Prompt] {
+        (raw as? [[String: Any]] ?? []).compactMap(Prompt.init(json:))
+    }
+
+    /// Same question (the countdown aside).
+    func sameQuestion(as other: Prompt) -> Bool { id == other.id }
+}

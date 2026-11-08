@@ -199,3 +199,15 @@ def live_screen():
     except (CapabilityUnavailable, CalledProcessError, OSError) as exc:
         pytest.skip(f"no screen to capture on this machine: {str(exc)[:120]}")
     return server
+
+
+# ------------------------------------------------- menu list tidying
+# Stop / Clear finished remember hidden rows in ~/.dobby/overlay/menu_hidden.json;
+# keep tests away from the real file.
+@pytest.fixture(autouse=True)
+def _isolate_menu_hiding(monkeypatch, tmp_path):
+    from dobby.overlay import topbar
+
+    monkeypatch.setattr(topbar, "HIDDEN_PATH", str(tmp_path / "menu_hidden.json"))
+    topbar._last_active.clear()
+    yield

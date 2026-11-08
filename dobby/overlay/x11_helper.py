@@ -1107,7 +1107,9 @@ class X11Overlay:
             agents = commands.overview(control_root())
         except Exception:  # noqa: BLE001
             agents = []
-        return topbar.topbar_view(agents, topbar.read_states(), self.server_pid)
+        hiding = topbar.Hiding.load()
+        hiding.prune(a["pid"] for a in agents)
+        return topbar.topbar_view(agents, topbar.read_states(), self.server_pid, hiding=hiding)
 
     def _refresh_topbar(self, force: bool = False) -> None:
         if self.tray is None:
@@ -1129,7 +1131,11 @@ class X11Overlay:
         if action == "turbo":
             self.cfg["turbo"] = not self.cfg.get("turbo")
             self._refresh_bar()
+        elif topbar.menu_action(action, view=self.topbar_view(), pid=pid):
+            pass  # Clear finished / Show hidden
         elif action in ("pause_toggle", "stop"):
+            if action == "stop" and pid is not None:
+                topbar.Hiding.load().hide([pid])  # stopped: out of the list
             if pid == self.server_pid:
                 if action == "stop":
                     self.request_stop()
@@ -1142,6 +1148,8 @@ class X11Overlay:
             else:
                 commands.set_paused(root, pid, not commands.read(root, pid)["paused"])
         elif action in ("pause_all", "resume_all", "stop_all"):
+            if action == "stop_all":
+                topbar.Hiding.load().hide(a["pid"] for a in commands.overview(root))
             for agent in commands.overview(root):
                 if agent["pid"] == self.server_pid:
                     if action == "stop_all":

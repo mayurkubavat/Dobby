@@ -76,6 +76,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         login.target = self
         login.state = LoginItem.enabled ? .on : .off
         menu.addItem(login)
+        let done = NSMenuItem(title: "Notify When Done", action: #selector(toggleNotifyDone), keyEquivalent: "")
+        done.target = self
+        done.state = Notifier.notifyWhenDone ? .on : .off
+        menu.addItem(done)
         let log = NSMenuItem(title: "Show Log", action: #selector(openLog), keyEquivalent: "")
         log.target = self
         menu.addItem(log)
@@ -119,7 +123,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         item.target = self
         item.representedObject = ActionRef(key: key, pid: pid)
         let symbols = ["pause_toggle": title == "Resume" ? "play.fill" : "pause.fill", "stop": "stop.fill",
-                       "pause_all": "pause.fill", "resume_all": "play.fill", "stop_all": "stop.fill"]
+                       "pause_all": "pause.fill", "resume_all": "play.fill", "stop_all": "stop.fill",
+                       "clear_finished": "checkmark.circle", "show_hidden": "eye"]
         if let name = symbols[key] {
             item.image = NSImage(systemSymbolName: name, accessibilityDescription: title)
         }
@@ -158,6 +163,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     @objc private func toggleLogin() { LoginItem.set(!LoginItem.enabled) }
+    @objc private func toggleNotifyDone() { Notifier.notifyWhenDone.toggle() }
     @objc private func askScreen() { Permissions.askScreenRecording() }
     @objc private func askAccessibility() { Permissions.askAccessibility() }
     @objc private func openLog() { callbacks.openLog() }

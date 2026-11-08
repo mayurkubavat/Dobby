@@ -117,9 +117,20 @@ final class ControlClient {
     }
 
     func topbar() -> TopbarView? {
+        poll()?.view
+    }
+
+    /// The menu and the Allow/Deny questions waiting for the app, in one request.
+    func poll() -> (view: TopbarView, prompts: [Prompt])? {
         guard let reply = request("topbar"), reply["ok"] as? Bool == true,
-              let view = reply["view"] as? [String: Any] else { return nil }
-        return TopbarView(json: view)
+              let raw = reply["view"] as? [String: Any], let view = TopbarView(json: raw) else { return nil }
+        return (view, Prompt.list(reply["prompts"]))
+    }
+
+    /// The card's (or a notification's) answer. False when the question is gone.
+    @discardableResult
+    func answer(_ promptID: Int, ok: Bool) -> Bool {
+        request("answer", ["prompt_id": promptID, "ok": ok])?["answered"] as? Bool == true
     }
 
     @discardableResult
