@@ -91,8 +91,14 @@ def _build(kind: str, cassette: Path | str | None) -> DesktopSession:
 
         path = cassette or os.environ.get("DESKTOP_CASSETTE")
         backend = load_cassette(path) if path else MockReplayHAL()
+        acting: Any = backend
+        if os.environ.get("PINLET_REPLAY_LEASE", "").strip() == "1":
+            # Multi-agent replay tests: take the shared lease like a real desktop does.
+            from pinlet.control import wrap_hal as wrap_control
+
+            acting = wrap_control(backend)
         return DesktopSession(
-            backend=backend,
+            backend=acting,
             topology=getattr(backend, "topology", None) or _topology_for(backend),
             quiescence=backend,
             ax=backend,
