@@ -45,6 +45,7 @@ class ControlHAL:
 
     @property
     def inner(self) -> Any:
+        """The wrapped HAL."""
         return self._inner
 
     def __getattr__(self, name: str) -> Any:
@@ -72,12 +73,14 @@ class ControlHAL:
 
 
 def unwrap_control(hal: Any) -> Any:
+    """Strips every :class:`ControlHAL` layer and returns the HAL underneath."""
     while isinstance(hal, ControlHAL):
         hal = hal.inner
     return hal
 
 
 def find_control_hal(hal: Any) -> ControlHAL | None:
+    """Finds the :class:`ControlHAL` in a chain of wrapping HALs, or None."""
     seen = 0
     while hal is not None and seen < 5:
         if isinstance(hal, ControlHAL):

@@ -17,6 +17,7 @@ from .lease import pid_alive
 
 
 def agents_dir(root: Path) -> Path:
+    """Directory holding one ``<pid>.json`` file per running Dobby."""
     return Path(root) / "agents"
 
 
@@ -72,6 +73,7 @@ def register(
 
 
 def unregister(root: Path, pid: int) -> None:
+    """Removes the registry file for ``pid``; a missing file is not an error."""
     try:
         (agents_dir(root) / f"{pid}.json").unlink()
     except OSError:
@@ -79,6 +81,7 @@ def unregister(root: Path, pid: int) -> None:
 
 
 def list_agents(root: Path) -> list[dict[str, object]]:
+    """Lists every registered agent whose process is still alive."""
     out = []
     d = agents_dir(root)
     if not d.is_dir():
@@ -100,6 +103,7 @@ def list_agents(root: Path) -> list[dict[str, object]]:
 
 
 def is_registered(root: Path, pid: int) -> bool:
+    """True when a registry file exists for ``pid``."""
     return (agents_dir(root) / f"{pid}.json").is_file()
 
 
@@ -113,6 +117,7 @@ class AgentPidCache:
         self._at: float | None = None
 
     def pids(self) -> set[int]:
+        """The pids of registered Dobbys, refreshed at most once per ``ttl``."""
         now = time.monotonic()
         if self._at is None or now - self._at >= self.ttl:
             self._at = now

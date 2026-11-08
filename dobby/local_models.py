@@ -44,6 +44,8 @@ MODELS_FILE = Path(os.path.expanduser("~/.dobby/models.json"))
 
 @dataclass(frozen=True)
 class ModelProfile:
+    """What Dobby knows about one local model: tag, family, vision support and sizes."""
+
     tag: str  # Ollama tag
     family: str
     vision: bool
@@ -52,6 +54,7 @@ class ModelProfile:
     notes: str = ""
 
     def as_dict(self) -> dict[str, Any]:
+        """The profile as a dict."""
         return asdict(self)
 
 
@@ -164,6 +167,11 @@ def model_for(role: str, models_file: Path | None = None) -> str:
 
 
 def source_of(role: str, models_file: Path | None = None) -> str:
+    """Where the model for ``role`` comes from.
+
+    Returns:
+        One of "env", "runtime", "models.json", "config" or "default".
+    """
     role = _check(role)
     if os.environ.get(f"DOBBY_MODEL_{role.upper()}", "").strip():
         return "env"
@@ -200,4 +208,5 @@ def roles_table(installed: set | None = None) -> list[dict[str, Any]]:
 
 
 def profile(tag: str) -> ModelProfile | None:
+    """The known profile for an Ollama tag, or None."""
     return next((p for p in KNOWN_MODELS if p.tag == tag), None)

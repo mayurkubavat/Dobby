@@ -1458,6 +1458,12 @@ class _Pill:
 
 # -------------------------------------------------------------- controller
 class OverlayController:
+    """The macOS overlay helper: draws the pointer, glow and bar, and answers the server.
+
+    Runs in its own process on the AppKit main thread and reads JSON-lines commands
+    from the server on stdin.
+    """
+
     def __init__(self, cfg: dict[str, Any], out=sys.stdout, interactive: bool = True) -> None:
         self.cfg = dict(DEFAULT_CONFIG)
         self.cfg.update(cfg)
@@ -1594,18 +1600,22 @@ class OverlayController:
                 pass
 
     def emit(self, obj: dict[str, Any]) -> None:
+        """Writes one JSON message to the server."""
         self._write(json.dumps(obj, separators=(",", ":")) + "\n")
 
     def send_event(self, name: str) -> None:
+        """Sends a named event (pause, resume, stop, ...) to the server."""
         self._write(protocol.event(name))
 
     def ack(self, msg_id: Any, ok: bool = True, error: str | None = None) -> None:
+        """Acknowledges the command with ``msg_id`` (nothing to do when it has none)."""
         if msg_id is None:
             return
         self._write(protocol.ack(msg_id, ok, error))
 
     # --------------------------------------------------------------- panels
     def rebuild_panels(self) -> None:
+        """Recreates one overlay panel per screen, e.g. after a display change."""
         for p in self.panels:
             p.close()
         screens = list(NSScreen.screens() or [])
@@ -2077,6 +2087,7 @@ class OverlayController:
         self._refresh_pill()  # "Dobby is sleeping" from the start
 
     def on_tick(self) -> None:
+        """Timer callback: animations, heartbeat, agent list and idle checks."""
         now = time.monotonic()
         if self.interactive:
             self._refresh_agents()
@@ -2312,6 +2323,7 @@ class OverlayController:
         self._set_pointer_visible(True)
 
     def sleep(self) -> None:
+        """Puts a woken Dobby back to sleep."""
         if not self.awake_until:
             return
         self._end_awake()
@@ -2397,6 +2409,7 @@ class OverlayController:
         self._refresh_menu()
 
     def set_pill_hidden(self, hidden: bool) -> None:
+        """Hides or shows the bar at the person's request."""
         self.pill_user_hidden = hidden
         if self.pill is not None:
             self.pill.set_user_hidden(hidden)
@@ -2405,6 +2418,7 @@ class OverlayController:
         self._refresh_menu()
 
     def on_pill(self, which: str) -> None:
+        """Handles a click on one of the bar's buttons."""
         if self.pill is None:
             return
         action = bar_click(self.pill.mode, which)
@@ -2423,6 +2437,7 @@ class OverlayController:
             self.resume()
 
     def set_paused(self, paused: bool) -> None:
+        """Pauses or resumes Dobby and tells the server."""
         if paused == self.paused:
             return
         self.paused = paused
@@ -2431,12 +2446,14 @@ class OverlayController:
         self._refresh_pill()
 
     def toggle_pause(self) -> None:
+        """Resumes when paused or taken over, else pauses."""
         if self.paused or self.takeover:
             self.resume()
         else:
             self.set_paused(True)
 
     def resume(self) -> None:
+        """Ends a pause or take-over and tells the server."""
         if self.takeover:
             self.takeover = False
             self.send_event("user_idle")
@@ -2446,6 +2463,7 @@ class OverlayController:
         self._refresh_pill()
 
     def request_stop(self) -> None:
+        """Stops the current task: denies any pending prompt and tells the server."""
         if self.pending_confirm is not None:
             self._answer_confirm(False)
         self.paused = False
@@ -2605,11 +2623,13 @@ class OverlayController:
 
     # ------------------------------------------- controls: input lock
     def is_dobby_pid(self, pid: int) -> bool:
+        """True when ``pid`` belongs to this Dobby or another running one."""
         if pid in (self.server_pid, os.getpid()):
             return True
         return self.agent_pids is not None and pid in self.agent_pids
 
     def lock_armed(self) -> bool:
+        """True when the input lock should be blocking the person's input right now."""
         return inputlock.armed(
             mode=self.lock_mode if self.input_lock is not None else "off",
             working=time.monotonic() - self.last_action <= float(self.cfg["active_secs"]),
@@ -2638,6 +2658,7 @@ class OverlayController:
         return rects
 
     def lock_blocks(self, kind: str, pt: tuple[float, float] | None) -> bool:
+        """True when the input lock should swallow this event at ``pt``."""
         return inputlock.blocks(
             kind,
             pt,
@@ -2756,6 +2777,7 @@ class OverlayController:
         return commands, control_root()
 
     def agent_pause_toggle(self, pid: int) -> None:
+        """Pauses or resumes the agent with ``pid`` from the menu."""
         if pid == self.server_pid:
             self.toggle_pause()
             return
@@ -2763,6 +2785,7 @@ class OverlayController:
         commands.set_paused(root, pid, not commands.read(root, pid)["paused"])
 
     def agent_stop(self, pid: int) -> None:
+        """Stops the agent with ``pid`` from the menu."""
         if pid == self.server_pid:
             self.request_stop()
             return
@@ -2770,6 +2793,7 @@ class OverlayController:
         commands.request_stop(root, pid)
 
     def all_paused(self, paused: bool) -> None:
+        """Pauses or resumes every agent."""
         commands, root = self._commands()
         for agent in commands.overview(root):
             if agent["pid"] == self.server_pid:
@@ -2964,6 +2988,7 @@ class OverlayController:
             sys.stderr.write(f"dobby.overlay: menu bar menu: {exc}\n")
 
     def all_stop(self) -> None:
+        """Stops every agent."""
         commands, root = self._commands()
         for agent in commands.overview(root):
             if agent["pid"] == self.server_pid:
@@ -2972,11 +2997,13 @@ class OverlayController:
                 commands.request_stop(root, agent["pid"])
 
     def toggle_overlay(self) -> None:
+        """Shows or hides the overlay."""
         self.user_visible = not self.user_visible
         self._apply_alpha()
         self._refresh_menu()
 
     def toggle_turbo(self) -> None:
+        """Turns turbo mode (no prompts) on or off."""
         self.turbo = not self.turbo
         if self.turbo and self.takeover:
             self.takeover = False
@@ -2984,16 +3011,19 @@ class OverlayController:
         self._refresh_pill()
 
     def toggle_trail(self) -> None:
+        """Turns the pointer trail on or off."""
         self.trail_on = not self.trail_on
         self._redraw_trail()
         self._refresh_menu()
 
     def clear_trail(self) -> None:
+        """Clears the pointer trail."""
         self.trail_points = []
         self._redraw_trail()
 
     # ------------------------------------------------------------- commands
     def handle_line(self, line: str) -> None:
+        """Parses and handles one line from the server; bad lines are acknowledged with an error."""
         line = line.strip()
         if not line:
             return
@@ -3017,6 +3047,7 @@ class OverlayController:
         self._refresh_tag()
 
     def handle(self, msg: dict[str, Any]) -> None:
+        """Handles one decoded command from the server."""
         op, msg_id = msg["op"], msg.get("id")
         if op == "cursor.move":
             self._mark_active()
@@ -3171,6 +3202,7 @@ class OverlayController:
         return (float(loc.x), self.primary_h - float(loc.y))
 
     def quit(self) -> None:
+        """Stops the timer, input monitors and lock, and exits the app."""
         try:
             self.timer.invalidate()
         except Exception:  # noqa: BLE001
@@ -3259,6 +3291,7 @@ def _demo(controller: OverlayController) -> None:
 
 
 def load_track(path: str) -> list[dict[str, Any]]:
+    """Reads a recorded track (``.jsonl``) for replay."""
     events = []
     with open(path) as fh:
         for line in fh:
@@ -3302,6 +3335,7 @@ def _arg(argv: list[str], name: str) -> str | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Runs the helper: reads the config, builds the controller and starts the app loop."""
     argv = list(argv or [])
     cfg: dict[str, Any] = {}
     raw = os.environ.get("DOBBY_OVERLAY_CONFIG")

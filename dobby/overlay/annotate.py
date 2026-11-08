@@ -44,6 +44,8 @@ _ARROW = [(0, 0), (0, 18), (4.5, 14), (8, 21.5), (10.5, 20.5), (7, 13), (13, 13)
 
 @dataclass
 class TrackState:
+    """Where the pointer, intent and boxes are at one moment of a replayed track."""
+
     cursor: Point | None = None
     intent: str = ""
     intent_until: float = 0.0
@@ -58,6 +60,7 @@ class TrackState:
 
 
 def load_track(path: os.PathLike) -> list[dict[str, Any]]:
+    """Reads an overlay track (``.jsonl``, one event per line), skipping blank lines."""
     out = []
     with open(path) as fh:
         for line in fh:
@@ -286,6 +289,7 @@ _TS = re.compile(r"(\d{13}|\d{10}(?:\.\d+)?)")
 
 
 def frame_time(path: Path) -> float:
+    """Capture time of a screenshot: from a timestamp in its name, else its mtime."""
     m = _TS.search(path.stem)
     if m:
         v = float(m.group(1))
@@ -294,6 +298,7 @@ def frame_time(path: Path) -> float:
 
 
 def find_frames(folder: os.PathLike) -> list[tuple[float, Path]]:
+    """Screenshots in ``folder`` as ``(time, path)`` pairs, oldest first."""
     exts = {".png", ".jpg", ".jpeg", ".webp"}
     frames = [(frame_time(p), p) for p in Path(folder).iterdir() if p.suffix.lower() in exts]
     frames.sort(key=lambda f: f[0])
@@ -334,6 +339,7 @@ def render(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Command line: draws the overlay from a track onto a folder of screenshots."""
     ap = argparse.ArgumentParser(description="Draw the Dobby overlay onto recorded screenshots.")
     ap.add_argument("--track", required=True, help="overlay track .jsonl")
     ap.add_argument("--frames", required=True, help="folder of timestamped screenshots")

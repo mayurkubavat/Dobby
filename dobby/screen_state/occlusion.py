@@ -23,11 +23,14 @@ COVERING_ROLES = {"dialog", "sheet", "popover", "menu", "alert", "AXSheet", "AXP
 
 @dataclass(frozen=True)
 class Occlusion:
+    """Whether a point is covered by another window, and by which one."""
+
     covered: bool | None  # None when no check could run
     reason: str
     by: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
+        """The result as a JSON-ready dict."""
         return {"covered": self.covered, "reason": self.reason, "by": self.by}
 
 

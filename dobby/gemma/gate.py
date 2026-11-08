@@ -20,6 +20,8 @@ from dobby.gemma.decide import Decision, Noul
 
 
 class Risk(str, Enum):
+    """How much harm an action can do, which sets how sure the decider must be."""
+
     READ = "read"  # looks only: focus, hover, scroll, read text
     NORMAL = "normal"  # reversible changes: click, type into a field, open
     CONSEQUENTIAL = (
@@ -28,6 +30,8 @@ class Risk(str, Enum):
 
 
 class Verdict(str, Enum):
+    """What the gate lets the agent do with a decision."""
+
     ACT = "act"
     ESCALATE = "escalate"
     STOP = "stop"
@@ -61,12 +65,16 @@ DEFAULT_VERB_RISK: dict[str, Risk] = {
 
 @dataclass(frozen=True)
 class Threshold:
+    """Minimum probability and confidence a decision needs at one risk level."""
+
     min_p: float
     min_confidence: float
 
 
 @dataclass
 class GatePolicy:
+    """Thresholds and verb risks the gate applies to local decisions."""
+
     thresholds: dict[Risk, Threshold] = field(
         default_factory=lambda: {
             Risk.READ: Threshold(0.50, 0.30),
@@ -86,15 +94,19 @@ class GatePolicy:
 
 @dataclass(frozen=True)
 class GateResult:
+    """The gate's verdict on one decision, with the reason and the risk it judged."""
+
     verdict: Verdict
     reason: str
     risk: Risk | None = None
 
     @property
     def act(self) -> bool:
+        """True when the verdict lets the agent act."""
         return self.verdict is Verdict.ACT
 
     def as_dict(self) -> dict[str, Any]:
+        """The result as a JSON-ready dict."""
         return {
             "verdict": self.verdict.value,
             "reason": self.reason,

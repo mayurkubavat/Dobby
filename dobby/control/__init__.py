@@ -61,6 +61,7 @@ _CONTROLLER: Controller | None = None
 
 
 def control_enabled(env: dict[str, str] | None = None) -> bool:
+    """True unless ``DOBBY_CONTROL`` turns shared control off."""
     env = os.environ if env is None else env
     flag = env.get("DOBBY_CONTROL", "").strip().lower()
     if flag in _FALSE:
@@ -71,6 +72,7 @@ def control_enabled(env: dict[str, str] | None = None) -> bool:
 
 
 def control_root(env: dict[str, str] | None = None) -> Path:
+    """Directory for the shared control state (``DOBBY_CONTROL_DIR``, default ``~/.dobby/control``)."""
     env = os.environ if env is None else env
     return Path(os.path.expanduser(env.get("DOBBY_CONTROL_DIR") or "~/.dobby/control"))
 
@@ -83,6 +85,7 @@ def _num(env: dict[str, str], key: str, default: float, low: float = 0.0) -> flo
 
 
 def settings_from_env(env: dict[str, str] | None = None) -> ControlSettings:
+    """Builds :class:`ControlSettings` from the ``DOBBY_CONTROL_*`` environment variables."""
     env = os.environ if env is None else env
     s = ControlSettings()
     s.idle_grace = _num(env, "DOBBY_CONTROL_IDLE_GRACE", s.idle_grace, 0.5)
@@ -94,6 +97,7 @@ def settings_from_env(env: dict[str, str] | None = None) -> ControlSettings:
 
 
 def agent_name(env: dict[str, str] | None = None) -> str | None:
+    """The configured agent name (``DOBBY_AGENT_NAME``), or None."""
     env = os.environ if env is None else env
     name = (env.get("DOBBY_AGENT_NAME") or "").strip()
     return name or None

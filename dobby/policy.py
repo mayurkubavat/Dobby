@@ -69,6 +69,7 @@ _SHELL_SYNTAX = (";", "|", "&", "`", "$", ">", "<", "\n")
 
 
 def system_path(platform: str | None = None, env: Mapping[str, str] | None = None) -> Path:
+    """Where the admin policy file lives on this platform."""
     platform = sys.platform if platform is None else platform
     env = os.environ if env is None else env
     if platform == "darwin":
@@ -95,13 +96,16 @@ class Policy:
     # ------------------------------------------------------------ queries
     @property
     def active(self) -> bool:
+        """True when a policy file was found (even a broken one)."""
         return self.source is not None
 
     @property
     def forces_secure(self) -> bool:
+        """True when the policy forces secure mode; a broken policy always does."""
         return self.mode == "secure" or self.broken is not None
 
     def tool_allowed(self, name: str) -> bool:
+        """True when the policy lets the AI call tool ``name``."""
         if name in ALWAYS_CALLABLE:
             return True
         if self.broken is not None:
@@ -111,6 +115,7 @@ class Policy:
         return not self.tools_allow or name in self.tools_allow
 
     def tool_refusal(self, name: str) -> str:
+        """Message telling the AI why tool ``name`` is blocked."""
         if self.broken is not None:
             return (
                 f"Tool '{name}' is blocked: the admin policy at {self.source} could not be read "
@@ -128,6 +133,7 @@ class Policy:
         return tier
 
     def summary(self) -> dict[str, Any]:
+        """The policy in force, for ``manage_toolsets`` and status output."""
         if not self.active:
             return {"active": False}
         return {
@@ -144,6 +150,7 @@ class Policy:
 
 
 def shell_summary(policy: Policy) -> str:
+    """How the shell tool stands under the policy: "off", "on" or "allow list"."""
     enabled, _ = shell_enabled(policy)
     if not enabled:
         return "off"
@@ -193,6 +200,11 @@ def parse(data: Any, source: str) -> Policy:
 
 
 def read_policy(path: Path) -> Policy:
+    """Reads and parses a policy file.
+
+    A missing file gives an empty policy. A file that cannot be read or parsed gives
+    a broken policy, which fails closed.
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -261,6 +273,7 @@ def current() -> Policy:
 
 
 def reset_cache() -> None:
+    """Forgets the cached policy so the next call re-reads the file."""
     _LOADER.reset()
 
 

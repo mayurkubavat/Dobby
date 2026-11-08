@@ -38,6 +38,8 @@ State = dict[str, Any]
 
 @dataclass
 class ControlSettings:
+    """Timing and policy knobs for the shared control lease (all times in seconds)."""
+
     idle_grace: float = 10.0  # seconds without an action before a waiter may take over
     slice: float = 60.0  # longest continuous hold while someone waits
     max_wait: float = 45.0  # how long a tool waits for the lease before giving up
@@ -52,6 +54,8 @@ class ControlSettings:
 
 @dataclass
 class Agent:
+    """One Dobby process taking part in the lease."""
+
     id: str
     name: str
     pid: int
@@ -60,6 +64,7 @@ class Agent:
 
 
 def pid_alive(pid: int) -> bool:
+    """True when a process with ``pid`` is still running."""
     if pid <= 0:
         return False
     if sys.platform == "win32":  # pragma: no cover - no signal 0 on Windows
@@ -118,6 +123,7 @@ def file_lock(path: Path) -> Iterator[None]:
 
 
 def empty_state() -> State:
+    """A fresh lease state: no holder, no waiters, world counter at zero."""
     return {
         "version": 1,
         "epoch": 0,
@@ -133,6 +139,7 @@ def _agent_record(agent: Agent) -> dict[str, Any]:
 
 
 def effective_priority(waiter: dict[str, Any], now: float, settings: ControlSettings) -> float:
+    """A waiter's priority plus one point per ``settings.aging`` seconds it has waited."""
     waited = max(0.0, now - float(waiter.get("since", now)))
     aging = settings.aging if settings.aging > 0 else float("inf")
     return float(waiter.get("priority", 0)) + waited / aging
@@ -141,6 +148,7 @@ def effective_priority(waiter: dict[str, Any], now: float, settings: ControlSett
 def prune(
     state: State, now: float, settings: ControlSettings, alive: Callable[[int], bool] = pid_alive
 ) -> None:
+    """Drops a dead holder, hung steps and waiters that stopped polling, in place."""
     holder = state.get("holder")
     if holder is not None and not alive(int(holder.get("pid", 0))):
         state["holder"] = None
@@ -248,6 +256,7 @@ class LeaseStore:
 
     @contextlib.contextmanager
     def transaction(self) -> Iterator[State]:
+        """Context manager that loads the state under the file lock and saves changes on exit."""
         with file_lock(self.lock_path):
             state = self._load()
             before = json.dumps(state, sort_keys=True)
@@ -256,5 +265,6 @@ class LeaseStore:
                 self._save(state)
 
     def snapshot(self) -> State:
+        """Reads the current state under the file lock, without changing it."""
         with file_lock(self.lock_path):
             return self._load()

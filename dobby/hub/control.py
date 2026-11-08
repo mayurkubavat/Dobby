@@ -70,10 +70,19 @@ def agents() -> list[dict[str, Any]]:
 
 
 def status() -> dict[str, Any]:
+    """Server pid, open sessions and every agent, for the menu."""
     return {"server_pid": os.getpid(), "sessions": sessions.snapshot(), "agents": agents()}
 
 
 def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> dict[str, Any]:
+    """Runs a menu action for one agent, every agent, or a pending prompt.
+
+    Per-agent keys need ``pid``; ``allow`` and ``deny`` need ``prompt_id``; the
+    ``_all`` forms, ``clear_finished`` and ``show_hidden`` need neither.
+
+    Raises:
+        ValueError: ``key`` is not one of ``ACTION_KEYS``, or a needed id is missing.
+    """
     from dobby.control import commands
     from dobby.overlay import topbar as tb
 
@@ -172,6 +181,10 @@ def topbar() -> dict[str, Any]:
 
 
 def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -> dict[str, Any]:
+    """Answers one request on the control socket.
+
+    Never raises: errors come back as ``{"ok": False, "error": ...}``.
+    """
     rid = request.get("id")
     op = request.get("op")
     try:

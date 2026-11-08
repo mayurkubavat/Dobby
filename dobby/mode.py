@@ -46,6 +46,12 @@ def session_mode(mode: str | None) -> Iterator[None]:
 
 
 def security_mode(env: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> str:
+    """Returns this call's security mode, ``"secure"`` or ``"turbo"``.
+
+    An admin policy that forces secure mode wins; then the session's mode in a
+    shared Dobby; then ``--secure``/``--turbo`` in ``argv``; then ``DOBBY_MODE`` or
+    ``DOBBY_SECURE`` in ``env``.
+    """
     from dobby.policy import current as _admin_policy
 
     if _admin_policy().forces_secure:
@@ -69,4 +75,5 @@ def security_mode(env: Mapping[str, str] | None = None, argv: Sequence[str] | No
 
 
 def is_secure(env: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> bool:
+    """True when :func:`security_mode` is ``"secure"``."""
     return security_mode(env, argv) == SECURE

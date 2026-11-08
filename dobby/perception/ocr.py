@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from PIL import Image
+from typing_extensions import override
 
 from dobby.config import CONFIG
 
@@ -35,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OCRLine:
+    """One recognised line of text with its bounding box and confidence."""
+
     text: str
     x: int
     y: int
@@ -44,14 +47,17 @@ class OCRLine:
 
     @property
     def center(self) -> tuple[int, int]:
+        """Centre of the line's bounding box."""
         return (self.x + self.width // 2, self.y + self.height // 2)
 
     def shifted(self, dx: int, dy: int) -> OCRLine:
+        """A copy moved by (dx, dy), e.g. from crop to screen coordinates."""
         return OCRLine(
             self.text, self.x + dx, self.y + dy, self.width, self.height, self.confidence
         )
 
     def as_dict(self) -> dict[str, Any]:
+        """The line as a JSON-ready dict."""
         return {
             "text": self.text,
             "bbox": {"x": self.x, "y": self.y, "width": self.width, "height": self.height},
@@ -69,6 +75,7 @@ def normalize_text(text: str) -> str:
 
 
 def text_matches(needle: str, haystack: str, regex: bool = False) -> bool:
+    """True when ``needle`` occurs in ``haystack``, ignoring case (or matches it as a regex)."""
     if regex:
         try:
             return re.search(needle, haystack, re.IGNORECASE) is not None
@@ -78,10 +85,13 @@ def text_matches(needle: str, haystack: str, regex: bool = False) -> bool:
 
 
 class OCREngine:
+    """Base class for OCR engines; subclasses implement ``_recognize``."""
+
     name = "none"
 
     @property
     def is_available(self) -> bool:
+        """True when the engine can run on this machine."""
         return False
 
     def _recognize(self, image: Image.Image) -> list[OCRLine]:  # pragma: no cover - abstract
@@ -101,6 +111,8 @@ class OCREngine:
 
 
 class NullOCR(OCREngine):
+    """OCR engine that is never available, used when no backend is installed."""
+
     name = "none"
 
 
@@ -132,6 +144,7 @@ class RapidOCREngine(OCREngine):
         return self._engine
 
     @property
+    @override
     def is_available(self) -> bool:
         return self._load() is not None
 
@@ -180,6 +193,7 @@ class AppleVisionOCR(OCREngine):
         return self._mods
 
     @property
+    @override
     def is_available(self) -> bool:
         return self._load() is not None
 
@@ -232,9 +246,11 @@ class CachedOCR(OCREngine):
         self.total_ms = 0.0
 
     @property
+    @override
     def is_available(self) -> bool:
         return self.inner.is_available
 
+    @override
     def recognize(self, image: Image.Image) -> list[OCRLine]:
         from dobby.vdom.gemma3_sidecar import compute_dhash
 
@@ -256,6 +272,7 @@ class CachedOCR(OCREngine):
         return list(lines)
 
     def diagnostics(self) -> dict[str, Any]:
+        """Engine name, availability, last error, call count, cache hits and mean latency."""
         return {
             "engine": self.name,
             "available": self.is_available,

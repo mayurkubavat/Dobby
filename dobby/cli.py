@@ -16,6 +16,11 @@ from collections.abc import Sequence
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Runs the ``dobby`` command line.
+
+    With no command it connects this AI client to the shared Dobby; ``serve`` runs the
+    shared Dobby and ``stdio`` a private one. ``dobby --help`` prints the module docstring.
+    """
     argv = list(sys.argv if argv is None else argv)
     command = next((a for a in argv[1:] if not a.startswith("-")), "")
     if command == "serve":

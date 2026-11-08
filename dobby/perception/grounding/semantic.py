@@ -1,6 +1,7 @@
 """Semantic Grounding Provider using OS Accessibility APIs (AT-SPI2 / UIA)."""
 
 from PIL import Image
+from typing_extensions import override
 
 from dobby.perception.atspi import ATSPIInspector
 from dobby.perception.ax import get_accessibility_inspector
@@ -15,10 +16,12 @@ class SemanticGroundingProvider(BaseGroundingProvider):
         self.inspector = inspector or get_accessibility_inspector()
 
     @property
+    @override
     def name(self) -> str:
         return "semantic"
 
     @property
+    @override
     def is_available(self) -> bool:
         return self.inspector.is_available
 

@@ -1,6 +1,7 @@
 """Pure Computer Vision Grounding Provider using Edge Contours and MSER."""
 
 from PIL import Image
+from typing_extensions import override
 
 from dobby.perception.cv_detector import CVDetector
 from dobby.perception.grounding.base import BaseGroundingProvider
@@ -14,10 +15,12 @@ class CVGroundingProvider(BaseGroundingProvider):
         self.detector = detector or CVDetector()
 
     @property
+    @override
     def name(self) -> str:
         return "cv"
 
     @property
+    @override
     def is_available(self) -> bool:
         return True
 

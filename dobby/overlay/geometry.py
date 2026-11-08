@@ -28,28 +28,33 @@ def global_point_to_local(pt: Point, screen_frame: Rect, primary_height: float) 
 
 
 def global_rect_to_local(rect: Rect, screen_frame: Rect, primary_height: float) -> Rect:
+    """Converts a global top-left rect to Cocoa coordinates local to ``screen_frame``."""
     x, y, w, h = rect
     fx, fy, _, _ = screen_frame
     return (x - fx, primary_height - y - h - fy, w, h)
 
 
 def cocoa_rect_to_global(rect: Rect, primary_height: float) -> Rect:
+    """Converts a Cocoa (bottom-left origin) rect to global top-left coordinates."""
     x, y, w, h = rect
     return (x, primary_height - y - h, w, h)
 
 
 def contains(rect: Rect, pt: Point) -> bool:
+    """True when ``pt`` lies inside ``rect`` (right and bottom edges excluded)."""
     x, y, w, h = rect
     return x <= pt[0] < x + w and y <= pt[1] < y + h
 
 
 def intersects(a: Rect, b: Rect) -> bool:
+    """True when the two rects overlap."""
     ax, ay, aw, ah = a
     bx, by, bw, bh = b
     return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
 
 
 def screen_index_for_point(pt: Point, global_frames: Sequence[Rect]) -> int | None:
+    """Index of the screen whose frame contains ``pt``, or None."""
     for i, fr in enumerate(global_frames):
         if contains(fr, pt):
             return i

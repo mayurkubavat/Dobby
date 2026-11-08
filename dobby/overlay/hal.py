@@ -84,12 +84,14 @@ def _split_combo(keys: Sequence[str]) -> tuple[frozenset, str]:
 
 
 def combo_label(keys: Sequence[str]) -> str:
+    """Readable label for a key combo, e.g. ``⌘⇧S``."""
     mods, key = _split_combo(keys)
     sym = "".join(_MOD_SYMBOLS[m] for m in _MOD_ORDER if m in mods)
     return sym + (key.upper() if len(key) == 1 else key.capitalize())
 
 
 def danger_reason(keys: Sequence[str]) -> str | None:
+    """Why a hotkey is dangerous (e.g. it quits or deletes), or None for a safe one."""
     return _DANGER.get(_split_combo(keys))
 
 
@@ -159,6 +161,13 @@ _VERBS = {
 
 
 class OverlayHAL:
+    """HAL wrapper that shows every action on the overlay and asks Allow/Deny when needed.
+
+    It moves the drawn pointer before each input, checks app grants, waits while
+    the person has paused Dobby, and asks before risky hotkeys or buttons. Every
+    other attribute is passed through to the wrapped HAL.
+    """
+
     def __init__(
         self,
         inner: Any,
@@ -197,6 +206,7 @@ class OverlayHAL:
 
     @property
     def inner(self) -> Any:
+        """The wrapped HAL."""
         return self._inner
 
     def __getattr__(self, name: str) -> Any:
@@ -204,6 +214,11 @@ class OverlayHAL:
 
     @property
     def secure(self) -> bool:
+        """True when the current call runs in secure mode.
+
+        With a policy callback it asks the callback (failing safe to True); otherwise
+        it uses the fixed flag.
+        """
         if self._policy is not None:
             try:
                 return bool(self._policy())
@@ -465,6 +480,7 @@ class OverlayHAL:
 
     # --------------------------------------------------------------- mouse
     def mouse_move(self, x: int, y: int, *args: Any, **kwargs: Any) -> Any:
+        """Shows the move on the overlay, then moves the real pointer."""
         self._sync_turbo()
         self.overlay.checkpoint()
         self._point_to(x, y, verb="Move")
@@ -474,6 +490,7 @@ class OverlayHAL:
     def mouse_click(
         self, x: int, y: int, button: str = "left", click_count: int = 1, *args: Any, **kwargs: Any
     ) -> Any:
+        """Checks the app and target, shows the click, asks if risky, then clicks."""
         self._sync_turbo()
         self.overlay.checkpoint()
         verb = _VERBS.get((button, click_count), "Click")
@@ -502,6 +519,7 @@ class OverlayHAL:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
+        """Checks the app, shows the drag on the overlay, then drags."""
         self._sync_turbo()
         self.overlay.checkpoint()
         app = self._window_app_at(start_x, start_y)
@@ -518,6 +536,7 @@ class OverlayHAL:
         return result
 
     def mouse_scroll(self, dx: int, dy: int, *args: Any, **kwargs: Any) -> Any:
+        """Shows the scroll on the overlay, then scrolls."""
         self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
@@ -530,6 +549,11 @@ class OverlayHAL:
 
     # ------------------------------------------------------------ keyboard
     def keyboard_type(self, text: str, *args: Any, **kwargs: Any) -> Any:
+        """Checks the app and field, shows what will be typed, then types it.
+
+        Raises:
+            OverlayBlocked: The target is a password field in secure mode.
+        """
         from .client import OverlayBlocked
 
         self._sync_turbo()
@@ -557,6 +581,7 @@ class OverlayHAL:
             self.overlay.state("idle")
 
     def keyboard_press_key(self, key_name: str, *args: Any, **kwargs: Any) -> Any:
+        """Shows the key on the overlay, then presses it."""
         self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
@@ -570,6 +595,11 @@ class OverlayHAL:
             self._after_keys()
 
     def keyboard_hotkey(self, keys: list[str], *args: Any, **kwargs: Any) -> Any:
+        """Shows the combo, asks Allow/Deny for a dangerous one, then presses it.
+
+        Raises:
+            OverlayDenied: The person denied the hotkey.
+        """
         from .client import OverlayDenied
 
         self._sync_turbo()
@@ -600,6 +630,7 @@ class OverlayHAL:
 
     # ------------------------------------------------------------- windows
     def focus_window(self, window_id: str, *args: Any, **kwargs: Any) -> Any:
+        """Focuses the window and points the overlay at it."""
         self._sync_turbo()
         self.overlay.checkpoint()
         ok = self._inner.focus_window(window_id, *args, **kwargs)
@@ -610,6 +641,7 @@ class OverlayHAL:
         return ok
 
     def list_windows(self, *args: Any, **kwargs: Any) -> list[Any]:
+        """Lists windows, leaving out the overlay's own."""
         windows = self._inner.list_windows(*args, **kwargs)
         # MacHAL already keeps only layer-0 windows (the overlay sits far above),
         # so this is a second line of defence for other HALs.
@@ -621,6 +653,7 @@ class OverlayHAL:
 
     # ------------------------------------------------------------- capture
     def capture_screen(self, *args: Any, **kwargs: Any) -> Any:
+        """Hides the overlay for the capture so screenshots never show it."""
         if not self.overlay.active:
             return self._inner.capture_screen(*args, **kwargs)
         self.overlay.hide()

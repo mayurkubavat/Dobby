@@ -73,6 +73,8 @@ def _same_user(sock: Any) -> bool:
 
 
 class Hub:
+    """The shared Dobby: serves MCP sessions and control requests on one Unix socket."""
+
     def __init__(self, server: Any) -> None:
         self.server = server  # dobby.server module
         self.last_client = time.monotonic()
@@ -80,6 +82,7 @@ class Hub:
         self.quitting = False
 
     async def handle(self, stream: Any) -> None:
+        """Serves one connection: an MCP client session or a control connection."""
         from dobby.control import new_session_controller, session_controller
         from dobby.mode import session_mode
 
@@ -238,6 +241,7 @@ class Hub:
             tg.cancel_scope.cancel()
 
     async def idle_watch(self, tg: Any) -> None:
+        """Exits the daemon after it has had no clients for ``DOBBY_IDLE_EXIT`` seconds."""
         limit = _idle_exit_s()
         if limit <= 0:
             return
@@ -266,6 +270,11 @@ def _take_lock() -> Any | None:
 
 
 def serve() -> int:
+    """Runs the shared Dobby until it is told to quit or goes idle.
+
+    Returns:
+        The process exit code. Returns 0 at once if another shared Dobby is running.
+    """
     lock = _take_lock()
     if lock is None:
         sys.stderr.write("dobby serve: another shared Dobby is already running\n")

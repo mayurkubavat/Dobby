@@ -47,10 +47,13 @@ class Expect(BaseModel):
 
     @property
     def empty(self) -> bool:
+        """True when the expectation checks nothing."""
         return not (self.text or self.text_absent or self.question)
 
 
 class Step(BaseModel):
+    """One tool call in a plan, with what the screen should show afterwards."""
+
     id: str = ""
     tool: str
     args: dict[str, Any] = Field(default_factory=dict)
@@ -71,19 +74,24 @@ class Step(BaseModel):
 
 
 class Plan(BaseModel):
+    """A named sequence of steps for the ADK runner to execute and verify."""
+
     name: str = "plan"
     goal: str = ""
     steps: list[Step]
 
     def model_post_init(self, _ctx: Any) -> None:
+        """Gives every step without an id a positional one (``s1``, ``s2``, ...)."""
         for i, step in enumerate(self.steps):
             if not step.id:
                 step.id = f"s{i + 1}"
 
     @property
     def domains(self) -> list[str]:
+        """The tool domains, besides ``core``, that the plan's steps need enabled."""
         return sorted({ACTION_TOOLS[s.tool] for s in self.steps} - {"core"})
 
     @classmethod
     def load(cls, path: str | Path) -> Plan:
+        """Loads and validates a plan from a JSON file."""
         return cls.model_validate(json.loads(Path(path).read_text(encoding="utf-8")))

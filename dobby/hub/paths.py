@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 def run_dir(env: Mapping[str, str] | None = None, platform: str = sys.platform) -> Path:
+    """Directory for the shared Dobby's socket and lock."""
     env = os.environ if env is None else env
     if env.get("DOBBY_SOCKET"):
         return Path(os.path.expanduser(env["DOBBY_SOCKET"])).parent
@@ -21,6 +22,7 @@ def run_dir(env: Mapping[str, str] | None = None, platform: str = sys.platform) 
 
 
 def socket_path(env: Mapping[str, str] | None = None, platform: str = sys.platform) -> Path:
+    """Unix socket the shared Dobby listens on (``DOBBY_SOCKET`` overrides it)."""
     env = os.environ if env is None else env
     if env.get("DOBBY_SOCKET"):
         return Path(os.path.expanduser(env["DOBBY_SOCKET"]))
@@ -28,14 +30,17 @@ def socket_path(env: Mapping[str, str] | None = None, platform: str = sys.platfo
 
 
 def lock_path(env: Mapping[str, str] | None = None) -> Path:
+    """Lock file that makes sure only one shared Dobby runs."""
     return socket_path(env).with_suffix(".lock")
 
 
 def daemon_log(env: Mapping[str, str] | None = None) -> Path:
+    """Log file of the shared Dobby."""
     return Path(os.path.expanduser("~/.dobby/logs/daemon.log"))
 
 
 def ensure_private_dir(path: Path) -> None:
+    """Creates ``path`` if needed and makes it readable by this user only."""
     path.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(path, 0o700)

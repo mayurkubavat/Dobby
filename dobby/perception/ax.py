@@ -112,6 +112,7 @@ class AXInspector:
 
     @property
     def is_available(self) -> bool:
+        """True when the AX API is loaded and this process is trusted for Accessibility."""
         if self._ax is None or self._appkit is None:
             return False
         try:
@@ -201,6 +202,10 @@ class AXInspector:
         max_depth: int = 16,
         filter_interactable: bool = True,
     ) -> list[UIElement]:
+        """Flattened on-screen elements of the active app, or of apps matching ``app_name_filter``.
+
+        Bounding boxes are in global screen coordinates.
+        """
         if not self.is_available:
             return []
         screen = self.screen_bounds

@@ -26,6 +26,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from typing_extensions import override
+
 from . import protocol
 
 log = logging.getLogger(__name__)
@@ -95,33 +97,43 @@ class NullOverlay:
         probe: bool = False,
         app: str | None = None,
     ) -> bool:
+        """Moves the drawn pointer to (x, y) in global points."""
         return True
 
     def click(self, button: str = "left", count: int = 1) -> bool:
+        """Plays the click animation at the pointer."""
         return True
 
     def state(self, state: str) -> bool:
+        """Sets the glow state (thinking, acting, idle, ...)."""
         return True
 
     def intent(self, text: str, ms: int | None = None) -> bool:
+        """Shows what Dobby is about to do as a short caption."""
         return True
 
     def box(self, x: float, y: float, w: float, h: float) -> bool:
+        """Draws a highlight box around the target element."""
         return True
 
     def clear_box(self) -> bool:
+        """Removes the highlight box."""
         return True
 
     def risk(self, level: str) -> bool:
+        """Sets the risk colour for the current step ("caution", "danger" or none)."""
         return True
 
     def scan(self, rect: tuple | None = None) -> bool:
+        """Plays the scan animation over ``rect`` (or the screen)."""
         return True
 
     def trail_clear(self) -> bool:
+        """Clears the pointer trail."""
         return True
 
     def set_visible(self, on: bool) -> bool:
+        """Shows or hides the whole overlay."""
         return True
 
     def confirm(
@@ -133,9 +145,15 @@ class NullOverlay:
         deny: str = "Deny",
         kind: str = "danger",
     ) -> bool:
+        """Asks the person Allow/Deny on the bar.
+
+        Returns:
+            True when allowed. Without an overlay there is no one to ask, so it allows.
+        """
         return True  # no overlay, no one to ask: keep the old behaviour
 
     def checkpoint(self, max_wait: float = 120.0) -> None:
+        """Blocks while the person has paused Dobby or taken over, up to ``max_wait``."""
         return None
 
     def wait_for_wake(
@@ -151,6 +169,7 @@ class NullOverlay:
         }
 
     def track(self, window_id: Any = None, pid: int | None = None) -> bool:
+        """Keeps the overlay on the target window (or process) as it moves."""
         return True
 
     def input_pass(self, on: bool) -> bool:
@@ -162,19 +181,29 @@ class NullOverlay:
         return True
 
     def clear(self) -> bool:
+        """Clears the pointer, boxes and caption."""
         return True
 
     def hide(self) -> bool:
+        """Hides the overlay, e.g. for a clean screenshot."""
         return True
 
     def show(self) -> bool:
+        """Shows the overlay again after :meth:`hide`."""
         return True
 
     def close(self) -> None:
+        """Stops the overlay."""
         return None
 
 
 class OverlayClient(NullOverlay):
+    """Drives the overlay helper process over a JSON-lines pipe.
+
+    Every call degrades to a no-op if the helper dies, so the overlay can never
+    block automation.
+    """
+
     def __init__(
         self,
         cmd: list[str] | None = None,
@@ -219,10 +248,12 @@ class OverlayClient(NullOverlay):
     # ----------------------------------------------------------------- state
     @property
     def active(self) -> bool:  # type: ignore[override]
+        """True while the helper process is running and has not been disabled."""
         return not self._disabled and self._proc is not None and self._proc.poll() is None
 
     @property
     def pid(self) -> int | None:  # type: ignore[override]
+        """Process id of the helper, or None."""
         return self._proc.pid if self._proc else None
 
     def _release_waits(self) -> None:
@@ -571,6 +602,7 @@ class OverlayClient(NullOverlay):
         return ok
 
     # ------------------------------------------------------------------- API
+    @override
     def move(
         self,
         x: float,
@@ -596,36 +628,46 @@ class OverlayClient(NullOverlay):
             app=app or None,
         )
 
+    @override
     def click(self, button: str = "left", count: int = 1) -> bool:
         return self._send("cursor.click", button=button, count=count)
 
+    @override
     def state(self, state: str) -> bool:
         return self._send("cursor.state", state=state)
 
+    @override
     def intent(self, text: str, ms: int | None = None) -> bool:
         return self._send("intent", text=text, ms=ms)
 
+    @override
     def box(self, x: float, y: float, w: float, h: float) -> bool:
         return self._send("target.box", x=x, y=y, w=w, h=h)
 
+    @override
     def clear_box(self) -> bool:
         return self._send("target.clear")
 
+    @override
     def risk(self, level: str) -> bool:
         return self._send("risk", level=level)
 
+    @override
     def scan(self, rect: tuple | None = None) -> bool:
         if rect is None:
             return self._send("scan")
         x, y, w, h = rect
         return self._send("scan", x=x, y=y, w=w, h=h)
 
+    @override
     def trail_clear(self) -> bool:
         return self._send("trail.clear")
 
+    @override
     def set_visible(self, on: bool) -> bool:
         return self._send("overlay.visible", on=bool(on))
 
+    @override
     def track(self, window_id: Any = None, pid: int | None = None) -> bool:
         wid = protocol.window_id_int(window_id)
         if wid is None and pid is None:
@@ -634,12 +676,15 @@ class OverlayClient(NullOverlay):
 
     @property
     def lock_on(self) -> bool:  # type: ignore[override]
+        """True when the input lock is configured on."""
         return self.config.get("input_lock", "off") != "off"
 
     @property
     def background_on(self) -> bool:  # type: ignore[override]
+        """True when buttons are pressed without the real mouse (needs the input lock)."""
         return self.lock_on and bool(self.config.get("background_clicks", True))
 
+    @override
     def set_turbo(self, on: bool) -> bool:  # type: ignore[override]
         self.config["turbo"] = bool(on)
         if not self.active:
@@ -662,19 +707,23 @@ class OverlayClient(NullOverlay):
             return True
         return self._send("input.pass", wait=bool(on), timeout=0.5, on=bool(on))
 
+    @override
     def clear(self) -> bool:
         return self._send("glow.clear")
 
+    @override
     def hide(self) -> bool:
         if not self.active:
             return True
         return self._send("hide", wait=True)
 
+    @override
     def show(self) -> bool:
         if not self.active:
             return True
         return self._send("show")
 
+    @override
     def close(self) -> None:
         proc = self._proc
         if proc is not None and proc.poll() is None:

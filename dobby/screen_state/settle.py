@@ -23,12 +23,15 @@ from PIL import Image, ImageChops, ImageStat
 
 @dataclass(frozen=True)
 class SettleResult:
+    """Whether the screen settled, how long it took and how many samples it needed."""
+
     settled: bool
     waited_ms: float
     samples: int
     last_delta: float | None  # mean abs pixel difference (0-255) of the last two samples
 
     def as_dict(self) -> dict:
+        """The result as a JSON-ready dict."""
         return {
             "settled": self.settled,
             "waited_ms": round(self.waited_ms, 1),

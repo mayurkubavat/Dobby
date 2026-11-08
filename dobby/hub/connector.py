@@ -31,6 +31,7 @@ _FALSE = {"0", "false", "no", "off"}
 
 
 def shared_enabled(env: dict[str, str] | None = None) -> bool:
+    """True when clients should share one Dobby (``DOBBY_SHARED`` not 0, and AF_UNIX exists)."""
     env = os.environ if env is None else env
     if not hasattr(socket, "AF_UNIX"):
         return False
@@ -57,6 +58,7 @@ def _parent_name() -> str | None:
 
 
 def hello(argv: Sequence[str]) -> dict[str, object]:
+    """The first line a client sends to the shared Dobby: protocol version, pids, mode, name."""
     return {
         "dobby_hello": HELLO_VERSION,
         "pid": os.getpid(),
@@ -83,6 +85,7 @@ PER_CLIENT_ENV = ("DOBBY_AGENT_NAME", "DOBBY_MODE", "DOBBY_SECURE", "DOBBY_OVERL
 
 
 def daemon_env(env: dict[str, str]) -> dict[str, str]:
+    """The environment to start the shared Dobby with, minus per-client variables."""
     return {k: v for k, v in env.items() if k not in PER_CLIENT_ENV}
 
 
@@ -118,6 +121,7 @@ def find_app(env: dict[str, str] | None = None, platform: str = sys.platform) ->
 
 
 def app_config(env: dict[str, str] | None = None) -> dict[str, object]:
+    """Settings Dobby.app passes to the ``dobby serve`` it starts: DOBBY_* and a few others."""
     env = os.environ if env is None else env
     keep = {
         k: v
@@ -134,6 +138,11 @@ def app_config(env: dict[str, str] | None = None) -> dict[str, object]:
 
 
 def write_app_config(env: dict[str, str] | None = None) -> Path:
+    """Writes :func:`app_config` where Dobby.app reads it, privately and atomically.
+
+    Returns:
+        The path of the written config file.
+    """
     path = paths.app_config_path()
     paths.ensure_private_dir(path.parent)
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
@@ -185,6 +194,11 @@ def start_daemon(env: dict[str, str] | None = None) -> subprocess.Popen | None:
 
 
 def connect_or_start(timeout_s: float = CONNECT_TIMEOUT_S) -> socket.socket | None:
+    """Connects to the shared Dobby, starting it if nobody is listening.
+
+    Returns:
+        A connected socket, or None if no Dobby answered within ``timeout_s``.
+    """
     path = paths.socket_path()
     sock = _connect(path)
     if sock is not None:
@@ -216,6 +230,7 @@ def _read_line(sock: socket.socket, timeout_s: float) -> bytes:
 def handshake(
     sock: socket.socket, argv: Sequence[str], timeout_s: float = CONNECT_TIMEOUT_S
 ) -> dict[str, object]:
+    """Sends this client's hello and returns the shared Dobby's reply."""
     sock.sendall((json.dumps(hello(argv)) + "\n").encode())
     line = _read_line(sock, timeout_s)
     reply = json.loads(line.decode() or "{}")
@@ -266,12 +281,14 @@ def pump(sock: socket.socket, stdin_fd: int = 0, stdout_fd: int = 1) -> None:
 
 
 def run_in_process() -> None:
+    """Runs a private Dobby MCP server on this process's stdio."""
     from dobby.server import main as serve_stdio
 
     serve_stdio()
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Connects this client's stdio to the shared Dobby, or runs a private one."""
     argv = list(sys.argv if argv is None else argv)
     if not shared_enabled():
         run_in_process()

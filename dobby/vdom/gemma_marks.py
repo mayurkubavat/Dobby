@@ -149,6 +149,7 @@ class MarkLabelCache:
         self._lock = threading.Lock()
 
     def get(self, app_key: str, dhash: int) -> tuple[str, str] | None:
+        """The cached (label, role) for a patch hash, matching within the Hamming threshold."""
         with self._lock:
             exact = self._entries.get((app_key, dhash))
             if exact is not None:
@@ -160,6 +161,7 @@ class MarkLabelCache:
         return None
 
     def put(self, app_key: str, dhash: int, label: str, role: str) -> None:
+        """Caches the label and role for a patch hash, evicting the oldest past capacity."""
         with self._lock:
             self._entries[(app_key, dhash)] = (label, role)
             self._entries.move_to_end((app_key, dhash))
@@ -191,6 +193,7 @@ class GemmaMarkLabeler:
 
     @property
     def vision_model(self) -> str:
+        """The Ollama model used to label marks."""
         from dobby.local_models import model_for
 
         return self._vision_model or model_for("vision")

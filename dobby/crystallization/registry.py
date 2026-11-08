@@ -47,6 +47,7 @@ class DynamicSkillRegistry:
         return True
 
     def get_macro(self, name: str) -> CrystallizedMacro | None:
+        """Retrieves a crystallized macro by name, or None."""
         return self.macros.get(name)
 
     def get_skill(self, name: str) -> CrystallizedSkillSpec | None:

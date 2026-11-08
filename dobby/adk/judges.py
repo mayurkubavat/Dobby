@@ -11,12 +11,16 @@ from dobby.gemma.prompts import get_prompt
 
 
 class Verdict(BaseModel):
+    """A judge's ruling on whether a step's expectation holds."""
+
     outcome: Literal["pass", "fail", "unsure"]
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: str = Field(default="", max_length=200)
 
 
 class DialogTriage(BaseModel):
+    """A judge's classification of a dialog that appeared during a step."""
+
     risk_tier: Literal[
         "BENIGN_DISMISSIBLE", "INFORMATIVE_ACK", "WORKFLOW_BRANCHING", "DESTRUCTIVE_OR_SYSTEM"
     ]
@@ -46,6 +50,7 @@ def _instruction(prompt_id: str, state_key: str):
 
 
 def make_verifier(model: Any) -> Any:
+    """Builds the ADK agent that checks a step's expectation against the observation."""
     from google.adk.agents import LlmAgent
 
     return LlmAgent(
@@ -60,6 +65,7 @@ def make_verifier(model: Any) -> Any:
 
 
 def make_triage(model: Any) -> Any:
+    """Builds the ADK agent that classifies an unexpected dialog by risk."""
     from google.adk.agents import LlmAgent
 
     return LlmAgent(

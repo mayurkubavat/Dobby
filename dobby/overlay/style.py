@@ -67,10 +67,12 @@ BAR_THEMES: dict[str, dict[str, object]] = {
 
 
 def bar_theme(dark: bool) -> dict[str, object]:
+    """Colours and materials of the bar for the dark or light appearance."""
     return BAR_THEMES["dark" if dark else "light"]
 
 
 def hex_rgb01(value: str) -> tuple[float, float, float]:
+    """Converts ``#RRGGBB`` to an ``(r, g, b)`` tuple of floats in 0..1."""
     v = value.lstrip("#")
     return tuple(int(v[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
 
@@ -81,6 +83,7 @@ def is_filled(button: Button) -> bool:
 
 
 def normalize_style(value: str | None) -> str:
+    """A known overlay style name, defaulting to ``"modern"``."""
     value = (value or "").strip().lower()
     return value if value in STYLES else "modern"
 
@@ -179,6 +182,8 @@ def working_text(
 
 @dataclass(frozen=True)
 class Button:
+    """One button on the bar: its key, title and optional SF Symbol icon."""
+
     key: str  # "primary" | "secondary" | "hide" | "menu"
     title: str  # text title, used when there is no icon (or no SF Symbols)
     icon: str | None = None  # SF Symbol name
@@ -188,6 +193,8 @@ class Button:
 
 @dataclass(frozen=True)
 class BarSpec:
+    """What the bar shows in one mode: its text and buttons."""
+
     mode: str
     text: str
     buttons: tuple[Button, ...] = field(default_factory=tuple)

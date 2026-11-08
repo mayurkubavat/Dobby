@@ -87,6 +87,7 @@ def publish(
 
 
 def clear(server_pid: int, directory: str = STATUS_DIR) -> None:
+    """Deletes the published status file of the Dobby with ``server_pid``."""
     try:
         os.unlink(os.path.join(directory, f"{int(server_pid)}.json"))
     except OSError:
@@ -262,6 +263,8 @@ _ORDER = list(_STATES)
 
 @dataclass
 class Row:
+    """One agent row in the menu."""
+
     pid: int
     name: str
     state: str  # a key of _STATES
@@ -275,6 +278,8 @@ class Row:
 
 @dataclass
 class View:
+    """The menu's content, drawn the same way by the Mac status item and the Linux tray."""
+
     header: str
     subtitle: str
     rows: list[Row]
@@ -469,6 +474,7 @@ def icon_title(view: View) -> str:
 
 
 def tooltip(view: View) -> str:
+    """Tooltip for the menu bar icon."""
     return f"Dobby: {view.subtitle}"
 
 
@@ -770,6 +776,10 @@ def bar_icon_path(
     directory: str = ICON_DIR,
 ) -> str | None:
     # "bar-ps": pointer and spark. A new look needs a new file name (icons are cached).
+    """Path of the cached menu bar icon PNG for ``state``, drawing it on first use.
+
+    Returns None when the icon cannot be drawn.
+    """
     return icon_file(
         "bar-ps",
         state,
@@ -797,6 +807,7 @@ def tray_icon_path(
 
 
 def row_icon_path(color: str, shape: str, size: int = 52, directory: str = ICON_DIR) -> str | None:
+    """Path of the cached square row icon in ``color`` and ``shape``, drawing it on first use."""
     return icon_file(
         "row-sq",
         color,

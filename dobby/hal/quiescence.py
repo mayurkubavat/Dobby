@@ -320,6 +320,7 @@ class X11QuiescenceMonitor:
         initial_timeout_ms: int = 1500,
         max_total_timeout_ms: int = 15000,
     ) -> QuiescenceReport:
+        """Waits for the screen to settle and reports how it went."""
         phase, elapsed, dirty = self.wait_for_quiescence(
             quiescence_window_ms=quiescence_window_ms,
             initial_timeout_ms=initial_timeout_ms,
@@ -356,15 +357,19 @@ class SleepQuiescenceMonitor:
         self.is_available = False
 
     def arm(self) -> None:
+        """No-op: this monitor cannot see screen damage."""
         return None
 
     def consume_damage_area(self) -> int:
+        """Always 0: this monitor cannot see screen damage."""
         return 0
 
     def get_cursor_state(self) -> tuple[str, int]:
+        """Always ``("unknown", 0)``: this monitor cannot read the cursor."""
         return ("unknown", 0)
 
     def is_cursor_busy(self) -> bool:
+        """Always False: this monitor cannot read the cursor."""
         return False
 
     def wait_for_quiescence(
@@ -374,6 +379,7 @@ class SleepQuiescenceMonitor:
         max_total_timeout_ms: int = 15000,
         poll_interval_sec: float = 0.025,
     ) -> tuple[ExecutionPhase, float, int]:
+        """Sleeps for ``quiescence_window_ms`` instead of watching the screen."""
         time.sleep(quiescence_window_ms / 1000.0)
         return (ExecutionPhase.SLEEP_FALLBACK, float(quiescence_window_ms), 0)
 
@@ -383,6 +389,7 @@ class SleepQuiescenceMonitor:
         initial_timeout_ms: int = 1500,
         max_total_timeout_ms: int = 15000,
     ) -> QuiescenceReport:
+        """Sleeps for the quiescence window and reports it as a fallback."""
         phase, elapsed, dirty = self.wait_for_quiescence(
             quiescence_window_ms=quiescence_window_ms,
             initial_timeout_ms=initial_timeout_ms,

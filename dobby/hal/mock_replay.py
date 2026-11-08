@@ -90,6 +90,7 @@ class MockReplayHAL:
 
     @property
     def current_state(self) -> ScreenFrameState:
+        """The frame the replay is currently showing."""
         return self.states[self.cursor]
 
     def set_auto_advance(self, auto_advance: bool) -> None:
@@ -130,9 +131,11 @@ class MockReplayHAL:
             self.advance_frame()
 
     def get_screen_size(self) -> tuple[int, int]:
+        """Screen size recorded in the current frame."""
         return self.current_state.screen_size
 
     def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
+        """Returns the current frame's image, cropped to ``region`` when given."""
         path = self.current_state.image_path
         if path and Path(path).is_file():
             img = Image.open(path).convert("RGB")
@@ -145,12 +148,15 @@ class MockReplayHAL:
         return img
 
     def get_cursor_position(self) -> tuple[int, int]:
+        """Pointer position recorded in the current frame."""
         return self.current_state.cursor_pos
 
     def mouse_move(self, x: int, y: int) -> None:
+        """Records the move; may advance to the next frame."""
         self._note("mouse_move", {"x": x, "y": y})
 
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1) -> None:
+        """Records the click; may advance to the next frame."""
         self._note(
             "mouse_click",
             {"x": x, "y": y, "button": button, "click_count": click_count},
@@ -159,6 +165,7 @@ class MockReplayHAL:
     def mouse_drag(
         self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3
     ) -> None:
+        """Records the drag; may advance to the next frame."""
         self._note(
             "mouse_drag",
             {
@@ -171,24 +178,31 @@ class MockReplayHAL:
         )
 
     def mouse_scroll(self, dx: int, dy: int) -> None:
+        """Records the scroll; may advance to the next frame."""
         self._note("mouse_scroll", {"dx": dx, "dy": dy})
 
     def keyboard_type(self, text: str, delay_ms: float = 12.0) -> None:
+        """Records the typed text; may advance to the next frame."""
         self._note("keyboard_type", {"text": text, "delay_ms": delay_ms})
 
     def keyboard_press_key(self, key_name: str) -> None:
+        """Records the key press; may advance to the next frame."""
         self._note("keyboard_press_key", {"key_name": key_name})
 
     def keyboard_hotkey(self, keys: list[str]) -> None:
+        """Records the hotkey; may advance to the next frame."""
         self._note("keyboard_hotkey", {"keys": list(keys)})
 
     def list_windows(self) -> list[WindowInfo]:
+        """Windows recorded in the current frame."""
         return self.current_state.windows
 
     def get_active_window(self) -> WindowInfo | None:
+        """Active window recorded in the current frame."""
         return self.current_state.active_window
 
     def focus_window(self, window_id: str) -> bool:
+        """Records the focus request and reports success."""
         if self.transitions:
             self._note("focus_window", {"window_id": window_id})
         else:
@@ -206,6 +220,7 @@ class MockReplayHAL:
         max_depth: int | None = None,
         diff_only: bool = False,
     ) -> dict[str, Any]:
+        """Accessibility tree (or its diff) recorded in the current frame."""
         if diff_only:
             return self.current_state.ax_diff or {"changed": False, "nodes": []}
         return self.current_state.ax_tree or {"role": "AXApplication", "children": []}
@@ -219,12 +234,15 @@ class MockReplayHAL:
         return {"count": len(boxes), "lines": boxes}
 
     def arm(self) -> None:
+        """No-op: replayed frames carry their own damage figure."""
         return None
 
     def consume_damage_area(self) -> int:
+        """Pixel change recorded between the previous and current frame."""
         return int(self.current_state.pixel_delta_from_prev)
 
     def get_cursor_state(self) -> tuple[str, int]:
+        """Always the idle arrow cursor."""
         return ("arrow", 0)
 
     def wait_for_quiescence(
@@ -313,6 +331,7 @@ class MockReplayHAL:
 
 
 def load_cassette(path_or_json: str | Path) -> MockReplayHAL:
+    """Loads a cassette file or JSON string into a :class:`MockReplayHAL`."""
     return MockReplayHAL.load_cassette(path_or_json)
 
 
@@ -344,6 +363,11 @@ class CassetteRecorder:
         return frame_id
 
     def run(self, action: str, args: dict[str, Any]) -> str:
+        """Runs one session action and records the frames before and after it.
+
+        Returns:
+            The id of the frame captured after the action.
+        """
         pre = self._snapshot()
         method = getattr(self.session, action)
         method(**args)

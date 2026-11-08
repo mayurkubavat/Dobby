@@ -20,6 +20,7 @@ from dobby.control.lease import pid_alive
 def parent_gone(
     parent: int, current: int | None = None, alive: Callable[[int], bool] = pid_alive
 ) -> bool:
+    """True when ``parent`` is no longer this process's parent or has exited."""
     current = os.getppid() if current is None else current
     return current != parent or not alive(parent)
 

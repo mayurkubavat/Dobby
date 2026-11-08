@@ -61,30 +61,37 @@ class Decision:
 
     @property
     def index(self) -> int:
+        """Index of the most probable option."""
         return max(range(len(self.probabilities)), key=lambda i: self.probabilities[i])
 
     @property
     def choice(self) -> str:
+        """The most probable option."""
         return self.options[self.index]
 
     @property
     def p(self) -> float:
+        """Probability of the chosen option."""
         return self.probabilities[self.index]
 
     @property
     def confidence(self) -> float:
+        """How decisive the distribution is, from 0 (uniform) to 1 (certain)."""
         return choice_confidence(self.probabilities)
 
     @property
     def margin(self) -> float:
+        """Gap between the two most probable options."""
         ranked = sorted(self.probabilities, reverse=True)
         return ranked[0] - (ranked[1] if len(ranked) > 1 else 0.0)
 
     @property
     def is_none(self) -> bool:
+        """True when the model chose "none of these"."""
         return self.choice == NONE_OPTION
 
     def as_dict(self) -> dict[str, Any]:
+        """The decision as a JSON-ready dict."""
         return {
             "choice": self.choice,
             "p": round(self.p, 4),
@@ -111,6 +118,7 @@ class Noul:
 
     @property
     def confidence(self) -> float:
+        """Distance from a coin flip: 0 at p=0.5, 1 at p=0 or p=1."""
         return abs(2.0 * self.p_true - 1.0)
 
     def answer(self, yes_at: float = 0.7, no_at: float = 0.3) -> bool | None:
@@ -122,6 +130,7 @@ class Noul:
         return None
 
     def as_dict(self) -> dict[str, Any]:
+        """The probability as a JSON-ready dict."""
         return {
             "p_true": round(self.p_true, 4),
             "confidence": round(self.confidence, 4),
@@ -142,6 +151,11 @@ def choice_confidence(probabilities: Sequence[float]) -> float:
 
 
 def option_labels(n: int) -> list[str]:
+    """Letter labels ``A``, ``B``, ... for ``n`` options.
+
+    Raises:
+        ValueError: ``n`` is more than ``MAX_OPTIONS``.
+    """
     if n > MAX_OPTIONS:
         raise ValueError(f"at most {MAX_OPTIONS} options, got {n}; shortlist first")
     return [chr(ord("A") + i) for i in range(n)]

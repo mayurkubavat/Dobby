@@ -19,6 +19,8 @@ _ids = itertools.count(1)
 
 @dataclass
 class SessionInfo:
+    """One connected client session of the shared Dobby."""
+
     id: int
     name: str
     pid: int | None
@@ -36,9 +38,11 @@ class SessionInfo:
 
     @property
     def turbo(self) -> bool:
+        """True unless the session asked for secure mode."""
         return self.mode != "secure"
 
     def as_dict(self) -> dict[str, Any]:
+        """The session as a JSON-ready dict, including ``turbo``."""
         out = asdict(self)
         out["turbo"] = self.turbo
         return out
@@ -52,6 +56,7 @@ CURRENT: contextvars.ContextVar[SessionInfo | None] = contextvars.ContextVar(
 
 
 def open_session(name: str, pid: int | None, mode: str) -> SessionInfo:
+    """Registers a new client session and returns its info."""
     info = SessionInfo(id=next(_ids), name=name, pid=pid, mode=mode)
     with _lock:
         _sessions[info.id] = info
@@ -59,11 +64,13 @@ def open_session(name: str, pid: int | None, mode: str) -> SessionInfo:
 
 
 def close_session(info: SessionInfo) -> None:
+    """Forgets a session when its client disconnects."""
     with _lock:
         _sessions.pop(info.id, None)
 
 
 def note_call(tool: str) -> None:
+    """Records a tool call against the current session."""
     info = CURRENT.get()
     if info is None:
         return
@@ -83,10 +90,12 @@ def rename(name: str | None) -> None:
 
 
 def count() -> int:
+    """Number of open sessions."""
     with _lock:
         return len(_sessions)
 
 
 def snapshot() -> list[dict[str, Any]]:
+    """All open sessions as dicts, oldest first."""
     with _lock:
         return [s.as_dict() for s in sorted(_sessions.values(), key=lambda s: s.id)]

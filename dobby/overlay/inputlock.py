@@ -121,6 +121,7 @@ class Insist:
         self.down_at: float | None = None
 
     def press(self, now: float) -> bool:
+        """Notes a swallowed press; True when it is the one that should get through."""
         self.times = [t for t in self.times if now - t <= self.secs] + [now]
         self.down_at = now
         if len(self.times) >= self.clicks:
@@ -129,17 +130,20 @@ class Insist:
         return False
 
     def held(self, now: float) -> bool:
+        """True once the current press has been held long enough to get through."""
         if self.down_at is not None and now - self.down_at >= self.hold_secs:
             self.reset()
             return True
         return False
 
     def release(self, now: float) -> bool:
+        """Ends the current press; True when it was a long press."""
         long_press = self.held(now)
         self.down_at = None
         return long_press
 
     def reset(self) -> None:
+        """Forgets earlier presses."""
         self.times = []
         self.down_at = None
 

@@ -1,6 +1,7 @@
 """Ensemble Grounding Provider fusing Semantic, Computer Vision, and Template detections with NMS."""
 
 from PIL import Image
+from typing_extensions import override
 
 from dobby.config import CONFIG
 from dobby.perception.grounding.base import BaseGroundingProvider
@@ -51,10 +52,12 @@ class EnsembleGroundingProvider(BaseGroundingProvider):
         self.iou_threshold = iou_threshold
 
     @property
+    @override
     def name(self) -> str:
         return "ensemble"
 
     @property
+    @override
     def is_available(self) -> bool:
         return True
 

@@ -31,6 +31,8 @@ from dobby.config import CONFIG
 
 @dataclass(frozen=True)
 class PromptSpec:
+    """A versioned prompt: system text, output JSON schema and token budget."""
+
     id: str
     version: int
     system: str
@@ -40,6 +42,7 @@ class PromptSpec:
 
     @property
     def tag(self) -> str:
+        """Short identifier such as ``yes_no@3`` (``+local`` for a locally tuned variant)."""
         return f"{self.id}@{self.version}{'+local' if self.local else ''}"
 
 
@@ -251,6 +254,7 @@ def get_prompt(prompt_id: str, prompt_dir: str | None = None) -> PromptSpec:
 
 
 def list_prompts() -> list[dict[str, Any]]:
+    """Lists every registered prompt with its id, version and tag."""
     out = []
     for pid in PROMPTS:
         spec = get_prompt(pid)

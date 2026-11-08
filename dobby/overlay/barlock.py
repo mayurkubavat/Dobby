@@ -22,9 +22,11 @@ class BarOwner:
 
     @property
     def owned(self) -> bool:
+        """True while this helper holds the lock."""
         return self.fh is not None
 
     def try_acquire(self) -> bool:
+        """Tries to take the lock without blocking; True when this helper holds it."""
         if self.fh is not None:
             return True
         try:
@@ -41,6 +43,7 @@ class BarOwner:
         return True
 
     def release(self) -> None:
+        """Gives the lock up if held."""
         if self.fh is not None:
             try:
                 fcntl.flock(self.fh, fcntl.LOCK_UN)
@@ -147,6 +150,7 @@ class BarRow:
         return 0  # every row taken (or no lock dir): overlap rather than vanish
 
     def release(self) -> None:
+        """Gives the row up if held."""
         if self.fh is not None:
             try:
                 fcntl.flock(self.fh, fcntl.LOCK_UN)

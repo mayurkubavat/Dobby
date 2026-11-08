@@ -22,6 +22,10 @@ def _path(root: Path, pid: int) -> Path:
 
 
 def read(root: Path, pid: int) -> dict[str, Any]:
+    """Reads the pending commands (pause, stop) for the Dobby with ``pid``.
+
+    Returns an empty dict when there are none or the file cannot be read.
+    """
     try:
         data = json.loads(_path(root, pid).read_text(encoding="utf-8"))
         if isinstance(data, dict):
@@ -48,14 +52,17 @@ def _update(root: Path, pid: int, **change: Any) -> dict[str, Any]:
 
 
 def set_paused(root: Path, pid: int, paused: bool) -> dict[str, Any]:
+    """Asks the Dobby with ``pid`` to pause or resume; returns the new command state."""
     return _update(root, pid, paused=bool(paused))
 
 
 def request_stop(root: Path, pid: int) -> dict[str, Any]:
+    """Asks the Dobby with ``pid`` to stop its current task; returns the new command state."""
     return _update(root, pid, stop=True)
 
 
 def clear(root: Path, pid: int) -> None:
+    """Deletes the command file (and its lock) for ``pid``."""
     for p in (_path(root, pid), _path(root, pid).with_suffix(".lock")):
         try:
             p.unlink()
@@ -91,4 +98,5 @@ def overview(root: Path) -> list[dict[str, Any]]:
 
 
 def find(root: Path, pid: int) -> dict[str, Any] | None:
+    """The overview entry for the agent with ``pid``, or None."""
     return next((a for a in overview(root) if a["pid"] == pid), None)

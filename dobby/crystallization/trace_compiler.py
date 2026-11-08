@@ -22,6 +22,7 @@ class TraceCompiler:
         native_template: str = "",
         native_kind: str = "none",
     ) -> CrystallizedMacro:
+        """Compiles correlated steps into a parameterised, replayable skill."""
         entities = entities or {}
         trace: list[TraceStep] = []
         params: dict[str, dict[str, Any]] = {}

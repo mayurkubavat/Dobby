@@ -25,6 +25,7 @@ from collections.abc import Callable
 from typing import Any
 
 from PIL import Image
+from typing_extensions import override
 
 from dobby.config import CONFIG
 from dobby.hal.base import IDesktopHAL
@@ -245,6 +246,7 @@ class MacHAL(IDesktopHAL):
 
     @property
     def AK(self):
+        """AppKit, loaded on first use."""
         if self._appkit is None:
             self._appkit = _load_appkit()
         return self._appkit
@@ -267,6 +269,7 @@ class MacHAL(IDesktopHAL):
 
     # ------------------------------------------------------------- screen
 
+    @override
     def get_screen_size(self) -> tuple[int, int]:
         bounds = self.Q.CGDisplayBounds(self.Q.CGMainDisplayID())
         return int(bounds.size.width), int(bounds.size.height)
@@ -303,6 +306,7 @@ class MacHAL(IDesktopHAL):
         )
 
     def backing_scale(self) -> float:
+        """Points-to-pixels factor of the main screen (2.0 on Retina), or 1.0 if unknown."""
         try:
             return float(self.AK.NSScreen.mainScreen().backingScaleFactor())
         except Exception:
@@ -310,15 +314,18 @@ class MacHAL(IDesktopHAL):
 
     # -------------------------------------------------------------- mouse
 
+    @override
     def get_cursor_position(self) -> tuple[int, int]:
         loc = self.Q.CGEventGetLocation(self.Q.CGEventCreate(None))
         return int(loc.x), int(loc.y)
 
+    @override
     def mouse_move(self, x: int, y: int) -> None:
         self._check_failsafe(x, y)
         ev = self.Q.CGEventCreateMouseEvent(None, _kCGEventMouseMoved, (x, y), _kCGMouseButtonLeft)
         self._post(ev)
 
+    @override
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1) -> None:
         self._check_failsafe(x, y)
         if button == "right":
@@ -335,6 +342,7 @@ class MacHAL(IDesktopHAL):
                 time.sleep(0.01)
         self._cooldown()
 
+    @override
     def mouse_drag(
         self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3
     ) -> None:
@@ -362,6 +370,7 @@ class MacHAL(IDesktopHAL):
         )
         self._cooldown()
 
+    @override
     def mouse_scroll(self, dx: int, dy: int) -> None:
         # Positive dy scrolls content up (same sign convention as the Linux HAL wheel)
         ev = self.Q.CGEventCreateScrollWheelEvent(
@@ -406,6 +415,7 @@ class MacHAL(IDesktopHAL):
         for code in MODIFIER_KEYCODES.values():
             self._key_event(code, False, 0)
 
+    @override
     def keyboard_press_key(self, key_name: str) -> None:
         code, flag = self._resolve(key_name)
         if code is None:
@@ -500,6 +510,7 @@ class MacHAL(IDesktopHAL):
             )
         return results
 
+    @override
     def get_active_window(self) -> WindowInfo | None:
         for w in self.list_windows():
             if w.is_active:
@@ -507,6 +518,7 @@ class MacHAL(IDesktopHAL):
         return None
 
     def window_pid(self, window_id: str) -> int | None:
+        """Process id that owns the window, or None when the window is not on screen."""
         for w in self._window_dicts():
             if str(int(w.get("kCGWindowNumber", -1))) == str(window_id):
                 return int(w.get("kCGWindowOwnerPID", -1))
@@ -615,4 +627,5 @@ class MacHAL(IDesktopHAL):
 
 
 def build_hal() -> MacHAL:
+    """Factory used by :func:`dobby.hal.factory.get_desktop_hal`."""
     return MacHAL()

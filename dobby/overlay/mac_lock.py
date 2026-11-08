@@ -161,6 +161,7 @@ class MacInputLock:
 
     @property
     def ok(self) -> bool:
+        """True when the event tap was installed."""
         return self.tap is not None
 
     # ------------------------------------------------------------- the tap
@@ -250,6 +251,7 @@ class MacInputLock:
             self._show_badge(None)
 
     def close(self) -> None:
+        """Removes the event tap."""
         if self.tap is not None:
             try:
                 CGEventTapEnable(self.tap, False)

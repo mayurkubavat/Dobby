@@ -95,6 +95,7 @@ class SemanticROICache:
             self._entries.popitem(last=False)
 
     def clear(self) -> None:
+        """Empties the cache."""
         self._entries.clear()
 
     def __len__(self) -> int:
@@ -218,6 +219,7 @@ class Gemma3Grounder:
 
     @property
     def vision_model(self) -> str:
+        """The Ollama model used for vision checks."""
         from dobby.local_models import model_for
 
         return self._vision_model or model_for("vision")
@@ -228,6 +230,7 @@ class Gemma3Grounder:
 
     @property
     def text_model(self) -> str:
+        """The Ollama model used for text triage."""
         from dobby.local_models import model_for
 
         return self._text_model or model_for("triage")
@@ -241,6 +244,7 @@ class Gemma3Grounder:
         return self.client.has_models({self.vision_model, self.text_model})
 
     def diagnostics(self) -> dict[str, Any]:
+        """Configured models, which are installed, and the client's call stats."""
         installed = self.client.installed_models()
         return {
             "vision_model": self.vision_model,

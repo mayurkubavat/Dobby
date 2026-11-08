@@ -19,7 +19,7 @@ except ImportError:
     from mcp.server.fastmcp import FastMCP as MCPServer
 
     class ToolError(RuntimeError):
-        pass
+        """A tool call that failed in a way the AI should see as an error."""
 
 
 from dobby.agent_loop.controller import FeedbackLoopController
@@ -171,9 +171,11 @@ class DobbyServer(MCPServer):
     active_loop: Any = None
 
     def add_tool(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        """Registers a tool wrapped in the handoff guard."""
         return super().add_tool(_handoff_guard(fn), *args, **kwargs)
 
     async def list_tools(self):
+        """Lists only the tools in the active profile that the admin policy allows."""
         tools = await super().list_tools()
         active = {schema["name"] for schema in toolset_manager.get_active_mcp_schemas()}
         from dobby import policy as _policy
@@ -182,6 +184,11 @@ class DobbyServer(MCPServer):
         return [tool for tool in tools if tool.name in active and rules.tool_allowed(tool.name)]
 
     async def call_tool(self, name, arguments, context=None):
+        """Runs a tool after checking the admin policy and the active profile.
+
+        Raises:
+            ToolError: The policy blocks the tool or it is outside the active profile.
+        """
         if context is not None and getattr(context, "session", None) is not None:
             self.active_session = context.session
             import asyncio

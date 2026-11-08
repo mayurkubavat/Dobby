@@ -56,19 +56,24 @@ def _short(result: Any) -> Any:
 
 
 class Observation:
+    """What the runner read from the screen after a step: OCR lines and AX nodes."""
+
     def __init__(self, ocr_lines: list[str], nodes: list[dict[str, Any]]) -> None:
         self.ocr_lines = ocr_lines
         self.nodes = nodes
 
     @property
     def dialogs(self) -> list[str]:
+        """Names of the dialogs among the accessibility nodes."""
         return [str(n.get("name") or "dialog") for n in self.nodes if n.get("role") == "dialog"]
 
     @property
     def names(self) -> list[str]:
+        """Accessible names of every named node."""
         return [str(n.get("name")) for n in self.nodes if n.get("name")]
 
     def as_text(self) -> str:
+        """Renders the observation as text for a judge prompt."""
         ocr = "\n".join(f"- {t}" for t in self.ocr_lines[:MAX_OBS_LINES]) or "(none)"
         ax = (
             "\n".join(

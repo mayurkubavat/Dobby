@@ -123,6 +123,7 @@ def _admin_secure() -> bool:
 
 
 def overlay_enabled(env: dict[str, str] | None = None, platform: str = sys.platform) -> bool:
+    """True when the visible overlay should run (``DOBBY_OVERLAY``, platform support, admin policy)."""
     env = os.environ if env is None else env
     flag = env.get("DOBBY_OVERLAY", "").strip().lower()
     if flag in _FALSE and not _admin_secure():
@@ -209,6 +210,7 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
 
 
 def make_overlay(enabled: bool | None = None) -> NullOverlay:
+    """Starts the overlay helper, or returns a :class:`NullOverlay` when it is off or fails to start."""
     if enabled is None:
         enabled = overlay_enabled()
     if not enabled:

@@ -103,6 +103,7 @@ MOMENTS = tuple(ELF)
 
 
 def normalize_level(value: str | None) -> str:
+    """A known personality level ("off", "subtle" or "elf") for loose user input."""
     v = (value or "").strip().lower()
     if v in ("0", "false", "no", "none"):
         return "off"
@@ -169,6 +170,7 @@ class Voice:
 
     @classmethod
     def from_config(cls, cfg: Mapping[str, object]) -> Voice:
+        """Builds a voice from the overlay config (personality, user name, lines file, seed)."""
         seed = cfg.get("personality_seed")
         return cls(
             level=str(cfg.get("personality") or DEFAULT_LEVEL),
@@ -181,6 +183,7 @@ class Voice:
 
     @property
     def on(self) -> bool:
+        """True unless the personality is off."""
         return self.level != "off"
 
     # ---------------------------------------------------------------- words
@@ -321,6 +324,7 @@ class Voice:
 
 
 def voice_from_env(env: Mapping[str, str] | None = None, seed: int | None = None) -> Voice:
+    """Builds a voice from ``DOBBY_PERSONALITY`` and related environment variables."""
     env = os.environ if env is None else env
     return Voice(
         level=env.get("DOBBY_PERSONALITY", DEFAULT_LEVEL),

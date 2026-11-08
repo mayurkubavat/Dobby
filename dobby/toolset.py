@@ -120,6 +120,7 @@ class ToolSetManager:
 
     @property
     def output_mode(self) -> OutputMode:
+        """Where large tool outputs go: inline, a file, or an MCP resource."""
         return self._output_mode
 
     @output_mode.setter
@@ -128,6 +129,7 @@ class ToolSetManager:
 
     @property
     def state_dir(self) -> Path:
+        """Directory for offloaded payloads and toolset state."""
         return self._state_dir
 
     def register_tool(self, tool: ToolDefinition) -> None:

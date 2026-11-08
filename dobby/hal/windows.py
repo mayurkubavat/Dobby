@@ -3,6 +3,7 @@
 import sys
 
 from PIL import Image
+from typing_extensions import override
 
 from dobby.hal.base import IDesktopHAL
 from dobby.hal.errors import CapabilityUnavailable
@@ -68,6 +69,7 @@ class WindowsHAL(IDesktopHAL):
             primary_id="primary",
         )
 
+    @override
     def get_screen_size(self) -> tuple[int, int]:
         if sys.platform != "win32":
             return (1920, 1080)
@@ -93,6 +95,7 @@ class WindowsHAL(IDesktopHAL):
             )
             return ImageGrab.grab(bbox=bbox)
 
+    @override
     def get_cursor_position(self) -> tuple[int, int]:
         if sys.platform != "win32":
             return (0, 0)
@@ -128,6 +131,7 @@ class WindowsHAL(IDesktopHAL):
         inp = INPUT(type=0, mi=MOUSEINPUT(dx, dy, data, flags, 0, 0))
         user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
+    @override
     def mouse_move(self, x: int, y: int) -> None:
         if sys.platform != "win32":
             return
@@ -141,6 +145,7 @@ class WindowsHAL(IDesktopHAL):
         # MOVE | ABSOLUTE | VIRTUALDESK
         self._send_mouse(0x0001 | 0x8000 | 0x4000, dx=ax, dy=ay)
 
+    @override
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1) -> None:
         if sys.platform != "win32":
             return
@@ -158,6 +163,7 @@ class WindowsHAL(IDesktopHAL):
             self._send_mouse(flags[1])
             time.sleep(0.01)
 
+    @override
     def mouse_drag(
         self, start_x: int, start_y: int, end_x: int, end_y: int, duration_sec: float = 0.3
     ) -> None:
@@ -177,6 +183,7 @@ class WindowsHAL(IDesktopHAL):
         finally:
             self._send_mouse(0x0004)
 
+    @override
     def mouse_scroll(self, dx: int, dy: int) -> None:
         if sys.platform != "win32":
             return
@@ -185,6 +192,7 @@ class WindowsHAL(IDesktopHAL):
         # MOUSEEVENTF_WHEEL = 0x0800, wheel delta 120 per click
         ctypes.windll.user32.mouse_event(0x0800, 0, 0, int(dy * 120), 0)
 
+    @override
     def keyboard_type(self, text: str, delay_ms: float = 12.0) -> None:
         from pynput.keyboard import Controller
 
@@ -195,6 +203,7 @@ class WindowsHAL(IDesktopHAL):
             kb.type(char)
             time.sleep(delay_ms / 1000.0)
 
+    @override
     def keyboard_press_key(self, key_name: str) -> None:
         from pynput.keyboard import Controller
 
@@ -202,6 +211,7 @@ class WindowsHAL(IDesktopHAL):
         kb.press(key_name)
         kb.release(key_name)
 
+    @override
     def keyboard_hotkey(self, keys: list[str]) -> None:
         from pynput.keyboard import Controller
 
@@ -219,9 +229,11 @@ class WindowsHAL(IDesktopHAL):
         """Returns the currently active window on Windows."""
         raise CapabilityUnavailable("Windows UIA active-window query is not implemented")
 
+    @override
     def focus_window(self, window_id: str) -> bool:
         raise CapabilityUnavailable("Windows SetForegroundWindow is not implemented")
 
 
 def build_hal() -> WindowsHAL:
+    """Factory used by :func:`dobby.hal.factory.get_desktop_hal`."""
     return WindowsHAL()

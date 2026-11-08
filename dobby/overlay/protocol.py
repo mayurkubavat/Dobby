@@ -64,7 +64,7 @@ OPS: dict[str, tuple] = {
 
 
 class ProtocolError(ValueError):
-    pass
+    """A message that does not follow the overlay protocol."""
 
 
 def validate(msg: dict[str, Any]) -> dict[str, Any]:
@@ -105,6 +105,7 @@ def validate(msg: dict[str, Any]) -> dict[str, Any]:
 
 
 def encode(op: str, msg_id: int | None = None, **fields: Any) -> str:
+    """Encodes one command as a JSON line."""
     msg: dict[str, Any] = {"op": op}
     msg.update({k: v for k, v in fields.items() if v is not None})
     if msg_id is not None:
@@ -114,6 +115,11 @@ def encode(op: str, msg_id: int | None = None, **fields: Any) -> str:
 
 
 def decode(line: str) -> dict[str, Any]:
+    """Decodes and validates one JSON line.
+
+    Raises:
+        ProtocolError: The line is not valid JSON or not a valid message.
+    """
     try:
         msg = json.loads(line)
     except json.JSONDecodeError as exc:
@@ -122,6 +128,7 @@ def decode(line: str) -> dict[str, Any]:
 
 
 def ack(msg_id: Any, ok: bool = True, error: str | None = None) -> str:
+    """Encodes an acknowledgement for the command ``msg_id``."""
     out: dict[str, Any] = {"ack": msg_id, "ok": ok}
     if error:
         out["error"] = error
@@ -129,6 +136,11 @@ def ack(msg_id: Any, ok: bool = True, error: str | None = None) -> str:
 
 
 def event(name: str, **fields: Any) -> str:
+    """Encodes an event from the helper to the server as a JSON line.
+
+    Raises:
+        ProtocolError: ``name`` is not a known event.
+    """
     if name not in EVENTS:
         raise ProtocolError(f"unknown event: {name!r}")
     out: dict[str, Any] = {"event": name}

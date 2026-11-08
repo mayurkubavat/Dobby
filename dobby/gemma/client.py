@@ -120,6 +120,8 @@ class _ModelStats:
 
 @dataclass
 class GemmaStats:
+    """Call counts and timings for a Gemma client, overall and per model."""
+
     calls: int = 0
     errors: int = 0
     total_ms: float = 0.0
@@ -127,6 +129,7 @@ class GemmaStats:
     per_model: dict[str, _ModelStats] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
+        """The stats as a JSON-ready dict, with average latency and error rate."""
         ok = self.calls - self.errors
         return {
             "calls": self.calls,
@@ -187,9 +190,11 @@ class GemmaClient:
         return models
 
     def has_model(self, model: str) -> bool:
+        """True when ``model`` is installed on the Ollama server."""
         return _model_matches(model, self.installed_models())
 
     def has_models(self, models: Iterable[str]) -> bool:
+        """True when every model in ``models`` is installed on the Ollama server."""
         installed = self.installed_models()
         return all(_model_matches(m, installed) for m in models)
 
@@ -332,6 +337,7 @@ class GemmaClient:
                 s.last_error = error
 
     def stats(self) -> dict[str, Any]:
+        """A snapshot of this client's call stats and server URL."""
         with self._lock:
             out = self._stats.as_dict()
         out["base_url"] = self.base_url

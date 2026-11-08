@@ -732,6 +732,11 @@ class _Tray:
 
 
 class X11Overlay:
+    """The Linux (X11/GTK) overlay helper: pointer, glow, bar and Allow/Deny prompts.
+
+    Runs in its own process and reads JSON-lines commands from the server on stdin.
+    """
+
     def __init__(self, cfg: dict[str, Any], out=None) -> None:
         self.cfg = dict(DEFAULT_CONFIG)
         self.cfg.update(cfg or {})
@@ -818,12 +823,19 @@ class X11Overlay:
                 GLib.idle_add(self.quit)
 
     def emit(self, obj: dict[str, Any]) -> None:
+        """Writes one JSON message to the server."""
         self._write(json.dumps(obj, separators=(",", ":")) + "\n")
 
     def send_event(self, name: str) -> None:
+        """Sends a named event (pause, resume, stop, ...) to the server."""
         self._write(protocol.event(name))
 
     def ack(self, msg_id: Any, ok: bool = True, error: str | None = None) -> bool:
+        """Acknowledges the command with ``msg_id``.
+
+        Returns:
+            Always False, so it can be used as a one-shot GLib callback.
+        """
         if msg_id is not None:
             self._write(protocol.ack(msg_id, ok, error))
         return False  # usable as a one-shot GLib callback
@@ -1084,6 +1096,7 @@ class X11Overlay:
         return self.lock is not None
 
     def lock_armed(self) -> bool:
+        """True when the input lock should be blocking the person's input right now."""
         return inputlock.armed(
             mode="window" if self.lock is not None else "off",
             working=self._working(),
@@ -1201,6 +1214,7 @@ class X11Overlay:
         self.publish_next = now + 5.0
 
     def topbar_view(self) -> topbar.View:
+        """Builds the tray menu's content from the shared agent overview."""
         try:
             from dobby.control import commands, control_root
 
@@ -1418,6 +1432,7 @@ class X11Overlay:
         self.send_event("sleep")
 
     def on_bar_label(self) -> None:
+        """Handles a click on the bar's label: wakes or puts Dobby to sleep."""
         if self.bar is None:
             return
         action = label_click(self.bar.mode)
@@ -1443,6 +1458,7 @@ class X11Overlay:
         self._layout_tag()
 
     def sleep(self) -> None:
+        """Puts a woken Dobby back to sleep."""
         if not self.awake_until:
             return
         self._end_awake()
@@ -1464,6 +1480,7 @@ class X11Overlay:
         self._refresh_bar()
 
     def on_bar(self, which: str) -> None:
+        """Handles a click on one of the bar's buttons."""
         if self.bar is None:
             return
         action = bar_click(self.bar.mode, which)
@@ -1481,6 +1498,7 @@ class X11Overlay:
             self.resume()
 
     def set_paused(self, paused: bool) -> None:
+        """Pauses or resumes Dobby and tells the server."""
         if paused == self.paused:
             return
         self.paused = paused
@@ -1490,12 +1508,14 @@ class X11Overlay:
         self._layout_tag()
 
     def resume(self) -> None:
+        """Ends a pause and tells the server."""
         if self.paused:
             self.set_paused(False)
         self._mark_active()
         self._refresh_bar()
 
     def request_stop(self) -> None:
+        """Stops the current task: denies any pending prompt and tells the server."""
         if self.pending_confirm is not None:
             self._answer_confirm(False)
         self.paused = False
@@ -1568,6 +1588,7 @@ class X11Overlay:
 
     # --------------------------------------------------------------- input
     def handle_line(self, line: str) -> None:
+        """Parses and handles one line from the server; bad lines are acknowledged with an error."""
         line = line.strip()
         if not line:
             return
@@ -1581,6 +1602,7 @@ class X11Overlay:
             self.ack(msg_id, False, str(exc))
 
     def handle(self, msg: dict[str, Any]) -> None:
+        """Handles one decoded command from the server."""
         op, msg_id = msg["op"], msg.get("id")
         if op == "cursor.move":
             self._mark_active()
@@ -1730,6 +1752,7 @@ class X11Overlay:
 
     # ------------------------------------------------------------- hotkeys
     def start_hotkeys(self) -> None:
+        """Starts the thread that listens for Dobby's global hotkeys (e.g. Ctrl+Alt+End to stop)."""
         threading.Thread(target=self._hotkey_loop, name="hotkeys", daemon=True).start()
 
     def _hotkey_loop(self) -> None:
@@ -1758,6 +1781,7 @@ class X11Overlay:
 
     # ---------------------------------------------------------------- life
     def quit(self) -> bool:
+        """Answers any pending prompt with Deny, releases the input lock and quits GTK."""
         if self.pending_confirm is not None:
             self._answer_confirm(False)
         if self.lock is not None:
@@ -1860,6 +1884,7 @@ def _demo(overlay: X11Overlay) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Runs the helper: reads the config, builds the overlay and starts the GTK loop."""
     argv = list(argv or [])
     cfg: dict[str, Any] = {}
     raw = os.environ.get("DOBBY_OVERLAY_CONFIG")

@@ -11,7 +11,11 @@ from typing import Any, Protocol
 
 
 class DesktopBackend(Protocol):
-    async def call(self, tool: str, args: dict[str, Any]) -> Any: ...
+    """Anything that can run a Dobby tool by name for the plan runner."""
+
+    async def call(self, tool: str, args: dict[str, Any]) -> Any:
+        """Runs ``tool`` with ``args`` and returns its result."""
+        ...
 
 
 class InProcessBackend:
@@ -24,10 +28,12 @@ class InProcessBackend:
         self.server = server_module
 
     async def enable(self, domains: list[str]) -> None:
+        """Turns on the tool domains (``manage_toolsets``) that the plan needs."""
         if domains:
             self.server.manage_toolsets(action="enable", domains=domains)
 
     async def call(self, tool: str, args: dict[str, Any]) -> Any:
+        """Calls the server's tool function in a worker thread and returns its result."""
         fn = getattr(self.server, tool)
         return await asyncio.to_thread(fn, **args)
 
@@ -59,10 +65,16 @@ class McpBackend:
             await self._stack.aclose()
 
     async def enable(self, domains: list[str]) -> None:
+        """Turns on the tool domains (``manage_toolsets``) that the plan needs."""
         if domains:
             await self.call("manage_toolsets", {"action": "enable", "domains": domains})
 
     async def call(self, tool: str, args: dict[str, Any]) -> Any:
+        """Calls ``tool`` over the MCP session and returns its decoded result.
+
+        Raises:
+            RuntimeError: The server reported the call as an error.
+        """
         result = await self.session.call_tool(tool, args)
         if getattr(result, "is_error", False):
             text = " ".join(getattr(c, "text", "") for c in result.content or [])

@@ -107,6 +107,11 @@ class LiveCassetteRecorder:
     # ----------------------------------------------------------------- control
 
     def start(self) -> dict[str, Any]:
+        """Starts recording and captures the first frame.
+
+        Raises:
+            FileExistsError: A cassette with this name already exists.
+        """
         if self.root.exists() and (self.root / "index.json").exists():
             raise FileExistsError(f"cassette '{self.name}' already exists at {self.root}")
         self.started_at = time.time()
@@ -128,6 +133,7 @@ class LiveCassetteRecorder:
         return post
 
     def payload(self) -> dict[str, Any]:
+        """The cassette's index: name, start time, frames and transitions."""
         return {
             "name": self.name,
             "recorded_at": self.started_at,

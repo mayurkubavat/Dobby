@@ -3,6 +3,7 @@
 import cv2
 import numpy as np
 from PIL import Image
+from typing_extensions import override
 
 from dobby.perception.grounding.base import BaseGroundingProvider
 from dobby.types import BoundingBox, UIElement
@@ -19,10 +20,12 @@ class TemplateGroundingProvider(BaseGroundingProvider):
         self._templates: dict[str, np.ndarray] = {}
 
     @property
+    @override
     def name(self) -> str:
         return "template"
 
     @property
+    @override
     def is_available(self) -> bool:
         return True
 

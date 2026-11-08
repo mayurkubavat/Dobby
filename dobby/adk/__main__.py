@@ -12,6 +12,11 @@ import sys
 
 
 def main() -> int:
+    """Parses the command line, runs the plan and prints the report.
+
+    Returns:
+        The process exit code: 0 when every step passed.
+    """
     ap = argparse.ArgumentParser(prog="python -m dobby.adk", description=__doc__)
     ap.add_argument("plan", help="plan JSON file (see dobby/adk/plan.py)")
     ap.add_argument(

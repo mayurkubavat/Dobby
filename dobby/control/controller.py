@@ -106,6 +106,7 @@ class Controller:
                 pass
 
     def close(self) -> None:
+        """Releases the lease and unregisters this agent; safe to call more than once."""
         try:
             self.release()
         except Exception:  # noqa: BLE001
@@ -229,12 +230,14 @@ class Controller:
             self._depth += 1
 
     def end(self) -> None:
+        """Leaves an action or tool scope; finishes the step on the outermost exit."""
         with self._lock:
             self._depth = max(0, self._depth - 1)
             if self._depth == 0:
                 self._finish()
 
     def action(self) -> _ActionScope:
+        """Context manager that holds the lease for one input action."""
         return _ActionScope(self)
 
     def tool_scope(self):
@@ -265,6 +268,13 @@ class Controller:
             pass
 
     def release(self) -> bool:
+        """Gives the lease back if this agent holds it.
+
+        Never releases in the middle of a step.
+
+        Returns:
+            True when this agent held the lease and released it.
+        """
         with self._lock:
             if self._depth:
                 return False  # never mid-step
@@ -299,6 +309,7 @@ class Controller:
                 holder.update(busy=False, last=now)
 
     def status(self) -> dict[str, Any]:
+        """Describes who holds control, who is waiting, and this agent's place."""
         now = self._clock()
         with self.store.transaction() as state:
             prune(state, now, self.settings, self._alive)

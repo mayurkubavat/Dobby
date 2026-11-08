@@ -33,6 +33,12 @@ _SCROLL_BUTTONS = (4, 5, 6, 7)
 
 
 class X11InputLock:
+    """X11 input lock: shields Dobby's target window from the person's mouse and keys.
+
+    Swallowed input is reported through ``on_swallowed``; insisting (several clicks
+    or a long press) calls ``on_insist`` so the person can take over.
+    """
+
     def __init__(
         self,
         on_swallowed: Callable[[str], None],
@@ -90,6 +96,7 @@ class X11InputLock:
 
     # ------------------------------------------------------------- state
     def fileno(self) -> int:
+        """File descriptor of the X connection, for the GLib main loop."""
         return self.d.fileno()
 
     def _frame_of(self, wid: int) -> int | None:
@@ -113,6 +120,7 @@ class X11InputLock:
             return None
 
     def target_front(self) -> bool:
+        """True when the locked window (or its frame) is the active window."""
         active = self._active()
         if active is None or self.client is None:
             return False
@@ -240,6 +248,7 @@ class X11InputLock:
             self._insist(None)
 
     def close(self) -> None:
+        """Releases every grab and removes the shield window."""
         self._release_all()
         try:
             self.shield.destroy()

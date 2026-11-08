@@ -229,6 +229,7 @@ def visual_window() -> tuple[Image.Image, list[tuple[int, int, int, int]], list[
 
 
 def pick_visual_cases() -> list[dict[str, Any]]:
+    """Synthetic Set-of-Marks cases for the visual pick task, each with the right mark."""
     rows = [
         ("search the signals", 0),
         ("open the settings", 1),
@@ -247,6 +248,8 @@ def pick_visual_cases() -> list[dict[str, Any]]:
 
 @dataclass
 class TaskScore:
+    """Accuracy and timing for one benchmark task on one model."""
+
     task: str
     n: int = 0
     correct: int = 0
@@ -259,6 +262,7 @@ class TaskScore:
     note: str = ""
 
     def as_dict(self) -> dict[str, Any]:
+        """The score as a JSON-ready dict."""
         return {
             "task": self.task,
             "n": self.n,
@@ -280,6 +284,7 @@ def _band(p: float) -> str:
 def run_check(
     decider: Any, cases: list[dict[str, Any]], encode: Callable[[Image.Image], str]
 ) -> TaskScore:
+    """Scores yes/no crop checks: is the quoted text visible in the image?"""
     s = TaskScore("check")
     for c in cases:
         s.n += 1
@@ -320,6 +325,7 @@ def _score_choice(s: TaskScore, decision: Any, expect: int | None, absent: bool)
 
 
 def run_pick_text(decider: Any, cases: list[dict[str, Any]]) -> TaskScore:
+    """Scores picking the right element from a text list of screen elements."""
     s = TaskScore("pick_text")
     for c in cases:
         s.n += 1
@@ -340,6 +346,7 @@ def run_pick_text(decider: Any, cases: list[dict[str, Any]]) -> TaskScore:
 def run_pick_visual(
     decider: Any, cases: list[dict[str, Any]], encode: Callable[[Image.Image], str]
 ) -> TaskScore:
+    """Scores picking the right lettered mark on a marked-up screenshot."""
     from dobby.gemma.decide import option_labels
     from dobby.vdom.gemma_marks import draw_marks
 
@@ -401,6 +408,7 @@ def bench_model(
 
 
 def markdown(results: list[dict[str, Any]]) -> str:
+    """Formats benchmark results as a Markdown table."""
     lines = [
         "| model | task | accuracy | confident wrong | says none when absent | p50 ms | logprobs |",
         "|---|---|---|---|---|---|---|",

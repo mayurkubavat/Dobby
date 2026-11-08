@@ -74,6 +74,7 @@ DEFAULT_PATH = Path(os.path.expanduser("~/.dobby/apps.json"))
 
 
 def normalize(app: str | None) -> str:
+    """Canonical app name for grant lookups: lower case, single spaces, no ``.app``/``.exe``-style suffix."""
     name = " ".join(str(app or "").split()).lower()
     for suffix in (".app", ".exe", ".bin", "-bin", "-server", "-wrapped"):
         if name.endswith(suffix) and len(name) > len(suffix):
@@ -95,6 +96,7 @@ class AppBlocked(Exception):
 
 
 def blocked_message(app: str, action: str, tier: str | None, asked: bool) -> str:
+    """Explains to the AI why Dobby may not act in ``app``, and what the person can change."""
     if tier is None:
         how = (
             "The person said no when Dobby asked to use it"
@@ -183,20 +185,24 @@ class AppGrants:
         return self.standing(app)
 
     def denied(self, app: str) -> bool:
+        """True when the person denied ``app`` this session."""
         with self._lock:
             return normalize(app) in self._denied
 
     def grant(self, app: str, tier: str = FULL) -> None:
+        """Grants ``app`` the given tier for the rest of this session."""
         with self._lock:
             self._session[normalize(app)] = tier
             self._denied.discard(normalize(app))
 
     def deny(self, app: str) -> None:
+        """Denies ``app`` for the rest of this session."""
         with self._lock:
             self._denied.add(normalize(app))
             self._session.pop(normalize(app), None)
 
     def snapshot(self) -> dict[str, object]:
+        """The saved and session grants, as a dict."""
         with self._lock:
             self._load()
             return {

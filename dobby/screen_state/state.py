@@ -72,22 +72,27 @@ class ScreenElement:
 
     @property
     def center(self) -> tuple[int, int]:
+        """Centre of the element's bounding box."""
         return (self.x + self.width // 2, self.y + self.height // 2)
 
     @property
     def focused(self) -> bool:
+        """True when the element has keyboard focus."""
         return "focused" in self.states
 
     @property
     def enabled(self) -> bool:
+        """True unless the element is disabled."""
         return "disabled" not in self.states
 
     @property
     def editable(self) -> bool:
+        """True when the element accepts typed text."""
         return self.role in EDITABLE_ROLES
 
     @property
     def secure(self) -> bool:
+        """True for password fields and anything labelled like a secret."""
         return self.role in SECURE_ROLES or bool(_SECRET_WORDS.search(self.label or ""))
 
     def describe(self) -> str:
@@ -108,6 +113,7 @@ class ScreenElement:
         return f'{self.eid} {self.role} "{label}"{extra}'
 
     def as_dict(self) -> dict[str, Any]:
+        """The element as a JSON-ready dict."""
         return {
             "eid": self.eid,
             "role": self.role,
@@ -136,6 +142,7 @@ class ScreenState:
     settle: dict[str, Any] | None = None  # how long observe waited for the screen to stop changing
 
     def get(self, eid: str) -> ScreenElement | None:
+        """The element with id ``eid``, or None."""
         for el in self.elements:
             if el.eid == eid:
                 return el
@@ -143,10 +150,12 @@ class ScreenState:
 
     @property
     def focused(self) -> ScreenElement | None:
+        """The focused element, or None."""
         return next((e for e in self.elements if e.focused), None)
 
     @property
     def secure_input(self) -> bool:
+        """True when the focused element is a password or secret field."""
         f = self.focused
         return bool(f and f.secure)
 
@@ -177,6 +186,7 @@ class ScreenState:
         return "\n".join(head)
 
     def as_dict(self, max_elements: int = 60) -> dict[str, Any]:
+        """The state as a JSON-ready dict, with at most ``max_elements`` elements."""
         return {
             "generation": self.generation,
             "captured_at": round(self.captured_at, 3),
@@ -444,11 +454,13 @@ class StateTracker:
         self.last_action_at: float = 0.0
 
     def next_generation(self) -> int:
+        """Returns the next generation number."""
         with self._lock:
             self._generation += 1
             return self._generation
 
     def remember(self, state: ScreenState) -> ScreenState:
+        """Stores ``state``, dropping the oldest beyond ``keep``, and returns it."""
         with self._lock:
             self._states[state.generation] = state
             for g in sorted(self._states)[: -self._keep]:
@@ -456,15 +468,18 @@ class StateTracker:
         return state
 
     def get(self, generation: int) -> ScreenState | None:
+        """The remembered state for ``generation``, or None if it was dropped."""
         with self._lock:
             return self._states.get(generation)
 
     @property
     def latest(self) -> ScreenState | None:
+        """The newest remembered state, or None."""
         with self._lock:
             return self._states[max(self._states)] if self._states else None
 
     def mark_action(self) -> float:
+        """Notes that an action just happened, so older states are no longer fresh."""
         self.last_action_at = time.time()
         return self.last_action_at
 
