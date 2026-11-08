@@ -2,7 +2,7 @@
 
 # Pinlet MCP tools
 
-56 tools. Only `core` is on by default; enable others with `manage_toolsets(action="enable", domains=[...])`.
+59 tools. Only `core` is on by default; enable others with `manage_toolsets(action="enable", domains=[...])`.
 
 ## core
 
@@ -22,6 +22,9 @@
 | `read_screen_text` | `region=None`, `contains=None`, `regex=False`, `output_mode=None` | Reads text on screen with local OCR (Apple Vision on macOS, RapidOCR on Linux/Windows) and returns lines with boxes and click points. No image is returned, so this costs a few hundred text tokens instead of a screenshot. |
 | `control_status` | none | Shows which agent controls the desktop, how long, and who is waiting. |
 | `request_control` | `max_wait_s=None` | Waits (up to max_wait_s, default the server's max wait) and takes control. |
+| `list_agents` | none | Lists the AI agents using this computer's Pinlet: name, pid, who holds control, who waits. |
+| `send_to_agent` | `to`, `text` | Sends a short message to another AI agent using Pinlet (by name like "Pip", or pid). |
+| `hand_control_to` | `to`, `note=''` | Gives the desktop to a named agent next, with a note on where things stand. |
 | `release_control` | none | Gives up desktop control so a waiting agent can start at once. |
 | `hold_control` | `seconds=30.0` | Keeps control for up to `seconds` (capped) even while idle or past the slice. |
 | `wait_for_wake` | `timeout_s=600`, `reason=''` | Call when you have finished the current task and want to stay available. |

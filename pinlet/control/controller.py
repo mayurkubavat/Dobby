@@ -14,6 +14,7 @@ from typing import Any
 
 from . import commands, inbox, registry
 from .lease import (
+    HANDOFF_RESERVE_S,
     Agent,
     ControlSettings,
     LeaseStore,
@@ -146,6 +147,11 @@ class Controller:
                 "handoff": ok and prev not in (None, self.agent.id),
                 "now": now,
                 "place": 0 if ok else place_in_line(state, self.agent.id, now, self.settings),
+                "reserved_for": (
+                    (state.get("handoff_to") or {}).get("name") or "another agent"
+                    if reason == "reserved"
+                    else None
+                ),
             }
         return ok, reason, info
 
@@ -158,6 +164,12 @@ class Controller:
                 mine["reserved_until"] = now + self.settings.reserve
 
     def _busy_message(self, info: dict[str, Any], wait: float) -> str:
+        if info.get("reserved_for") and not info.get("holder"):
+            return (
+                f"Control was handed to {info['reserved_for']}, so it goes first (for up to "
+                f"{_fmt_secs(HANDOFF_RESERVE_S)}). Waited {_fmt_secs(wait)}. Call the same tool "
+                "again to keep waiting, or do work that does not need the mouse or keyboard."
+            )
         holder = info.get("holder") or {}
         now = info["now"]
         who = holder.get("name") or "another agent"
@@ -329,6 +341,28 @@ class Controller:
                     state["holder"] = None
                     return True
             return False
+
+    def hand_to(self, agent_id: str, name: str = "") -> bool:
+        """Releases the lease and keeps it for ``agent_id`` for a short while.
+
+        Returns:
+            True when this agent held the lease and handed it over.
+        """
+        with self._lock:
+            if self._depth:
+                return False  # never mid-step
+            with self.store.transaction() as state:
+                holder = state.get("holder")
+                if holder is None or holder.get("id") != self.agent.id:
+                    return False
+                state["holder"] = None
+                state["handoff_to"] = {
+                    "id": agent_id,
+                    "name": name,
+                    "by": self.agent.id,
+                    "until": self._clock() + HANDOFF_RESERVE_S,
+                }
+                return True
 
     def hold(self, seconds: float) -> dict[str, Any]:
         """Keep the lease for ``seconds`` (capped) even when idle or past the slice."""

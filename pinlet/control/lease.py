@@ -21,6 +21,9 @@ Policy (see :func:`decide`):
 * A waiter that gave up after ``max_wait`` keeps its place (its ``since``) for
   ``reserve`` seconds, so calling again does not send it to the back of the
   line. Only waiters that are polling right now can be handed the lease.
+* ``handoff_to``: a holder may name the agent that goes next
+  (``hand_control_to``). The lease is then kept free for that agent for
+  :data:`HANDOFF_RESERVE_S` seconds; everyone else waits ("reserved").
 * ``world`` counts every finished action by any agent. An agent that gets the
   lease from someone else compares it with the ``world`` it last observed;
   if they differ the screen may have changed, so it must look again.
@@ -143,6 +146,9 @@ def empty_state() -> State:
     }
 
 
+HANDOFF_RESERVE_S = 30.0
+
+
 def _agent_record(agent: Agent) -> dict[str, Any]:
     return {"id": agent.id, "name": agent.name, "pid": agent.pid, "priority": agent.priority}
 
@@ -230,7 +236,7 @@ def decide(
 
     Returns ``(granted, reason)``. Reasons when granted: ``held`` (already
     ours), ``free``, ``idle``, ``slice``, ``preempt``. When refused: ``busy``,
-    ``holding``, ``working``, ``queued``.
+    ``holding``, ``working``, ``queued``, ``reserved`` (handed to another agent).
     """
     prune(state, now, settings, alive)
     waiters = state.setdefault("waiters", {})
@@ -252,10 +258,22 @@ def decide(
         if not ok:
             return False, reason
 
-    best = max(
-        (w for w in waiters.values() if polling(w, now, settings)),
-        key=lambda w: (effective_priority(w, now, settings), -float(w.get("since", now))),
-    )
+    # A holder named who goes next (hand_control_to): the lease is kept for
+    # that agent until it asks or the reservation ends.
+    named = state.get("handoff_to")
+    if named and float(named.get("until", 0)) <= now:
+        state.pop("handoff_to", None)
+        named = None
+    if named and named.get("id") != me.id:
+        return False, "reserved"
+    if named:
+        best = mine
+        state.pop("handoff_to", None)
+    else:
+        best = max(
+            (w for w in waiters.values() if polling(w, now, settings)),
+            key=lambda w: (effective_priority(w, now, settings), -float(w.get("since", now))),
+        )
     if best.get("id") != me.id:
         return False, "queued"
 
