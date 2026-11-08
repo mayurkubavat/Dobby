@@ -21,6 +21,12 @@ The first public release will be 0.1.0. It contains:
 - `pinlet doctor` (`--json`): checks Python, packages, the launcher, the model,
   the skills, the shared Pinlet and each AI tool, with a fix for each problem.
 - `pinlet setup --repair`, `--remove` and `--json` (and `--list --json`).
+- Pinlet.app installs its own engine: build.sh bundles the installer and the
+  source, the Welcome window installs it on first launch and connects the AI
+  tools found, and a newer bundled source updates the engine on launch. The
+  app never starts a Python that is gone. Settings gains **AI Tools** and
+  **Diagnostics** tabs. A main menu makes Cmd+, and copy/paste work, and
+  Settings and Welcome open in front of the current app.
 
 ### Changed
 

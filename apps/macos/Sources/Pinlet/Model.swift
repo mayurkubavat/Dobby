@@ -110,6 +110,33 @@ struct EngineConfig: Equatable {
         return EngineConfig(data: data)
     }
 
+    /// The engine to start, never a Python that is gone: `PINLET_PYTHON`, then the
+    /// connector's app.json while its Python still exists, then Pinlet's own runtime.
+    /// nil means Pinlet is not installed yet.
+    static func resolve(env: [String: String] = ProcessInfo.processInfo.environment,
+                        appConfig: URL = EngineConfig.path,
+                        runtimePython: URL = RuntimePaths.python()) -> EngineConfig? {
+        let fm = FileManager.default
+        if let custom = env["PINLET_PYTHON"], !custom.isEmpty {
+            let path = (custom as NSString).expandingTildeInPath
+            if fm.isExecutableFile(atPath: path) { return EngineConfig(python: path, cwd: nil, env: [:]) }
+        }
+        if var cfg = load(from: appConfig), fm.isExecutableFile(atPath: cfg.python) {
+            var isDir: ObjCBool = false
+            if let cwd = cfg.cwd, !(fm.fileExists(atPath: cwd, isDirectory: &isDir) && isDir.boolValue) {
+                cfg.cwd = nil
+            }
+            return cfg
+        }
+        if fm.isExecutableFile(atPath: runtimePython.path) {
+            return EngineConfig(python: runtimePython.path, cwd: nil, env: [:])
+        }
+        return nil
+    }
+
+    /// True when this is Pinlet's own runtime rather than a checkout's venv.
+    var isManaged: Bool { python == RuntimePaths.python().path }
+
     /// The daemon's environment: the app's own, the client's Pinlet settings,
     /// then what only makes sense when the app owns the engine.
     func environment(base: [String: String]) -> [String: String] {
@@ -150,6 +177,13 @@ enum PinletURL {
         guard let key = map[name] else { return nil }
         if !key.hasSuffix("_all") && pid == nil { return nil }
         return (key, pid)
+    }
+
+    /// `pinlet://settings`, `pinlet://welcome` or `pinlet://activity`: a window to open.
+    static func window(for url: URL) -> String? {
+        guard url.scheme?.lowercased() == "pinlet" else { return nil }
+        let name = (url.host ?? url.path).trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+        return ["settings", "welcome", "activity"].contains(name) ? name : nil
     }
 }
 

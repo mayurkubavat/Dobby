@@ -82,8 +82,7 @@ final class SettingsWindowController {
             w.center()
             window = w
         }
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
+        bringForward(window)
     }
 }
 
@@ -93,6 +92,7 @@ struct SettingsView: View {
     @State private var loginItem = LoginItem.enabled
     @State private var notifyDone = Notifier.notifyWhenDone
     @State private var changed = false
+    @StateObject private var diagnostics = DiagnosticsModel()
 
     var body: some View {
         TabView {
@@ -163,8 +163,31 @@ struct SettingsView: View {
             }
             .modifier(SettingsForm())
             .tabItem { Label("Menu", systemImage: "list.bullet") }
+
+            Form {
+                Section {
+                    AIToolsList(model: AIToolsModel.shared, compact: false)
+                } footer: {
+                    SettingsFooter("Every AI tool runs \(RuntimePaths.launcher().path), so moving Pinlet never breaks them. Restart a tool after a change.")
+                }
+                Section {
+                    HStack {
+                        Button("Refresh") { AIToolsModel.shared.refresh() }
+                        Spacer()
+                        Button("Copy Config for Another Tool") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(AIToolsModel.snippet, forType: .string)
+                        }
+                    }
+                }
+            }
+            .modifier(SettingsForm())
+            .tabItem { Label("AI Tools", systemImage: "sparkles") }
+
+            DiagnosticsView(model: diagnostics)
+                .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
         }
-        .frame(width: 500)
+        .frame(width: 540)
         .safeAreaInset(edge: .bottom) {
             if changed {
                 HStack {

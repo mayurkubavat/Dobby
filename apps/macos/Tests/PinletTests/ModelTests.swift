@@ -104,3 +104,43 @@ import Testing
     #expect(!StatusMenu.isProblem("Starting… (the first start loads the models)"))
     #expect(StatusMenu.shortNote("Connecting…") == "Connecting…")
 }
+
+@Test func engineResolveSkipsAPythonThatIsGone() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pinlet-resolve-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let app = dir.appendingPathComponent("app.json")
+    try Data(#"{"python": "/gone/.venv/bin/python", "cwd": "/gone"}"#.utf8).write(to: app)
+    let missing = dir.appendingPathComponent("runtime/bin/python")
+    #expect(EngineConfig.resolve(env: [:], appConfig: app, runtimePython: missing) == nil)
+    // Pinlet's own runtime takes over when the checkout's venv is gone.
+    let managed = URL(fileURLWithPath: "/bin/sh")
+    #expect(EngineConfig.resolve(env: [:], appConfig: app, runtimePython: managed)?.python == "/bin/sh")
+    // A live app.json wins, and a cwd that is gone is dropped.
+    try Data(#"{"python": "/bin/sh", "cwd": "/gone"}"#.utf8).write(to: app)
+    let cfg = try #require(EngineConfig.resolve(env: [:], appConfig: app, runtimePython: missing))
+    #expect(cfg.python == "/bin/sh" && cfg.cwd == nil)
+    #expect(EngineConfig.resolve(env: ["PINLET_PYTHON": "/bin/ls"], appConfig: app, runtimePython: missing)?.python == "/bin/ls")
+}
+
+@Test func installerProgressLines() {
+    let step = RuntimeInstaller.parseStep("::step 2/6 Getting the Pinlet source")
+    #expect(step?.0 == 2 && step?.1 == 6 && step?.2 == "Getting the Pinlet source")
+    #expect(RuntimeInstaller.parseStep("==> Getting uv") == nil)
+    #expect(RuntimeInstaller.parseStep("::step x/6 nope") == nil)
+}
+
+@Test func aiToolsDecodeSetupJSON() {
+    let raw: [[String: Any]] = [
+        ["key": "cursor", "label": "Cursor", "installed": true, "state": "broken", "stable": false],
+        ["key": "codex", "label": "OpenAI Codex", "installed": true, "state": "connected", "stable": true],
+        ["key": "vscode", "label": "VS Code", "installed": false, "state": "not installed"],
+    ]
+    let tools = AITool.list(raw)
+    #expect(tools.map(\.key) == ["cursor", "codex", "vscode"])
+    #expect(tools[0].needsRepair && !tools[1].needsRepair && tools[1].connected)
+    let summary = AIToolsModel.summary(
+        ["changes": [["tool": "cursor", "status": "added"]], "restart": ["cursor", "codex"]],
+        verb: "Connected", labels: ["cursor": "Cursor", "codex": "OpenAI Codex"])
+    #expect(summary.hasPrefix("Connected Cursor and OpenAI Codex."))
+}

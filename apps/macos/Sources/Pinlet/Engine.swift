@@ -7,7 +7,7 @@ import Foundation
 /// "Pinlet" once, not to whichever terminal or AI client started Python.
 final class Engine {
     enum State: Equatable {
-        case notConfigured      // no ~/.pinlet/app.json yet: run `pinlet` from an AI client once
+        case notConfigured      // no Python to start: Pinlet is not installed yet (Welcome installs it)
         case starting
         case running(pid: Int32)
         case external           // a shared Pinlet we did not start is already listening
@@ -45,7 +45,7 @@ final class Engine {
             state = .external
             return
         }
-        guard let config = EngineConfig.load() else {
+        guard let config = EngineConfig.resolve() else {
             state = .notConfigured
             return
         }
@@ -53,7 +53,8 @@ final class Engine {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: config.python)
         proc.arguments = ["-m", "pinlet", "serve"]
-        if let cwd = config.cwd { proc.currentDirectoryURL = URL(fileURLWithPath: cwd) }
+        // No checkout to run in: start in the home folder, never wherever the app happens to be.
+        proc.currentDirectoryURL = URL(fileURLWithPath: config.cwd ?? NSHomeDirectory())
         var env = config.environment(base: ProcessInfo.processInfo.environment)
         for (k, v) in AppSettings.shared.engineEnvironment() { env[k] = v }  // the Settings window wins
         proc.environment = env

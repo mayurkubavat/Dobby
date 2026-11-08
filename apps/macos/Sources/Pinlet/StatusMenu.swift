@@ -58,7 +58,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private func rebuild() {
         menu.removeAllItems()
         menu.addItem(header())
-        if let note = engineNote, StatusMenu.isProblem(note) {
+        if let note = engineNote, note.contains("not installed") {
+            let install = item("Install Pinlet…", #selector(openWelcome))
+            install.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+            menu.addItem(install)
+        } else if let note = engineNote, StatusMenu.isProblem(note) {
             let details = item("Show Details…", #selector(openLog))
             details.image = NSImage(systemSymbolName: "doc.text.magnifyingglass", accessibilityDescription: nil)
             details.toolTip = note
@@ -91,7 +95,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         let troubleshoot = NSMenuItem(title: "Troubleshoot", action: nil, keyEquivalent: "")
         let sub = NSMenu(title: "Troubleshoot")
-        sub.addItem(item("Check Permissions…", #selector(openWelcome)))
+        sub.addItem(item("Setup and Permissions…", #selector(openWelcome)))
         sub.addItem(item("Show Log", #selector(openLog)))
         sub.addItem(.separator())
         sub.addItem(item("Relaunch", #selector(restartEngine)))

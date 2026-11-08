@@ -409,6 +409,17 @@ and install it with:
 apps/macos/build.sh --install   # needs the Xcode command line tools
 ```
 
+The app carries Pinlet's installer and source. On first launch its Welcome
+window installs the engine into `~/Library/Application Support/Pinlet` (no
+venv in the checkout needed), asks for the two permissions, and connects the
+AI tools it finds. When a rebuilt app carries newer source, it updates the
+engine on launch. It starts whichever Python still exists: `PINLET_PYTHON`, the
+one the last AI client used (`~/.pinlet/app.json`), then its own runtime, and
+says "not installed" with an Install item instead of failing on a moved
+checkout. Settings has an **AI Tools** tab (Connect, Remove, Repair, and a
+config to paste into other tools) and **Diagnostics** (`pinlet doctor`, Copy
+Report, Reinstall Engine).
+
 Once it is installed, `pinlet` opens Pinlet.app instead of starting the engine
 itself. The app starts `pinlet serve` as its own child, so macOS asks for
 Screen Recording and Accessibility for **Pinlet** once, whichever AI client

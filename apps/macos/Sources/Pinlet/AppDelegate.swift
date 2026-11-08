@@ -33,7 +33,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier.onOpenPrompt = { [weak self] in self?.promptPanel.focus() }
         notifier.start()
         settingsWindow.restartEngine = { [weak self] in self?.engine.restart() }
+        installMenu()
+        RuntimeInstaller.shared.onFinished.append { [weak self] in
+            self?.engine.restart()
+            AIToolsModel.shared.refresh()
+        }
         welcome.showIfNeeded()
+        // This app carries a newer Pinlet than its runtime: update it quietly, then restart.
+        if RuntimePaths.updateAvailable, EngineConfig.resolve()?.isManaged == true {
+            RuntimeInstaller.shared.install()
+        }
         engine.onChange = { [weak self] _ in self?.poll() }
         engine.start()
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.poll() }
@@ -50,14 +59,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            if let (key, pid) = PinletURL.action(for: url) { send(key, pid: pid) }
+            if let (key, pid) = PinletURL.action(for: url) {
+                send(key, pid: pid)
+                continue
+            }
+            switch PinletURL.window(for: url) {  // pinlet://settings, pinlet://welcome, pinlet://activity
+            case "settings": settingsWindow.show()
+            case "welcome": welcome.show()
+            case "activity": activity.show()
+            default: break
+            }
         }
     }
+
+    /// A main menu: menu bar apps have none, so Cmd+, and Cmd+V in text fields did nothing.
+    private func installMenu() {
+        let main = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu(title: "Pinlet")
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        appMenu.addItem(settings)
+        appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        appMenu.addItem(NSMenuItem(title: "Quit Pinlet", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        let redo = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(redo)
+        edit.addItem(.separator())
+        edit.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        edit.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        edit.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        edit.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editItem.submenu = edit
+        main.addItem(editItem)
+        NSApp.mainMenu = main
+    }
+
+    @objc private func openSettings() { settingsWindow.show() }
 
     // --------------------------------------------------------------------
     private func note(for state: Engine.State) -> String? {
         switch state {
-        case .notConfigured: return "Run `pinlet` from an AI client once so Pinlet knows its Python."
+        case .notConfigured:
+            return RuntimeInstaller.shared.running ? "Installing Pinlet…" : "Pinlet is not installed yet. Open Welcome to install it."
         case .starting: return "Starting… (the first start loads the models)"
         case .crashed(let why): return why
         case .stopped: return "Stopped"

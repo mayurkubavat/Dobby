@@ -62,6 +62,18 @@ else
   cp Resources/Info.plist "$APP/Contents/Info.plist"
 fi
 mkdir -p "$APP/Contents/Resources"
+# Pinlet's engine travels inside the app: the installer and this checkout's
+# source (tracked and new files, as they are on disk). On first launch, or when
+# this source differs from the installed one, the app runs the installer, which
+# sets up ~/Library/Application Support/Pinlet with uv. No venv in the checkout needed.
+ROOT="$(cd ../.. && pwd)"
+RES="$APP/Contents/Resources"
+cp "$ROOT/scripts/install.sh" "$RES/install.sh"
+(cd "$ROOT" && git ls-files --cached --others --exclude-standard \
+  | while IFS= read -r f; do [ -e "$f" ] && printf '%s\n' "$f"; done \
+  | tar -czf "$OLDPWD/$RES/pinlet-src.tar.gz" -T -)
+gzip -dc "$RES/pinlet-src.tar.gz" | shasum -a 256 | cut -c1-12 > "$RES/pinlet-src.id"
+echo "Bundled Pinlet source $(cat "$RES/pinlet-src.id") ($(du -h "$RES/pinlet-src.tar.gz" | cut -f1))"
 ICONSET="$(mktemp -d)/Pinlet.iconset"
 "$BIN" --icon "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Pinlet.icns"
