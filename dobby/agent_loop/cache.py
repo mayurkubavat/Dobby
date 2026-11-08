@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 def compute_dhash(image: Image.Image) -> int:
     """Computes a 64-bit difference hash (dHash) for an image crop in < 0.4ms.
+
     Captures structural gradient morphology invariant to slight brightness shifts.
     """
     try:
@@ -175,8 +176,9 @@ class CachedLocator(BaseModel):
 
 class ActionCache:
     """Manages persistent storage and self-healing lifecycle for element locators.
-    Supports window-relative coordinate re-projection, pre-flight visual verification,
-    and localized neighborhood template auto-reanchoring.
+
+    Supports window-relative coordinate re-projection, pre-flight visual verification, and
+    localized neighborhood template auto-reanchoring.
     """
 
     def __init__(self, cache_file_path: str | None = None) -> None:
@@ -320,8 +322,10 @@ class ActionCache:
         dhash_threshold: int = 6,
         auto_heal: bool = True,
     ) -> tuple[str, CachedLocator | None]:
-        """Resolves cached locator with dynamic window re-projection, pre-flight visual verification,
-        and localized neighborhood auto-reanchoring.
+        """Resolves a cached locator against the current screen.
+
+        Re-projects it into the window's current position, verifies it visually before use,
+        and re-anchors it within a small neighbourhood if the element has moved.
 
         Returns:
             (status, locator) where status is:

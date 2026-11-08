@@ -105,8 +105,10 @@ class NullOCR(OCREngine):
 
 
 class RapidOCREngine(OCREngine):
-    """PP-OCR via rapidocr_onnxruntime (Python <= 3.12, models bundled in the wheel) or
-    rapidocr 3.x + onnxruntime (Python 3.13+, models fetched once on first use).
+    """PP-OCR text recognition through RapidOCR.
+
+    Uses rapidocr_onnxruntime on Python <= 3.12 (models bundled in the wheel), or
+    rapidocr 3.x with onnxruntime on Python 3.13+ (models fetched once on first use).
     """
 
     name = "rapidocr"
@@ -198,8 +200,9 @@ class AppleVisionOCR(OCREngine):
 
 
 def vision_observations_to_lines(observations, width: int, height: int) -> list[OCRLine]:
-    """Converts VNRecognizedTextObservation results to pixel lines. Vision boxes are
-    normalized 0..1 with the origin at the bottom-left, so y is flipped.
+    """Converts VNRecognizedTextObservation results to pixel lines.
+
+    Vision boxes are normalized 0..1 with the origin at the bottom-left, so y is flipped.
     """
     lines: list[OCRLine] = []
     for obs in observations:
@@ -282,9 +285,11 @@ def assign_text_to_boxes(
     proposals: list[dict[str, Any]],
     lines: list[OCRLine],
 ) -> int:
-    """Gives each detector proposal with empty text the OCR line whose center lies
-    inside it (largest overlap first). Returns how many proposals were named.
-    Both lists must be in the same coordinate space.
+    """Labels detector proposals that have no text with OCR lines.
+
+    Each one gets the OCR line whose center lies inside it (largest overlap first).
+
+    Returns how many proposals were named. Both lists must be in the same coordinate space.
     """
     named = 0
     for p in proposals:

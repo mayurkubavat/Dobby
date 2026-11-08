@@ -1,5 +1,6 @@
-"""Dobby's control menu, opened from the control bar's ▾ (and, when enabled,
-the menu bar icon or the name tag's ▾).
+"""Dobby's control menu, opened from the control bar's ▾.
+
+When enabled, the menu bar icon or the name tag's ▾ open it too.
 
 Pure data (no AppKit) so it can be tested anywhere; ``mac_helper`` turns the
 entries into an NSMenu.

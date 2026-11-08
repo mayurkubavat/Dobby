@@ -46,8 +46,9 @@ class XFixesCursorImage(Structure):
 
 class X11QuiescenceMonitor:
     """Sub-millisecond X11 screen buffer damage and cursor state monitor.
-    Uses XDamage (DamageReportRawRectangles) to track dirty buffer regions
-    and XFixes to monitor cursor pointer transformations (watch, wait, spinning).
+
+    Uses XDamage (DamageReportRawRectangles) to track dirty buffer regions and XFixes to monitor
+    cursor pointer transformations (watch, wait, spinning).
     """
 
     BUSY_CURSOR_NAMES: set[str] = {
@@ -203,6 +204,7 @@ class X11QuiescenceMonitor:
 
     def consume_damage_area(self) -> int:
         """Atomically copies and clears accumulated XDamage regions.
+
         Returns total number of modified pixels, filtering out blinks <= min_damage_area.
         """
         if not self.is_available or not self.dpy:

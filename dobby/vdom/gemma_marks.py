@@ -95,8 +95,11 @@ def _font(size: int) -> ImageFont.ImageFont:
 def draw_marks(
     image: Image.Image, boxes: Sequence[Box], max_side: int, labels: Sequence[str] | None = None
 ) -> Image.Image:
-    """Downscales ``image`` to ``max_side`` and draws numbered boxes (1-based, in
-    ``boxes`` order), or the given ``labels`` (e.g. letters for a logprob choice).
+    """Downscales ``image`` to ``max_side`` and draws numbered boxes on it.
+
+    Boxes are numbered from 1 in ``boxes`` order, or take the given ``labels`` (e.g.
+    letters for a logprob choice).
+
     Badges are drawn after the downscale so they stay legible.
     """
     w, h = image.size
@@ -195,9 +198,10 @@ class GemmaMarkLabeler:
     def label_marks(
         self, image: Image.Image, boxes: Sequence[Box], app_key: str = "default"
     ) -> dict[int, dict[str, str]]:
-        """Returns ``{index_in_boxes: {"label", "role"}}`` for boxes Gemma could
-        name. Cached patches are answered without a call; at most ``max_marks``
-        uncached boxes are sent per call. Returns what it has on failure.
+        """Returns ``{index_in_boxes: {"label", "role"}}`` for boxes Gemma could name.
+
+        Cached patches are answered without a call; at most ``max_marks`` uncached boxes are
+        sent per call. Returns what it has on failure.
         """
         results: dict[int, dict[str, str]] = {}
         pending: list[tuple[int, Box, int]] = []
@@ -247,9 +251,10 @@ class GemmaMarkLabeler:
     def find_mark(
         self, image: Image.Image, boxes: Sequence[Box], description: str
     ) -> dict[str, Any]:
-        """Picks the box matching ``description``. Returns
-        ``{"index": int|None, "confidence", "reason", "source"}`` where index is
-        into ``boxes``; None when nothing matches or Gemma fails.
+        """Picks the box matching ``description``.
+
+        Returns ``{"index": int|None, "confidence", "reason", "source"}`` where index is into
+        ``boxes``; None when nothing matches or Gemma fails.
         """
         boxes = list(boxes)[: self.max_marks]
         if not boxes or not description.strip():

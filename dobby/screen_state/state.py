@@ -1,5 +1,6 @@
-"""Builds :class:`ScreenState` from accessibility elements and OCR lines, and
-re-binds an element chosen on one observation to a newer one.
+"""Builds :class:`ScreenState` from accessibility elements and OCR lines.
+
+Also re-binds an element chosen on one observation to a newer one.
 
 Pure functions over plain data: no desktop backend is touched here, so the
 module is fully testable and replayable from cassettes. :mod:`.observe` wires
@@ -211,7 +212,10 @@ def _bbox(obj: Any) -> tuple[int, int, int, int] | None:
 
 
 def coarse_position(cx: int, cy: int, frame: tuple[int, int, int, int] | None) -> str:
-    """ "top left" ... "bottom right" within ``frame`` (the window), or "" without one."""
+    """Describes where a point sits in ``frame`` (the window), from "top left" to "bottom right".
+
+    Returns "" without a frame.
+    """
     if not frame or frame[2] <= 0 or frame[3] <= 0:
         return ""
     fx, fy, fw, fh = frame

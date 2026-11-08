@@ -427,8 +427,10 @@ class _Target(NSObject):
 
 
 class _HotspotView(NSView):
-    """Almost transparent view: borderless windows pass clicks through fully
-    clear pixels, so it is filled at alpha 0.01.
+    """Almost transparent view that still receives clicks.
+
+    Borderless windows pass clicks through fully clear pixels, so it is filled at alpha
+    0.01.
     """
 
     def acceptsFirstMouse_(self, _event):
@@ -441,8 +443,9 @@ class _HotspotView(NSView):
 
 
 class _ChipHotspot:
-    """Clickable window that follows the name tag, so its ▾ opens a menu
-    (only with cfg "chip_menu"; by default the menu is on the bar's ▾).
+    """Clickable window that follows the name tag, so its ▾ opens a menu.
+
+    Only with cfg "chip_menu"; by default the menu is on the bar's ▾.
 
     Dobby clicks at the pointer tip and the tag sits below-right of the tip,
     so this never catches Dobby's own clicks. Hidden from every capture.
@@ -503,8 +506,9 @@ def _track_hover(view) -> None:
 
 
 class _PillView(NSView):
-    """The bar's background: a click away from its buttons wakes Dobby;
-    hovering grows the compact sleeping bar.
+    """The bar's background view.
+
+    A click away from its buttons wakes Dobby; hovering grows the compact sleeping bar.
     """
 
     def acceptsFirstMouse_(self, _event):
@@ -637,7 +641,10 @@ def _symbol_contents(name: str, scale: float):
 
 
 class _Chip:
-    """Capsule name tag: [state icon] Dobby, widening to "Dobby › step".
+    """Draws the capsule name tag.
+
+    Gradient fill, shine, white rim, state dot and label; while a step runs, also a ›
+    breadcrumb and its detail (no chevron when idle).
 
     Gradient fill with a soft top highlight (an inlaid, glassy look), a thin
     light border and a faint shadow. The layers are click-through like the
@@ -987,8 +994,10 @@ _FILL_HOVER_RGB = style.hex_rgb01("#6A50EA")
 
 
 def _desktop_dark() -> bool:
-    """MacOS Dark Mode. Read from defaults: the helper app is never active,
-    so its own effectiveAppearance does not follow the system.
+    """MacOS Dark Mode.
+
+    Read from defaults: the helper app is never active, so its own effectiveAppearance does not
+    follow the system.
     """
     try:
         return (

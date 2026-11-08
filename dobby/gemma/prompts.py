@@ -270,9 +270,12 @@ def _words(text: str) -> list[str]:
 
 
 def evidence_in_ocr(evidence: str, ocr_lines: Iterable[str], min_overlap: float = 0.75) -> bool:
-    """True when the quoted evidence is visible in the OCR text: either a direct
-    (normalized) substring of one line, or at least ``min_overlap`` of its words
-    appear in the crop's OCR words. Quotes and punctuation are ignored.
+    """Returns True when the quoted evidence is visible in the OCR text.
+
+    Either a direct (normalized) substring of one line matches, or at least
+    ``min_overlap`` of its words appear in the crop's OCR words.
+
+    Quotes and punctuation are ignored.
     """
     ev_words = _words(evidence)
     if not ev_words:

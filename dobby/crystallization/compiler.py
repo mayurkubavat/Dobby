@@ -57,6 +57,7 @@ class TclTrajectoryCompiler:
         task_prompt: str,
     ) -> tuple[str, dict[str, dict[str, Any]]]:
         """Replaces concrete entity literals with {{param}} placeholders.
+
         Sorts entities by length descending to prevent substring collisions.
         """
         param_schema: dict[str, dict[str, Any]] = {}

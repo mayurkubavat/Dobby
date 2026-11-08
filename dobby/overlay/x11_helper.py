@@ -834,8 +834,10 @@ class X11Overlay:
         return _rgb(self.cfg[key])
 
     def _tag_color(self) -> tuple[float, float, float]:
-        """The pointer tag carries white text: Dobby violet #7C5CFF is too light
-        for that (4.3:1), so the tag uses the deeper #5B3FE0.
+        """Colour for the pointer tag, which carries white text.
+
+        Dobby violet #7C5CFF is too light for that (4.3:1), so the tag uses the deeper
+        #5B3FE0.
         """
         if self.risk not in ("caution", "danger") and str(self.cfg["color"]).upper() == "#7C5CFF":
             return _rgb(style.FILL_COLOR)

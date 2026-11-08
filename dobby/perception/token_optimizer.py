@@ -29,8 +29,9 @@ class TokenOptimizer:
         padding: int = 24,
         min_change_pixels: int = 50,
     ) -> tuple[Image.Image, BoundingBox] | None:
-        """Detects the localized bounding box where pixels changed between two frames
-        and extracts that patch with padding.
+        """Finds where pixels changed between two frames and crops that patch.
+
+        The patch is padded around the changed bounding box.
 
         Returns:
             Tuple of (patch_image, patch_bounding_box), or None if no change detected.

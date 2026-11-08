@@ -61,8 +61,9 @@ def _is_sliver(bbox: Any) -> bool:
 
 class FeedbackLoopController:
     """Coordinates perception, action execution, and post-action verification.
-    Integrates the pluggable GroundingEngine, TokenOptimizer, WindowClipper,
-    Self-Healing ActionCache, ObstructionInterceptor, and Set-of-Marks mapping.
+
+    Integrates the pluggable GroundingEngine, TokenOptimizer, WindowClipper, Self-Healing
+    ActionCache, ObstructionInterceptor, and Set-of-Marks mapping.
     """
 
     def __init__(self, hal: IDesktopHAL) -> None:
@@ -175,8 +176,9 @@ class FeedbackLoopController:
         compress_quality: int = CONFIG.image_quality,
         zoom_factor: float = 1.0,
     ) -> ScreenshotResult:
-        """Captures current desktop state with Set-of-Marks, pluggable grounding,
-        and optional per-window clipping.
+        """Captures the desktop state with Set-of-Marks annotations.
+
+        Uses the configured grounding providers and can clip to a single window.
 
         Args:
             mode: 'annotated_som' (uses active grounding strategy or ensemble),
@@ -189,6 +191,7 @@ class FeedbackLoopController:
             clip_to_active_window: If True, crops capture frame to the focused window bounds.
             strategy_override: Optional override for grounding provider ('semantic', 'cv', 'template', 'ensemble').
             compress_quality: JPEG compression factor.
+            zoom_factor: Upscale factor applied to the image before it is returned (1.0 keeps it as is).
 
         Returns:
             ScreenshotResult model containing base64 payload and marked element registry.
@@ -284,6 +287,7 @@ class FeedbackLoopController:
         strategy_override: str | None = None,
     ) -> FindElementResult:
         """Autonomous element search by text label, accessible name, or role.
+
         Enables one-shot coordinate resolution with zero screenshot token overhead.
         """
         clean_img, scale_factor, _, _ = self.pipeline.capture(draw_cursor=False, scale_down=True)
@@ -321,6 +325,7 @@ class FeedbackLoopController:
 
     def verify_post_conditions(self, contract: PostConditionContract) -> tuple[bool, list[str]]:
         """Evaluates semantic post-condition assertions declared in a contract.
+
         Supports AT-SPI state checks, window spawning/closing, text detection, and cursor state.
         """
         if not contract.assertions:
@@ -461,8 +466,11 @@ class FeedbackLoopController:
         return None
 
     def cassette_snapshot(self, capture_ocr: bool = True) -> tuple[dict[str, Any], Any | None]:
-        """One cassette frame of the live desktop: AX nodes, OCR lines (screen
-        coordinates), windows, cursor and screen size, plus the screen image.
+        """Records one cassette frame of the live desktop.
+
+        A frame holds AX nodes, OCR lines (screen coordinates), windows, cursor and screen
+        size, plus the screen image.
+
         Each part is best effort so a missing backend never blocks recording.
         """
         frame: dict[str, Any] = {}
@@ -979,8 +987,9 @@ class FeedbackLoopController:
         delay_ms: float = CONFIG.typing_delay_ms,
         verify_delta: bool = True,
     ) -> ActionVerificationResult:
-        """Compound action with Self-Healing Action Cache: Focuses target, optionally clears,
-        types text, and optionally presses Enter.
+        """Focuses a target and types text, using the self-healing action cache.
+
+        Optionally clears the field first and presses Enter afterwards.
         """
         app_key = self._get_active_app_key()
 
@@ -1081,8 +1090,10 @@ class FeedbackLoopController:
         title_filter: str | None = None,
         mode: str = "raw",
     ) -> ScreenshotResult:
-        """High-efficiency perception tool that captures strictly a named sub-pane of
-        the target or active application window (e.g. 'address_bar', 'content_area').
+        """Captures only a named sub-pane of the target or active window.
+
+        Sub-panes are named by the app plugin, e.g. 'address_bar' or 'content_area'.
+
         Slashes multimodal tokens by up to 90% compared to full-window captures.
         """
         target_win = self.window_clipper.resolve_target_window(
@@ -1148,8 +1159,10 @@ class FeedbackLoopController:
         title_filter: str | None = None,
         label_with_gemma: bool | None = None,
     ) -> VirtualDOMSnapshot:
-        """Captures desktop and accessibility state, fuses AT-SPI2 nodes with local neural/CV
-        proposals, and returns an indexed VirtualDOMSnapshot in < 30ms with 0 cloud tokens.
+        """Builds an indexed VirtualDOMSnapshot of the desktop.
+
+        Fuses AT-SPI2 accessibility nodes with local neural/CV proposals. Runs locally in
+        under 30 ms and spends no cloud tokens.
         """
         target_win = self.window_clipper.resolve_target_window(
             window_id=window_id, title_filter=title_filter
@@ -1256,8 +1269,9 @@ class FeedbackLoopController:
         description: str,
         region: tuple[int, int, int, int] | None = None,
     ) -> dict[str, Any]:
-        """Finds an element by description on canvases and custom widgets that have
-        no accessibility names: the detector proposes boxes, Gemma picks one by
+        """Finds an element by description where there are no accessibility names.
+
+        For canvases and custom widgets: the detector proposes boxes, Gemma picks one by
         number, and the click point comes from the detector box.
         """
         gemma = self.neural_grounder.gemma3_grounder
@@ -1339,8 +1353,9 @@ class FeedbackLoopController:
         diff_only: bool = False,
     ) -> Any:
         """Directly queries the OS accessibility bus (AXUIElement on macOS, AT-SPI2 on Linux).
-        Supports full tree export as well as diff-only payloads (added, removed, modified)
-        to minimize multi-turn context token explosion.
+
+        Supports full tree export as well as diff-only payloads (added, removed, modified) to
+        minimize multi-turn context token explosion.
         """
         recorded = self._replay_backend()
         if recorded is not None and not diff_only:

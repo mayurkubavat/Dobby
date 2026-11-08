@@ -19,8 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 class LocalNeuralGrounder:
-    """Local grounding sidecar interfacing with POSIX shared memory (/dev/shm)
-    and running sub-20ms neural/CV visual proposals and local Gemma 3 VLM grounding.
+    """Local grounding sidecar for neural/CV proposals and Gemma 3 grounding.
+
+    Exchanges frames through POSIX shared memory (/dev/shm) and returns visual proposals
+    in under 20 ms.
     """
 
     def __init__(
@@ -103,7 +105,9 @@ class LocalNeuralGrounder:
         offset: tuple[int, int] = (0, 0),
     ) -> list[dict[str, Any]]:
         """Generates fast UI element bounding box proposals (< 20ms) from the given image frame.
-        Uses neural inference via FastONNXUIDetector if available, with graceful fallback to OpenCV contouring.
+
+        Uses neural inference via FastONNXUIDetector if available, with graceful fallback to
+        OpenCV contouring.
         """
         if self.fast_detector and self.fast_detector.is_available():
             try:

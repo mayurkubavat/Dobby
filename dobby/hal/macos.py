@@ -513,8 +513,11 @@ class MacHAL(IDesktopHAL):
         return None
 
     def background_click(self, x: int, y: int, window_id: str) -> bool:
-        """Press the button at (x, y) in window ``window_id``'s app without the
-        real mouse (see ``dobby.hal.background``). False: click normally.
+        """Presses the button at (x, y) in ``window_id``'s app without the real mouse.
+
+        See ``dobby.hal.background``.
+
+        False: click normally.
         """
         pid = self.window_pid(window_id)
         if pid is None or pid <= 0:
@@ -533,10 +536,10 @@ class MacHAL(IDesktopHAL):
 
     def focus_window(self, window_id: str) -> bool:
         """Activates the owning app, then checks that the window really is in front.
-        macOS may refuse activation and still report success, so when the window
-        is not active after a short wait, Dobby raises it through AX
-        (AXFrontmost + AXRaise) and checks again. ``last_focus_error`` says why
-        a False came back.
+
+        macOS may refuse activation and still report success, so when the window is not active
+        after a short wait, Dobby raises it through AX (AXFrontmost + AXRaise) and checks again.
+        ``last_focus_error`` says why a False came back.
         """
         self.last_focus_error = None
         pid = self.window_pid(window_id)

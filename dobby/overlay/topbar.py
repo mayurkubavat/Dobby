@@ -363,9 +363,11 @@ def topbar_view(
     hiding: Hiding | None = None,
     now: float | None = None,
 ) -> View:
-    """The dropdown: ``agents`` from ``dobby.control.commands.overview``,
-    ``states`` from :func:`read_states`. With ``hiding``, stopped, cleared and
-    long-asleep Dobbys are left out (see :class:`Hiding`).
+    """Builds the dropdown menu.
+
+    ``agents`` comes from ``dobby.control.commands.overview`` and ``states`` from
+    :func:`read_states`. With ``hiding``, stopped, cleared and long-asleep Dobbys
+    are left out (see :class:`Hiding`).
     """
     now = time.time() if now is None else now
     hidden = 0
@@ -492,8 +494,9 @@ _DOT_C, _DOT_R, _DOT_RING = (14.6, 14.4), 3.0, 1.2
 
 
 def _spark_points(cx: float, cy: float, r: float, steps: int = 10) -> list[tuple[float, float]]:
-    """A pinched four-point star: tips joined by quadratic curves whose
-    control points sit at centre ± 0.16·r.
+    """Draws a pinched four-point star.
+
+    The tips are joined by quadratic curves whose control points sit at centre ± 0.16·r.
     """
     tips = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
     k = 0.16 * r
@@ -588,9 +591,12 @@ def _tile_xy(x: float, y: float, s: float) -> tuple[float, float]:
 
 
 def render_tile_icon(state: str, size: int = 44, count: int = 0):
-    """The tray icon as a small Dobby.app tile: a rounded violet square with a
-    white pointer and a gold spark, square like the Claude app's chips. Reads on
-    light and dark panels alike. Status dot and count badge as in :func:`render_icon`.
+    """Draws the tray icon as a small Dobby.app tile.
+
+    A rounded violet square with a white pointer and a gold spark, square like the
+    Claude app's chips.
+
+    Reads on light and dark panels alike. Status dot and count badge as in :func:`render_icon`.
     """
     from PIL import Image, ImageDraw
 

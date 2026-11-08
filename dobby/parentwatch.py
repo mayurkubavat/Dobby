@@ -1,8 +1,10 @@
-"""Exit with the parent: a Dobby server outlives a crashed client, and an overlay
-helper outlives a killed server, whenever the pipe between them is held open by
-someone else. Both then sit there forever. This watch notices the parent is gone
-(the process was re-parented, or the parent pid no longer exists) and runs
-``on_orphan`` once.
+"""Exit when the parent process goes away.
+
+A Dobby server outlives a crashed client, and an overlay helper outlives a killed
+server, whenever the pipe between them is held open by someone else.
+
+Both then sit there forever. This watch notices the parent is gone (the process was re-parented,
+or the parent pid no longer exists) and runs ``on_orphan`` once.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ def watch_parent(
     on_orphan: Callable[[], None], interval: float = 2.0, parent: int | None = None
 ) -> threading.Thread | None:
     """Start a daemon thread that calls ``on_orphan`` once the parent is gone.
+
     Returns None when there is no real parent to watch (already orphaned, or pid 1).
     """
     parent = os.getppid() if parent is None else parent

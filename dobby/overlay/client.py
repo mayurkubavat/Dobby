@@ -51,8 +51,9 @@ class OverlayDenied(OverlayStopped):
 
 
 class OverlayBlocked(OverlayDenied):
-    """Dobby may not do this in this app (``~/.dobby/apps.json`` or a Deny
-    to "Let Dobby use …?"). No prompt is shown again this session.
+    """Dobby may not do this in this app (``~/.dobby/apps.json`` or a Deny to "Let Dobby use …?").
+
+    No prompt is shown again this session.
     """
 
     def __init__(self, message: str, app: str = "", tier: str | None = None) -> None:

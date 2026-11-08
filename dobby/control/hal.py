@@ -23,8 +23,9 @@ OBSERVING = ("capture_screen", "get_accessibility_tree", "read_screen_text")
 
 
 class ControlHAL:
-    """Wraps any HAL (or OverlayHAL). Unknown attributes pass through, so
-    ``hasattr`` checks on the inner HAL keep working.
+    """Wraps any HAL (or OverlayHAL).
+
+    Unknown attributes pass through, so ``hasattr`` checks on the inner HAL keep working.
     """
 
     def __init__(self, inner: Any, controller: Controller) -> None:

@@ -97,6 +97,7 @@ class JournalCorrelator:
         t_start: float | None = None,
     ) -> CorrelatedStep:
         """Harvests new commands written to the journal file since the last pre-action mark.
+
         Filters out comments, empty lines, and pure viewport zoom commands.
         """
         now = time.monotonic()

@@ -9,11 +9,11 @@ BAR_LOCK = os.path.expanduser("~/.dobby/overlay/bar.lock")
 
 
 class BarOwner:
-    """Several Dobby servers can run at once (one per app or session), each
-    with its own helper. Only the helper holding this lock shows the idle
-    "ready" bar (and the menu bar icon, if on); the others show their bar only while
-    they work, are paused or ask Allow/Deny. The lock is released when the
-    helper exits, and another helper takes over on its next try.
+    """Several Dobby servers can run at once (one per app or session), each with its own helper.
+
+    Only the helper holding this lock shows the idle "ready" bar (and the menu bar icon, if on);
+    the others show their bar only while they work, are paused or ask Allow/Deny. The lock is
+    released when the helper exits, and another helper takes over on its next try.
     """
 
     def __init__(self, path: str = BAR_LOCK) -> None:

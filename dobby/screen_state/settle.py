@@ -62,7 +62,9 @@ def wait_until_settled(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> SettleResult:
-    """Calls ``capture`` every ``interval_s`` until ``stable_samples`` consecutive
+    """Waits for the screen to settle.
+
+    Calls ``capture`` every ``interval_s`` until ``stable_samples`` consecutive
     thumbnails differ by at most ``max_delta``, or ``timeout_s`` passes.
 
     A screen that is already still returns after one interval (two samples).

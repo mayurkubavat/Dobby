@@ -101,6 +101,7 @@ class CapturePipeline:
     @staticmethod
     def compute_image_delta(img1: Image.Image, img2: Image.Image) -> float:
         """Calculates fraction of pixels changed between two images of same dimensions.
+
         Returns float between 0.0 (identical) and 1.0 (completely different).
         """
         if img1.size != img2.size:

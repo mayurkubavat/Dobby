@@ -88,8 +88,9 @@ def _clean(items: Iterable[str]) -> list[str]:
 
 
 def pick(taken: Iterable[str], pid: int, names: list[str] | None = None) -> str:
-    """The first name nobody running uses; past the end of the list, a
-    numbered one ("Tibble 2"). With names off: ``Dobby-<pid>``.
+    """The first name nobody running uses; past the end of the list, a numbered one ("Tibble 2").
+
+    With names off: ``Dobby-<pid>``.
     """
     names = pool() if names is None else names
     if not names:
@@ -108,7 +109,7 @@ def pick(taken: Iterable[str], pid: int, names: list[str] | None = None) -> str:
 
 
 def display(first: str, client: str | None) -> str:
-    """ "Tibble · Claude Code", or just "Tibble" before the client says who it is."""
+    """Display name such as "Tibble · Claude Code", or just "Tibble" before the client says who it is."""
     client = (client or "").strip()
     if not client or client == first:
         return first

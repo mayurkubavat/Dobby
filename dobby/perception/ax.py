@@ -1,5 +1,7 @@
-"""macOS Accessibility (AXUIElement) inspector with the same interface as
-``ATSPIInspector`` (``is_available``, ``inspect_desktop``, ``inspect``).
+"""macOS Accessibility (AXUIElement) inspector.
+
+Has the same interface as ``ATSPIInspector``: ``is_available``, ``inspect_desktop``
+and ``inspect``.
 
 Roles are mapped to the AT-SPI role names the rest of the code already
 understands ("push button", "entry", "dialog", "label", ...), so modal triage,
@@ -143,11 +145,13 @@ class AXInspector:
         return int(p.x), int(p.y), int(s.width), int(s.height)
 
     def _enable_web_content(self, root, pid: int) -> bool:
-        """Electron and Chromium build their web-content AX tree only after a client
-        sets AXManualAccessibility on the app element. Native apps reject the
-        attribute (kAXErrorAttributeUnsupported), which is harmless. Tried once
-        per pid. AXEnhancedUserInterface is deliberately not used: it breaks
-        window animations and positioning in some apps.
+        """Turns on the web-content AX tree for Electron and Chromium apps.
+
+        They build it only after a client sets AXManualAccessibility on the app element.
+
+        Native apps reject the attribute (kAXErrorAttributeUnsupported), which is harmless.
+        Tried once per pid. AXEnhancedUserInterface is deliberately not used: it breaks window
+        animations and positioning in some apps.
 
         Returns True the first time it succeeds, so the caller can let the tree settle.
         """

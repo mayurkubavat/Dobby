@@ -35,8 +35,10 @@ def _pick_color(root: Path, pid: int) -> str:
 def register(
     root: Path, agent_id: str, name: str, pid: int, priority: int = 0, color: str | None = None
 ) -> Path:
-    """Write ``agents/<pid>.json``. ``color`` is this Dobby's overlay colour:
-    by default the first palette colour no other running Dobby uses.
+    """Write ``agents/<pid>.json``.
+
+    ``color`` is this Dobby's overlay colour: by default the first palette colour no other
+    running Dobby uses.
     """
     d = agents_dir(root)
     d.mkdir(parents=True, exist_ok=True)

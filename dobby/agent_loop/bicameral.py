@@ -93,8 +93,10 @@ Compress the provided conversation history turns into the following 8-part invar
 
 
 class BicameralStepController:
-    """Coordinates local System 1 verification against routine actions,
-    escalating to Cloud System 2 planner only when ambiguity or failure occurs.
+    """Verifies routine actions locally and escalates to the cloud planner on doubt.
+
+    Local System 1 checks each step; Cloud System 2 is consulted only when a step is
+    ambiguous or fails.
     """
 
     def __init__(
@@ -433,6 +435,7 @@ class BicameralStepController:
             max_tokens: Threshold to trigger compaction
             keep_last_n: Number of most recent turns to retain raw
             local_compressor_fn: Optional custom callable to invoke local Gemma 3
+            force: Compact even when the history is under ``max_tokens``.
         """
         total_text = "".join(str(m.get("content", "")) for m in messages)
         est_tokens = len(total_text) // 4

@@ -165,8 +165,10 @@ def pick_first_name(pid: int) -> str:
 
 
 def get_controller(create: bool = True) -> Controller | None:
-    """This session's controller in a shared Dobby, else the process controller
-    (created on first use when control is enabled).
+    """Returns this session's controller.
+
+    In a shared Dobby this is the session's own controller; otherwise the process-wide
+    one, created on first use when control is enabled.
     """
     session = _SESSION_CONTROLLER.get()
     if session is not None:

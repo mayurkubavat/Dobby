@@ -48,6 +48,7 @@ class BaseGroundingProvider(ABC):
         fuzzy: bool = True,
     ) -> list[UIElement]:
         """Searches for UI elements matching text or label query.
+
         Default implementation filters results from detect().
         """
         if image is None:

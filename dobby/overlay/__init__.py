@@ -283,7 +283,9 @@ def find_overlay_hal(hal: Any) -> OverlayHAL | None:
 
 
 def step(hal: Any, text: str, risk: str | None = None, confirm: bool = False):
-    """``with step(hal, "Run synthesis", risk="caution"): ...`` for tool code.
+    """Shows a step on the overlay while the ``with`` block runs.
+
+    Usage in tool code: ``with step(hal, "Run synthesis", risk="caution"): ...``
 
     Works with any HAL; a no-op context when the overlay is not in use.
     """

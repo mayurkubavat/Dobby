@@ -219,8 +219,9 @@ class OverlayHAL:
         return self._confirm_danger and (self._policy is None or self.secure)
 
     def _sync_turbo(self) -> None:
-        """Shared Dobby: tell the helper whether this call is turbo (no prompts,
-        no take-over pause) before acting; clients may differ.
+        """Tells the helper whether this call is turbo before acting.
+
+        In a shared Dobby, clients may differ: turbo means no prompts and no take-over pause.
         """
         if self._policy is None:
             return

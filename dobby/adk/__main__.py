@@ -1,4 +1,7 @@
-"""python -m dobby.adk plan.json [--in-process] [--model ollama_chat/gemma3:4b] [--json]"""
+"""Command line entry point for the ADK plan runner.
+
+Usage: ``python -m dobby.adk plan.json [--in-process] [--model ollama_chat/gemma3:4b] [--json]``
+"""
 
 from __future__ import annotations
 

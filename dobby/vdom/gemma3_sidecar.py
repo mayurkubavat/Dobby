@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 def compute_dhash(image: Image.Image) -> int:
     """Computes a 64-bit difference hash (dHash) for an image crop in < 0.6ms.
+
     Captures structural gradient morphology invariant to slight brightness/contrast shifts.
     """
     try:
@@ -53,6 +54,7 @@ def hamming_distance(h1: int, h2: int) -> int:
 
 class SemanticROICache:
     """Perceptual LRU cache for visual grounding proposals.
+
     Provides sub-millisecond retrieval on static or repeating EDA sub-panes.
     """
 
@@ -182,9 +184,10 @@ def _escalate(reason: str) -> dict[str, Any]:
 
 
 class Gemma3Grounder:
-    """On-demand local Gemma 3 sidecar (via Ollama) for sub-pane grounding and
-    modal triage. All calls go through :class:`GemmaClient`, which constrains
-    replies to a JSON schema and records call counts and latency.
+    """On-demand local Gemma 3 sidecar (via Ollama) for sub-pane grounding and modal triage.
+
+    All calls go through :class:`GemmaClient`, which constrains replies to a JSON schema and
+    records call counts and latency.
     """
 
     def __init__(
@@ -259,9 +262,10 @@ class Gemma3Grounder:
         anchor_id: str = "default",
         task_intent: str = "ground_ui",
     ) -> list[dict[str, Any]]:
-        """Deprecated: asks Gemma to regress box coordinates, which Gemma 3 does
-        poorly. Prefer ``self.marks.label_marks`` / ``find_mark`` on detector
-        boxes (see LocalNeuralGrounder.ground_subpane). Kept for compatibility.
+        """Deprecated: asks Gemma to regress box coordinates, which Gemma 3 does poorly.
+
+        Prefer ``self.marks.label_marks`` / ``find_mark`` on detector boxes (see
+        LocalNeuralGrounder.ground_subpane). Kept for compatibility.
 
         Grounds UI elements inside an ROI crop and returns proposals in absolute
         screen coordinates. Returns [] on any Gemma failure so callers fall back
@@ -530,8 +534,10 @@ class Gemma3Grounder:
         return result
 
     def decider(self, timeout: float | None = None, role: str = "vision"):
-        """A :class:`~dobby.gemma.decide.GemmaDecider` for a model role: "text" (screen-state
-        choices), "vision" (crop checks, the default) or "visual_pick" (Set-of-Marks).
+        """Returns a :class:`~dobby.gemma.decide.GemmaDecider` for a model role.
+
+        Roles are "text" (screen-state choices), "vision" (crop checks, the default) or
+        "visual_pick" (Set-of-Marks).
         """
         from dobby.gemma.decide import GemmaDecider
         from dobby.local_models import model_for
@@ -632,7 +638,9 @@ class Gemma3Grounder:
         anchor_id: str | None = None,
     ) -> VirtualDOMSnapshot:
         """Integrates Gemma 3 visual proposals into a VirtualDOMSnapshot.
-        Injects nodes with source=GroundingSource.VISION_ONLY into the snapshot nodes dictionary.
+
+        Injects nodes with source=GroundingSource.VISION_ONLY into the snapshot nodes
+        dictionary.
         """
         next_idx = len(vdom_snapshot.nodes) + 1
 

@@ -63,8 +63,10 @@ class ManageToolsetsInput(BaseModel):
 
 
 class ToolSetManager:
-    """Manages active tool domain profiles, dynamic capability gating,
-    and out-of-band large payload disk/tmpfs offloading.
+    """Manages tool profiles and offloads large tool outputs.
+
+    Gates which tool domains are active, and writes large payloads to disk or tmpfs
+    instead of returning them inline.
     """
 
     PROFILES: dict[str, list[str]] = {
@@ -254,6 +256,7 @@ class ToolSetManager:
             tool_name: Name of executing tool
             payload: Tool result dictionary
             output_mode_override: Optional per-call override ('inline', 'file', 'resource')
+            force_offload: Offload the payload even when it is small.
 
         Returns:
             Raw payload if inline or small; summary preview and file URI if offloaded.

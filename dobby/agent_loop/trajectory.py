@@ -31,8 +31,9 @@ logger = logging.getLogger(__name__)
 
 class TrajectoryEngine:
     """Executes declarative multi-step trajectories against the host desktop and active application plugins.
-    Supports Jinja2 parameter interpolation, per-step delta verification, post-condition assertions,
-    and automatic failure recovery.
+
+    Supports Jinja2 parameter interpolation, per-step delta verification, post-condition
+    assertions, and automatic failure recovery.
     """
 
     def __init__(self, controller: FeedbackLoopController) -> None:

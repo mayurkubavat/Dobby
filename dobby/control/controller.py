@@ -243,8 +243,9 @@ class Controller:
         return _LazyToolScope(self)
 
     def ensure_registered(self) -> None:
-        """Put this agent's registry file back if something removed it, so the
-        other Dobbys and the overlay keep counting this one as an agent.
+        """Restores this agent's registry file if something removed it.
+
+        Keeps the other Dobbys and the overlay counting this one as an agent.
         """
         if not self._registered:
             return
@@ -341,8 +342,10 @@ class Controller:
 
 
 class _ActionScope:
-    """One HAL action. Inside a tool call the first action acquires and the
-    lease stays busy until the tool returns; outside, each action stands alone.
+    """One HAL action.
+
+    Inside a tool call the first action acquires and the lease stays busy until the tool
+    returns; outside, each action stands alone.
     """
 
     def __init__(self, ctl: Controller) -> None:

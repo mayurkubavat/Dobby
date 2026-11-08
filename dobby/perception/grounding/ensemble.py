@@ -32,8 +32,10 @@ def compute_iou(boxA: BoundingBox, boxB: BoundingBox) -> float:
 
 
 class EnsembleGroundingProvider(BaseGroundingProvider):
-    """Combines semantic hierarchy, visual edge contours, and template matching into a unified,
-    deduplicated Set-of-Marks map using Non-Maximum Suppression.
+    """Fuses several grounding providers into one Set-of-Marks map.
+
+    Combines the semantic hierarchy, visual edge contours and template matching, and
+    de-duplicates overlapping boxes with Non-Maximum Suppression.
     """
 
     def __init__(
@@ -63,8 +65,9 @@ class EnsembleGroundingProvider(BaseGroundingProvider):
         app_filter: str | None = None,
         region: tuple[int, int, int, int] | None = None,
     ) -> list[UIElement]:
-        """Executes multi-source detection and applies Non-Maximum Suppression (NMS)
-        with semantic attribute retention.
+        """Runs every provider and merges the results with Non-Maximum Suppression.
+
+        Semantic attributes from the accessibility tree are kept on the surviving boxes.
         """
         raw_candidates: list[UIElement] = []
 

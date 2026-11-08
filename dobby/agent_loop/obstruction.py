@@ -196,8 +196,9 @@ class SemanticModalRouter:
 
 class ObstructionInterceptor:
     """Intelligent modal dialog interceptor and policy coordinator.
-    Scans for blocking dialogs, classifies their risk tier, auto-dismisses safe dialogs,
-    and escalates critical/branching choices to the orchestrator.
+
+    Scans for blocking dialogs, classifies their risk tier, auto-dismisses safe dialogs, and
+    escalates critical/branching choices to the orchestrator.
     """
 
     def __init__(
@@ -217,6 +218,7 @@ class ObstructionInterceptor:
 
     def inspect_active_dialog(self) -> tuple[str, str, list[ModalButtonOption]] | None:
         """Inspects the accessibility tree and window manager for active modal dialogs.
+
         Returns (window_title, body_text, buttons) if a dialog is present, else None.
         """
         # 1. Check window hierarchy for transient dialog windows
@@ -299,6 +301,7 @@ class ObstructionInterceptor:
 
     def triage_and_resolve(self) -> ModalTriageResult:
         """Performs semantic triage on active obstructions.
+
         Auto-resolves safe dialogs, or halts and returns an escalation payload.
         """
         inspection = self.inspect_active_dialog()

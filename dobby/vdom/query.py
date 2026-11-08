@@ -23,7 +23,9 @@ class VDOMQueryEngine:
         self.nodes = list(snapshot.nodes.values())
 
     def query_selector(self, selector: str, limit: int = 10) -> list[VDOMNode]:
-        """Parses composite CSS-like spatial selectors:
+        """Finds nodes that match a CSS-like spatial selector.
+
+        Examples:
         - 'push_button[name*="Run Synthesis"]:enabled'
         - 'text_input:right_of("Period (ns):")'
         - 'waveform_signal[name="clk_div2"]:inside("Waveform")'

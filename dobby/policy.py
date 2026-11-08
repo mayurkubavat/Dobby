@@ -1,4 +1,4 @@
-"""Admin policy: rules an organisation sets for every Dobby on a computer.
+r"""Admin policy: rules an organisation sets for every Dobby on a computer.
 
 A person's own settings (``DOBBY_*`` variables, ``~/.dobby/apps.json``,
 ``--turbo``) cannot loosen what this file says. It lives at a system path

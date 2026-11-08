@@ -217,8 +217,10 @@ def _draw_chip(
     color: tuple[int, int, int],
     scale: float,
 ) -> None:
-    """Capsule name tag: gradient fill, shine, white rim, state dot, label and,
-    while a step runs, a › breadcrumb and its detail (no chevron when idle).
+    """Draws the capsule name tag.
+
+    Gradient fill, shine, white rim, state dot and label; while a step runs, also a ›
+    breadcrumb and its detail (no chevron when idle).
     """
     font = _font(int(12 * scale))
     dfont = _font(int(11 * scale))
@@ -306,8 +308,10 @@ def render(
     origin: Point = (0.0, 0.0),
     frame_ms: int = 600,
 ) -> list[Path]:
-    """Annotate each (ts, image or path) frame. ``out`` ending in .gif makes a GIF,
-    otherwise ``out`` is a folder of numbered PNGs. Returns the files written.
+    """Annotate each (ts, image or path) frame.
+
+    ``out`` ending in .gif makes a GIF, otherwise ``out`` is a folder of numbered PNGs. Returns
+    the files written.
     """
     images = []
     for ts, src in frames:

@@ -49,8 +49,10 @@ def _ax_names(hal: MockReplayHAL) -> list[str]:
 
 
 def replay_cassette(path: str | Path) -> dict[str, Any]:
-    """Replays every transition through the HAL input API, so argument shapes are
-    checked exactly as a live agent would call them, then checks expect.json.
+    """Replays every transition through the HAL input API, then checks expect.json.
+
+    Argument shapes are checked exactly as a live agent would call them.
+
     Returns {"ok", "steps", "final_frame", "failures": [...]}.
     """
     path = Path(path)

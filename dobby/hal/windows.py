@@ -11,6 +11,7 @@ from dobby.types import DisplayMetrics, DisplayTopology, WindowInfo
 
 class WindowsHAL(IDesktopHAL):
     """Windows 10/11 Desktop HAL implementation.
+
     Architected for dxcam (DXGI GPU screen capture), Win32 SendInput (PerMonitorV2 DPI aware),
     and pywinauto / UIA3 window querying.
     """

@@ -66,6 +66,7 @@ class WindowClipper:
         window_bbox: BoundingBox,
     ) -> list[UIElement]:
         """Filters elements that lie within the window bounds.
+
         Elements retain their true physical desktop coordinates for accurate clicking.
         """
         wx, wy, ww, wh = window_bbox.x, window_bbox.y, window_bbox.width, window_bbox.height

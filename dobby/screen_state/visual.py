@@ -28,9 +28,12 @@ VISUAL_MAY_ACT = False  # flip once cassette calibration shows the visual lane c
 def _candidates(
     elements: list[ScreenElement], window: tuple[int, int, int, int], limit: int
 ) -> list[ScreenElement]:
-    """Elements drawn inside the screenshot: unnamed and icon elements first (that
-    is why we look), then named controls, in reading order. Menu bar items and
-    anything else outside the window are left out: Gemma could only pick them
+    """Returns the elements drawn inside the screenshot.
+
+    Unnamed and icon elements come first (that is why we look), then named controls,
+    in reading order.
+
+    Menu bar items and anything else outside the window are left out: Gemma could only pick them
     from their text, and the text lane already covers them.
     """
     wx, wy, ww, wh = window
@@ -69,10 +72,13 @@ def decide_visual_element(
     confirm: bool = True,
     confirm_at: float = 0.9,
 ) -> dict[str, Any]:
-    """Observes with the icon detector, marks up to ``max_marks`` elements with
-    letters on a window screenshot, and lets the local decider pick one by
-    letter. Gated like the text lane; acts on nothing. When the verdict is
-    "act", call act_on_element with the returned ``eid`` and ``generation``.
+    """Picks an element by letter from a marked-up window screenshot.
+
+    Observes with the icon detector, marks up to ``max_marks`` elements with letters,
+    and lets the local decider pick one.
+
+    Gated like the text lane; acts on nothing. When the verdict is "act", call act_on_element
+    with the returned ``eid`` and ``generation``.
     """
     from dobby.gemma.client import encode_image
     from dobby.gemma.decide import option_labels

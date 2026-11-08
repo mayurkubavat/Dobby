@@ -14,6 +14,7 @@ from dobby.types import RelationalAnchor, UIElement
 
 class GroundingEngine:
     """Coordinates and hotswaps perception grounding providers at runtime.
+
     Supports 'ensemble', 'semantic', 'cv', and 'template' modes.
     """
 

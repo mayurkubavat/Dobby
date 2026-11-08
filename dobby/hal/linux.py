@@ -59,8 +59,9 @@ def _load_native() -> None:
 
 class LinuxHAL(IDesktopHAL):
     """Linux Desktop HAL supporting X11 natively and Wayland via compatible protocols.
-    Uses mss for high-speed screen capture, pynput for mouse/keyboard injection,
-    and python-xlib for window hierarchy querying.
+
+    Uses mss for high-speed screen capture, pynput for mouse/keyboard injection, and python-xlib
+    for window hierarchy querying.
     """
 
     def __init__(self) -> None:
@@ -597,8 +598,10 @@ class LinuxHAL(IDesktopHAL):
             return None
 
     def background_click(self, x: int, y: int, window_id: str) -> bool:
-        """Press the button at (x, y) in window ``window_id`` through AT-SPI,
-        without moving the real pointer (the Linux side of background clicks).
+        """Presses the button at (x, y) in window ``window_id`` through AT-SPI.
+
+        Does not move the real pointer; this is the Linux side of background clicks.
+
         False: nothing pressable there, so the caller clicks normally.
         """
         pid = self.window_pid(window_id)

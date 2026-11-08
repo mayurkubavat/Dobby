@@ -64,6 +64,7 @@ def _default_frame() -> ScreenFrameState:
 
 class MockReplayHAL:
     """Cassette-driven Desktop HAL.
+
     Implements the capture, input, window, AX, and quiescence protocols.
     """
 

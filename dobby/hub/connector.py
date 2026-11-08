@@ -94,8 +94,9 @@ _APP_ENV_KEYS = ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "OLLAMA_HOST", "HF_HOME", 
 
 
 def find_app(env: dict[str, str] | None = None, platform: str = sys.platform) -> Path | None:
-    """Dobby.app on macOS: ``DOBBY_APP``, ~/Applications, /Applications, or the
-    checkout's own build. ``DOBBY_APP=0`` never uses it.
+    """Dobby.app on macOS: ``DOBBY_APP``, ~/Applications, /Applications, or the checkout's own build.
+
+    ``DOBBY_APP=0`` never uses it.
     """
     env = os.environ if env is None else env
     if platform != "darwin":
@@ -143,8 +144,10 @@ def write_app_config(env: dict[str, str] | None = None) -> Path:
 
 
 def start_app(app: Path) -> bool:
-    """Open Dobby.app in the background; it starts ``dobby serve`` as its own
-    child, so macOS asks for Screen Recording / Accessibility for Dobby.
+    """Opens Dobby.app in the background.
+
+    The app starts ``dobby serve`` as its own child, so macOS asks for Screen Recording
+    and Accessibility permission for Dobby rather than for the terminal.
     """
     try:
         write_app_config()
@@ -159,8 +162,10 @@ def start_app(app: Path) -> bool:
 
 
 def start_daemon(env: dict[str, str] | None = None) -> subprocess.Popen | None:
-    """Start the shared Dobby: through Dobby.app on macOS when it is
-    installed, else ``dobby serve`` detached from this client (it outlives it).
+    """Starts the shared Dobby.
+
+    Goes through Dobby.app on macOS when it is installed, else runs ``dobby serve``
+    detached from this client, so it outlives the client.
     """
     app = find_app(env)
     if app is not None and start_app(app):

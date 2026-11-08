@@ -305,8 +305,9 @@ def build_default_ui_detector_model(
     target_size: tuple[int, int] = (640, 640),
     num_classes: int = 6,
 ) -> str:
-    """Constructs and serializes a high-speed ONNX UI detector model
-    compatible with ONNX Runtime 1.31.0 (ir_version <= 13, opset 17).
+    """Builds and serializes a small ONNX UI detector model.
+
+    Compatible with ONNX Runtime 1.31.0 (ir_version <= 13, opset 17).
 
     The model contains convolutional feature extraction with edge/contrast kernels,
     anchor grid decoding, and sigmoid class probabilities.
@@ -540,6 +541,7 @@ def bundled_model_ok(path: str) -> bool:
 
 class FastONNXUIDetector:
     """Sub-20ms neural UI bounding box detector using ONNX Runtime with CPU AVX-512 acceleration.
+
     Produces zero-token visual element proposals for Virtual DOM synthesis.
     """
 

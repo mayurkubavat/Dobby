@@ -14,8 +14,9 @@ from dobby.types import (
 
 class BaseUIAppPlugin(ABC):
     """Abstract Base Class for high-feature application plugins.
-    Enables specialized sub-pane routing, declarative feature catalogs,
-    coordinate-free hotkey dispatching, and workflow macros.
+
+    Enables specialized sub-pane routing, declarative feature catalogs, coordinate-free hotkey
+    dispatching, and workflow macros.
     """
 
     app_id: str = "base"

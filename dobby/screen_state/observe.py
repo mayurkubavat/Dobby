@@ -1,5 +1,7 @@
-"""Live wiring for screen state: observe the active window, decide on an element
-with the local decision core, and act on it after re-binding to a fresh frame.
+"""Live wiring for screen state.
+
+Observes the active window, decides on an element with the local decision core,
+and acts on it after re-binding to a fresh frame.
 
 Everything goes through the controller (HAL, AX inspector, OCR, verification),
 so cassette replay works unchanged.
@@ -371,9 +373,13 @@ def decide_next_element(
     visual_fallback: bool = False,
     visual_decider: Any = None,
 ) -> dict[str, Any]:
-    """Observes, shortlists elements by the goal, lets the local decider choose one,
-    and gates the choice by the verb's risk. Acts on nothing: the caller acts
-    only when ``gate.verdict`` is "act" (then :func:`act_on_element`).
+    """Observes, picks an element for the goal, and gates it by risk.
+
+    Shortlists elements by the goal, lets the local decider choose one, and gates the
+    choice by the verb's risk.
+
+    Acts on nothing: the caller acts only when ``gate.verdict`` is "act" (then
+    :func:`act_on_element`).
 
     With ``confirm`` a second, overlapping yes/no question checks the pick
     ("using X advances the goal"). A choice is always relative to the

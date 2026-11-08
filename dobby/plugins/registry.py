@@ -7,9 +7,7 @@ from dobby.types import PluginSummary
 
 
 class PluginRegistry:
-    """Central registry for discovering, registering, and routing actions
-    to high-feature application plugins.
-    """
+    """Discovers application plugins and routes actions to them."""
 
     def __init__(self) -> None:
         self._plugins: dict[str, BaseUIAppPlugin] = {}

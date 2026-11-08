@@ -1,5 +1,7 @@
-"""Look of the overlay: per-Dobby colours, the top bar's layout, glow states,
-step trail and name tag placement.
+"""Look of the overlay.
+
+Per-Dobby colours, the top bar's layout, glow states, step trail and name tag
+placement.
 
 Pure data (no AppKit, no GTK) so every decision can be tested anywhere; the
 helpers (``mac_helper``, ``x11_helper``) only draw what these functions say.
@@ -432,7 +434,7 @@ def tag_detail(intent: str, state: str, narrate: bool) -> str:
 
 # --------------------------------------------------------------------- glow
 def glow_state(*, paused: bool, takeover: bool, working: bool, thinking: bool, risk: str) -> str:
-    """ "risk" | "halted" | "thinking" | "acting" | "idle"."""
+    """Returns the glow state: "risk", "halted", "thinking", "acting" or "idle"."""
     if risk == "danger":
         return "risk"
     if paused or takeover:

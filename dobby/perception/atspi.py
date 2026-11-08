@@ -365,8 +365,10 @@ class ATSPIInspector:
         max_depth: int = 16,
         filter_interactable: bool = True,
     ) -> list[UIElement]:
-        """Flattened, on-screen elements of the active app (or apps matching
-        ``app_name_filter``), with true screen bounding boxes.
+        """Returns the flattened on-screen elements of the active app.
+
+        With ``app_name_filter``, returns those of the matching apps instead. Bounding boxes
+        are in true screen coordinates.
         """
         if not self._available:
             return []

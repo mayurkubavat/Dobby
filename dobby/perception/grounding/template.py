@@ -9,8 +9,9 @@ from dobby.types import BoundingBox, UIElement
 
 
 class TemplateGroundingProvider(BaseGroundingProvider):
-    """Grounding provider that matches specific visual icons or UI snippets using
-    OpenCV normalized cross-correlation (cv2.TM_CCOEFF_NORMED).
+    """Grounding provider that finds known icons or UI snippets by template matching.
+
+    Uses OpenCV normalised cross-correlation (``cv2.TM_CCOEFF_NORMED``).
     """
 
     def __init__(self, match_threshold: float = 0.80) -> None:
