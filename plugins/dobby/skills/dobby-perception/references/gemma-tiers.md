@@ -1,6 +1,6 @@
 # Local Gemma in Dobby
 
-Measured on Mayur's MacBook Pro (16 GB), 2026-11-01, Claude window 1512x949.
+Measured on a MacBook Pro (16 GB), 2026-11-01, Claude window 1512x949.
 
 | Step | Time | Notes |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ To try a different wording without editing code, put `<prompt_id>.txt` (system t
 
 ## Models
 
-Only models listed in `~/LocalAI/MODELS.md` are used. Run `~/LocalAI/bin/ai-check` before pulling anything; one Ollama serves every project on the Mac, and duplicate downloads are not allowed. gemma3:12b is installed too, for slower, off-the-hot-path work such as history compaction.
+Dobby never pulls models; ask the user before downloading one, since one Ollama may serve several projects. gemma3:12b is installed too, for slower, off-the-hot-path work such as history compaction.
 
 ## Measuring
 

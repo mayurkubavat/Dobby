@@ -26,26 +26,26 @@ SKILLS = ROOT / "plugins" / "dobby" / "skills"
 
 # skill -> [(reference file name, source path relative to ROOT)]
 COPIED: dict[str, list[tuple]] = {
-    "perception": [
+    "dobby-perception": [
         ("zero-token-element-discovery.md", "learnings/zero_token_element_discovery.md"),
         ("visual-delta-verification.md", "learnings/visual_delta_verification.md"),
         ("architecture.md", "docs/architecture.md"),
     ],
-    "app-chrome": [
+    "dobby-app-chrome": [
         ("browser-recipes.md", "learnings/browser_interaction_recipes.md"),
         ("gemini-web-clipboard.md", "learnings/gemini_web_clipboard_extraction_recipe.md"),
     ],
-    "app-vivado": [
+    "dobby-app-vivado": [
         ("waveform-automation.md", "learnings/vivado_gui_waveform_automation.md"),
         ("layout-for-dv.md", "learnings/vivado_ui_layout_customization_for_dv.md"),
         ("plugin.md", "docs/plugins/vivado.md"),
         ("tool-features-research.md", "research/vivado_tool_features_and_ai_automation.md"),
     ],
-    "app-verdi": [
+    "dobby-app-verdi": [
         ("eda-ui-automation.md", "learnings/verdi_and_complex_eda_ui_automation.md"),
         ("tool-features-research.md", "research/verdi_tool_features_and_ai_automation.md"),
     ],
-    "troubleshoot": [
+    "dobby-troubleshoot": [
         ("setup.md", "docs/setup.md"),
         ("linux-window-management.md", "learnings/linux_desktop_window_management.md"),
     ],
@@ -167,9 +167,9 @@ def features_reference(app_id: str) -> str:
 
 def expected_files() -> dict[Path, str]:
     files: dict[Path, str] = {
-        SKILLS / "perception" / "references" / "tools.md": tools_reference(),
-        SKILLS / "app-chrome" / "references" / "features.md": features_reference("chrome"),
-        SKILLS / "app-vivado" / "references" / "features.md": features_reference("vivado"),
+        SKILLS / "dobby-perception" / "references" / "tools.md": tools_reference(),
+        SKILLS / "dobby-app-chrome" / "references" / "features.md": features_reference("chrome"),
+        SKILLS / "dobby-app-vivado" / "references" / "features.md": features_reference("vivado"),
     }
     for skill, pairs in COPIED.items():
         for name, rel in pairs:

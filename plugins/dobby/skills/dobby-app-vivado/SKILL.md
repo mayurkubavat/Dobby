@@ -1,6 +1,6 @@
 ---
-name: app-vivado
-description: Automate AMD/Xilinx Vivado - simulation, waveforms and the Tcl console - with dobby's Vivado plugin, Tcl first and the GUI second. Use when a task involves Vivado projects, xsim simulation or waveform inspection.
+name: dobby-app-vivado
+description: Automate AMD/Xilinx Vivado - simulation, waveforms and the Tcl console - with dobby's Vivado plugin, Tcl first and the GUI second. Use when a task involves Vivado projects, xsim simulation or waveform inspection. Read the dobby skill first for the general rules.
 ---
 
 # Vivado
@@ -22,7 +22,7 @@ Tcl is the most reliable interface. Use the GUI only for what Tcl cannot show, s
 
 ## Making it repeatable
 
-Record with `start_skill_recording` (Vivado writes `vivado.jou`), then `crystallize_skill` with a `verification_cmd` that checks a value or report. See `dobby:skill-crafting`.
+Record with `start_skill_recording` (Vivado writes `vivado.jou`), then `crystallize_skill` with a `verification_cmd` that checks a value or report. See the `dobby-skill-crafting` skill.
 
 ## References
 

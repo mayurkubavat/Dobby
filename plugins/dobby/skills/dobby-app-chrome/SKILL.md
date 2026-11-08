@@ -1,6 +1,6 @@
 ---
-name: app-chrome
-description: Drive Google Chrome and web apps (including Gemini on the web) with dobby's Chrome plugin features, accessibility tree and OCR. Use when a task happens in a browser tab.
+name: dobby-app-chrome
+description: Drive Google Chrome and web apps (including Gemini on the web) with dobby's Chrome plugin features, accessibility tree and OCR. Use when a task happens in a browser tab and you have no dedicated browser tool, or the user wants their own signed-in Chrome window used. Read the dobby skill first for the general rules.
 ---
 
 # Chrome and web apps

@@ -45,6 +45,8 @@ pip install -e ".[dev]"
 
 ## 3. Client Configuration
 
+The quick way: `dobby setup` registers Dobby with every AI tool it finds and links the agent skills (`dobby setup --dry-run` to preview, `--list` to see each tool). The entries below are the manual equivalent.
+
 ### Claude Desktop
 Add `dobby` to your Claude Desktop configuration file:
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
@@ -64,7 +66,7 @@ Add `dobby` to your Claude Desktop configuration file:
 ```
 
 ### Antigravity / Gemini CLI
-Add `dobby` to your Antigravity configuration file (`~/.gemini/antigravity-cli/mcp_config.json`):
+Add `dobby` to Antigravity's MCP config (`~/.gemini/config/mcp_config.json` for the app, `~/.gemini/antigravity-cli/mcp_config.json` for the CLI; Gemini CLI uses `~/.gemini/settings.json`):
 
 ```json
 {
@@ -80,7 +82,7 @@ Add `dobby` to your Antigravity configuration file (`~/.gemini/antigravity-cli/m
 ```
 
 ### Cursor / VS Code
-In your project or global Cursor settings (`.cursor/mcp.json`):
+In your project or global Cursor settings (`.cursor/mcp.json` or `~/.cursor/mcp.json`). Codex uses `~/.codex/config.toml` with a `[mcp_servers.Dobby]` table and `command = "..."`:
 
 ```json
 {

@@ -32,15 +32,15 @@ def test_manifests_are_valid():
 def test_every_skill_has_frontmatter_and_existing_references():
     skills = sorted(p for p in SKILLS.iterdir() if p.is_dir())
     assert {p.name for p in skills} >= {
-        "orchestrator",
-        "perception",
-        "skill-crafting",
-        "eval",
-        "troubleshoot",
-        "app-claude",
-        "app-chrome",
-        "app-vivado",
-        "app-verdi",
+        "dobby",
+        "dobby-perception",
+        "dobby-skill-crafting",
+        "dobby-eval",
+        "dobby-troubleshoot",
+        "dobby-app-claude",
+        "dobby-app-chrome",
+        "dobby-app-vivado",
+        "dobby-app-verdi",
     }
     for skill in skills:
         text = (skill / "SKILL.md").read_text(encoding="utf-8")
@@ -54,7 +54,7 @@ def test_every_skill_has_frontmatter_and_existing_references():
 
 
 def test_skills_only_name_tools_the_server_has():
-    tools_md = (SKILLS / "perception" / "references" / "tools.md").read_text(encoding="utf-8")
+    tools_md = (SKILLS / "dobby-perception" / "references" / "tools.md").read_text(encoding="utf-8")
     known = set(re.findall(r"^\| `(\w+)` \|", tools_md, re.M))
     assert len(known) > 30
     tool_like = re.compile(r"`([a-z]+(?:_[a-z]+)+)\(")
@@ -71,3 +71,22 @@ def test_generated_references_are_current():
         cwd=ROOT,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_skill_names_are_unique_outside_the_plugin():
+    """Outside Claude Code skills share one folder, so every name carries the dobby prefix."""
+    for skill in SKILLS.iterdir():
+        if skill.is_dir():
+            assert skill.name == "dobby" or skill.name.startswith("dobby-"), skill.name
+
+
+def test_entry_skill_says_when_to_use_dobby():
+    meta = _frontmatter((SKILLS / "dobby" / "SKILL.md").read_text(encoding="utf-8"))
+    desc = meta["description"].lower()
+    for word in ("desktop", "click", "screen", "use whenever"):
+        assert word in desc
+
+
+def test_repo_agents_skills_link_points_at_the_plugin():
+    link = ROOT / ".agents" / "skills"
+    assert link.resolve() == SKILLS.resolve()

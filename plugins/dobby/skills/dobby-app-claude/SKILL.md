@@ -1,6 +1,6 @@
 ---
-name: app-claude
-description: Drive the Claude desktop app (Electron) on macOS with Dobby - sidebar, projects, chats and the composer - using its accessibility tree instead of screenshots. Use when a task happens inside the Claude app window.
+name: dobby-app-claude
+description: Drive the Claude desktop app (Electron) on macOS with Dobby - sidebar, projects, chats and the composer - using its accessibility tree instead of screenshots. Use when a task happens inside the Claude app window. Read the dobby skill first for the general rules.
 ---
 
 # Claude desktop app

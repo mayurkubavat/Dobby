@@ -17,13 +17,18 @@ The server command is the venv's entry point:
 
 `/path/to/Dobby/.venv/bin/dobby` (the `.venv` of your clone)
 
+`dobby setup` writes all of these for you (`--dry-run` to preview, `--list` to see each tool's state). By hand:
+
 | Client | How |
 | --- | --- |
 | Claude Code | `claude mcp add -s user Dobby -- <command>`; check with `claude mcp get Dobby` |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json`, under `mcpServers` |
 | Antigravity | `~/.gemini/config/mcp_config.json`, under `mcpServers` |
+| Gemini CLI | `~/.gemini/settings.json`, under `mcpServers` |
+| Cursor | `~/.cursor/mcp.json`, under `mcpServers` |
+| Codex | `~/.codex/config.toml`, a `[mcp_servers.Dobby]` table with `command = "<command>"` |
 
-Entry for the two JSON files:
+Entry for the JSON files:
 
 ```json
 "Dobby": {
@@ -41,4 +46,4 @@ Back up the file first, keep it valid JSON (`python3 -m json.tool FILE`), and ed
 
 ## Local models
 
-One Ollama (Homebrew service, `localhost:11434`) serves every project on the Mac; models live in `~/LocalAI/models/ollama`. `~/LocalAI/MODELS.md` lists approved models; `~/LocalAI/bin/ai-check` must pass before any pull, and duplicate downloads are not allowed.
+Dobby talks to one Ollama (Homebrew service, `localhost:11434`) and never downloads models itself. Check what is installed with `ollama list`, and ask the user before pulling anything: models are large and may be shared with other projects.

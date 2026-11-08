@@ -1,5 +1,5 @@
 ---
-name: eval
+name: dobby-eval
 description: Check that a change to Dobby (prompts, local models, perception or server code) helps rather than hurts - unit and replay tests, cassettes, and the local benchmark. Use before committing such a change, or when comparing two models or prompts.
 ---
 

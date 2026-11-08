@@ -11,6 +11,14 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- `dobby setup`: registers Dobby with every AI tool it finds (Claude Code,
+  Claude Desktop, Codex, Cursor, Gemini CLI, Antigravity, GitHub Copilot,
+  OpenCode, VS Code) and links the agent skills into `~/.agents/skills` and
+  `~/.claude/skills`. `--dry-run`, `--list`, `--only`, backups, idempotent.
+- Agent guidance that works in any AI tool: skills renamed `dobby` and
+  `dobby-*` (portable Agent Skills names), trigger-focused descriptions,
+  fuller MCP server instructions, skills served as `mcp://dobby/skills/<name>`
+  resources, and a `dobby` MCP prompt.
 - MCP server for desktop automation on macOS and Linux (X11 / XWayland):
   accessibility tree (AX, AT-SPI), local OCR, an ONNX icon detector, numbered
   screen states, and click, type, scroll, hotkey and window tools with

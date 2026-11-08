@@ -1,6 +1,6 @@
 ---
-name: perception
-description: Choose how to see the screen with Dobby - accessibility tree, local OCR, local Gemma checks, Set-of-Marks or a screenshot - and look up any tool's exact parameters. Use when deciding how to find or verify something on screen, or when a perception call returns nothing useful.
+name: dobby-perception
+description: Choose how to see the screen with Dobby - accessibility tree, local OCR, local Gemma checks, Set-of-Marks or a screenshot - and look up any tool's exact parameters. Use when deciding how to find or verify something on screen, or when a perception call returns nothing useful. Read the dobby skill first for the general rules.
 ---
 
 # Perception with Dobby

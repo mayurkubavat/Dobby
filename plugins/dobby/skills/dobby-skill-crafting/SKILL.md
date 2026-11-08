@@ -1,6 +1,6 @@
 ---
-name: skill-crafting
-description: Turn a desktop task that will repeat into something Dobby replays without a model - a declarative trajectory for any app, or a crystallized Tcl/CLI skill for journaled apps like Vivado and Verdi. Use after a task has worked, or when the user asks to automate or save a workflow.
+name: dobby-skill-crafting
+description: Turn a desktop task that will repeat into something Dobby replays without a model - a declarative trajectory for any app, or a crystallized Tcl/CLI skill for journaled apps like Vivado and Verdi. Use after a task has worked, or when the user asks to automate or save a workflow. Read the dobby skill first for the general rules.
 ---
 
 # Crafting reusable desktop skills

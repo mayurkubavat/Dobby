@@ -4,6 +4,8 @@
     dobby --secure     the same, with permission prompts for this client
     dobby serve        run the shared Dobby (normally started for you)
     dobby stdio        run a private Dobby for this client only (the old behaviour)
+    dobby setup        register Dobby and its skills with every AI tool on this computer
+                       (--dry-run to preview, --list to see each tool; dobby setup --help)
 
 Set ``DOBBY_SHARED=0`` to make plain ``dobby`` behave like ``dobby stdio``.
 Kept free of engine imports so connecting is fast.
@@ -27,6 +29,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         from dobby.hub.daemon import serve
 
         sys.exit(serve())
+    if command == "setup":
+        from dobby.agent_setup import main as setup
+
+        rest = argv[argv.index("setup") + 1 :]
+        sys.exit(setup(rest))
     if command == "stdio":
         from dobby.hub.connector import run_in_process
 

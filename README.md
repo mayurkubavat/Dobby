@@ -137,8 +137,37 @@ when the target is not there.
 
 ## Connect your AI client
 
-Every client starts its own Dobby. In each example, replace
-`/path/to/Dobby` with where you cloned it.
+One command sets Dobby up for every AI tool on this computer:
+
+```bash
+/path/to/Dobby/.venv/bin/dobby setup --dry-run   # show what it would change
+/path/to/Dobby/.venv/bin/dobby setup             # do it
+```
+
+It finds Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, Antigravity,
+GitHub Copilot (CLI and VS Code) and OpenCode, adds Dobby to each one's MCP
+config (other servers are kept, each file is backed up once as
+`<file>.dobby-backup`, an existing Dobby entry is left alone unless `--force`),
+and links the Dobby skills into the folders those tools read skills from:
+`~/.agents/skills` (shared by Codex, Cursor, Gemini CLI, Copilot, OpenCode and
+Antigravity) and `~/.claude/skills`. `dobby setup --list` shows every tool and
+its state; `--only cursor,codex`, `--no-mcp` and `--no-skills` narrow it.
+Restart each tool afterwards.
+
+How agents learn to use Dobby, whatever the tool:
+
+- **Server instructions.** Every MCP client receives Dobby's short guide when
+  it connects: when to use the desktop, the cheapest way to look, handoffs and
+  safety.
+- **Agent Skills.** The `dobby` skill (plus `dobby-perception`,
+  `dobby-app-chrome`, `dobby-app-vivado`...) loads automatically when a task
+  needs the desktop, in any tool that supports `SKILL.md` skills.
+- **MCP resources and a prompt.** Clients without skills can read the same
+  guides as `mcp://dobby/skills/<name>`, or start a task with the `dobby` MCP
+  prompt (a slash command in clients that offer prompts).
+
+The sections below are the manual way, per client. Replace `/path/to/Dobby`
+with where you cloned it.
 
 ### Claude Code
 
@@ -146,8 +175,8 @@ Every client starts its own Dobby. In each example, replace
 claude mcp add --scope user Dobby -- /path/to/Dobby/.venv/bin/dobby
 ```
 
-Optional: install the Dobby skills, which teach the agent to read the screen
-cheaply and verify each step:
+Skills: `dobby setup --only claude-code` links them into `~/.claude/skills`,
+or install them as a plugin instead:
 
 ```
 /plugin marketplace add /path/to/Dobby
@@ -185,6 +214,22 @@ Open the MCP settings in Antigravity (or edit
   }
 }
 ```
+
+### Codex, Cursor, Gemini CLI, Copilot, OpenCode
+
+`dobby setup` writes these; by hand the entries are:
+
+- Codex, `~/.codex/config.toml`: `[mcp_servers.Dobby]` with
+  `command = "/path/to/Dobby/.venv/bin/dobby"`
+- Cursor, `~/.cursor/mcp.json`, and Gemini CLI, `~/.gemini/settings.json`:
+  the same `mcpServers` entry as Claude Desktop above
+- GitHub Copilot CLI, `~/.copilot/mcp-config.json`: `mcpServers` entry with
+  `"type": "local"` and `"tools": ["*"]`
+- OpenCode, `~/.config/opencode/opencode.json`: under `mcp`,
+  `{"type": "local", "command": ["/path/to/Dobby/.venv/bin/dobby"]}`
+
+For skills, link `plugins/dobby/skills/*` into `~/.agents/skills/`. Inside this
+repo they are already visible to agents through `.agents/skills`.
 
 ### Any other MCP client
 
@@ -382,7 +427,7 @@ More: [docs/shared-control.md](docs/shared-control.md).
 - [docs/linux.md](docs/linux.md): Linux details, XWayland, a headless test rig
 - [docs/shared-control.md](docs/shared-control.md): the control lease in depth
 - [docs/admin-policy.md](docs/admin-policy.md): the organisation-wide policy file
-- [plugins/dobby/README.md](plugins/dobby/README.md): the agent skills
+- [plugins/dobby/README.md](plugins/dobby/README.md): the agent skills and how each AI tool finds them
 
 ## Development
 
