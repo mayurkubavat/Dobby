@@ -428,7 +428,7 @@ def topbar_view(
     working = sum(r.state in ("working", "awake") for r in rows)
     attention = any(r.state in ("confirm", "paused", "takeover", "stopped") for r in rows)
     if not running:
-        subtitle = "No Dobby is running" if not hidden else "Nothing going on"
+        subtitle = "Nothing running" if not hidden else "Nothing going on"
     else:
         bits = [f"{running} running" if running > 1 else "1 running"]
         if working:

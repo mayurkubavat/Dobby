@@ -104,7 +104,7 @@ def test_view_needs_you_and_none_running():
     v = topbar.topbar_view(_agents()[:1], {11: {"mode": "confirm"}})
     assert v.rows[0].state == "confirm" and "Allow or Deny" in v.rows[0].detail
     assert v.subtitle == "1 running · 1 needs you"
-    assert topbar.topbar_view([], {}).subtitle == "No Dobby is running"
+    assert topbar.topbar_view([], {}).subtitle == "Nothing running"
 
 
 def test_turbo_and_long_timer():

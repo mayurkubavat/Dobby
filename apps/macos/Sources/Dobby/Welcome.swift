@@ -58,7 +58,7 @@ struct WelcomeView: View {
             step(done: screen, title: "Screen Recording",
                  detail: "To take the screenshots your AI looks at. macOS may ask you to reopen Dobby.",
                  action: "Allow…") { Permissions.askScreenRecording() }
-            Toggle("Open Dobby at login", isOn: $loginItem)
+            Toggle("Open at login", isOn: $loginItem)
                 .onChange(of: loginItem) { LoginItem.set($0) }
             HStack {
                 Spacer()

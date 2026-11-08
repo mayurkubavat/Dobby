@@ -76,7 +76,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Form {
-                Toggle("Open Dobby at login", isOn: $loginItem)
+                Toggle("Open at login", isOn: $loginItem)
                     .onChange(of: loginItem) { LoginItem.set($0) }
                 Picker("Personality", selection: $settings.personality) {
                     Text("Default (subtle)").tag("")
@@ -123,9 +123,9 @@ struct SettingsView: View {
         .safeAreaInset(edge: .bottom) {
             if changed {
                 HStack {
-                    Text("Some changes apply after Dobby restarts.").font(.caption).foregroundStyle(.secondary)
+                    Text("Some changes apply after a relaunch.").font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Restart Dobby") { changed = false; restart() }
+                    Button("Relaunch Now") { changed = false; restart() }
                 }
                 .padding([.horizontal, .bottom], 20)
             }

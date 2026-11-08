@@ -331,8 +331,13 @@ Once it is installed, `dobby` opens Dobby.app instead of starting the engine
 itself. The app starts `dobby serve` as its own child, so macOS asks for
 Screen Recording and Accessibility for **Dobby** once, whichever AI client
 or terminal you use. Its menu bar icon lists each connected AI with Pause,
-Resume and Stop, and has Pause / Stop all, permission shortcuts, Open at
-Login, Show Log, Restart and Quit. Links such as `dobby://pause-all`,
+Resume and Stop, and has Pause / Resume / Stop all, Clear finished, permission
+shortcuts (only while one is missing), Settings, Troubleshoot (permissions,
+log, relaunch) and Quit. Stopped Dobbys leave the list, and sleeping ones hide
+after 15 minutes (`DOBBY_MENU_HIDE_IDLE`, in seconds). Allow/Deny questions
+show as a card with Return / Esc, and as a notification if you miss it.
+Spotlight and Shortcuts get Pause, Resume and Stop all Dobbys, and "What is
+Dobby doing" (when built with XcodeGen: `brew install xcodegen`). Links such as `dobby://pause-all`,
 `dobby://stop-all` or `dobby://stop?pid=4242` do the same from Shortcuts or a
 script. `DOBBY_APP=0` skips the app; `DOBBY_APP=/path/Dobby.app` picks one.
 Run `apps/macos/build.sh --setup-signing` once before your first build: it
