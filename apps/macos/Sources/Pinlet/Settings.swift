@@ -97,61 +97,74 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Form {
-                Toggle("Open at login", isOn: $loginItem)
-                    .onChange(of: loginItem) { LoginItem.set($0) }
-                Picker("Personality", selection: $settings.personality) {
-                    Text("Default (subtle)").tag("")
-                    Text("Off").tag("off")
-                    Text("Subtle").tag("subtle")
-                    Text("Lively").tag("lively")
+                Section {
+                    Toggle("Open at login", isOn: $loginItem)
+                        .onChange(of: loginItem) { LoginItem.set($0) }
+                    Picker("Personality", selection: $settings.personality) {
+                        Text("Default (subtle)").tag("")
+                        Text("Off").tag("off")
+                        Text("Subtle").tag("subtle")
+                        Text("Lively").tag("lively")
+                    }
+                    .onChange(of: settings.personality) { _ in changed = true }
                 }
-                .onChange(of: settings.personality) { _ in changed = true }
-                Picker("Look", selection: $settings.theme) {
-                    Text("Default (dark)").tag("")
-                    Text("Dark").tag("dark")
-                    Text("Light").tag("light")
-                    Text("Match macOS").tag("auto")
+                Section {
+                    Picker("Look", selection: $settings.theme) {
+                        Text("Default (dark)").tag("")
+                        Text("Dark").tag("dark")
+                        Text("Light").tag("light")
+                        Text("Match macOS").tag("auto")
+                    }
+                    .onChange(of: settings.theme) { _ in changed = true }
+                    Picker("Bar glass", selection: $settings.glass) {
+                        Text("Default").tag("")
+                        Text("Always clear").tag("clear")
+                        Text("Always regular").tag("regular")
+                        Text("Frosted (no glass)").tag("0")
+                    }
+                    .onChange(of: settings.glass) { _ in changed = true }
+                    Toggle("Show the bar while Pinlet rests", isOn: $settings.restingBar)
+                        .onChange(of: settings.restingBar) { _ in changed = true }
+                } footer: {
+                    SettingsFooter("Default glass is clear at rest and regular with text. With the bar off at rest, wake Pinlet from the menu or with ⌃⌥Space.")
                 }
-                .onChange(of: settings.theme) { _ in changed = true }
-                Picker("Bar glass", selection: $settings.glass) {
-                    Text("Default (clear at rest, regular with text)").tag("")
-                    Text("Always clear").tag("clear")
-                    Text("Always regular").tag("regular")
-                    Text("Frosted (no glass)").tag("0")
-                }
-                .onChange(of: settings.glass) { _ in changed = true }
-                Toggle("Show the bar while Pinlet rests", isOn: $settings.restingBar)
-                    .onChange(of: settings.restingBar) { _ in changed = true }
-                Text("Off: the bar only appears while Pinlet works, asks or is paused. Wake a resting Pinlet from the menu or with ⌃⌥Space.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
+            .modifier(SettingsForm())
             .tabItem { Label("General", systemImage: "gearshape") }
 
             Form {
-                Toggle("Ask Allow / Deny on a Pinlet card", isOn: $settings.appPrompts)
-                    .onChange(of: settings.appPrompts) { _ in changed = true }
-                Text("Off: Pinlet's own bar asks instead.").font(.caption).foregroundStyle(.secondary)
-                Toggle("Notify when a Pinlet is done", isOn: $notifyDone)
-                    .onChange(of: notifyDone) { Notifier.notifyWhenDone = $0 }
+                Section {
+                    Toggle("Ask Allow / Deny on a card", isOn: $settings.appPrompts)
+                        .onChange(of: settings.appPrompts) { _ in changed = true }
+                } footer: {
+                    SettingsFooter("Off: the bar asks instead.")
+                }
+                Section {
+                    Toggle("Notify when a task is done", isOn: $notifyDone)
+                        .onChange(of: notifyDone) { Notifier.notifyWhenDone = $0 }
+                }
             }
+            .modifier(SettingsForm())
             .tabItem { Label("Notifications", systemImage: "bell.badge") }
 
             Form {
-                Picker("Hide sleeping Pinlets after", selection: $settings.hideIdleMinutes) {
-                    Text("Default (15 minutes)").tag(-1)
-                    Text("5 minutes").tag(5)
-                    Text("15 minutes").tag(15)
-                    Text("1 hour").tag(60)
-                    Text("Never").tag(0)
+                Section {
+                    Picker("Hide sleeping rows after", selection: $settings.hideIdleMinutes) {
+                        Text("15 minutes (default)").tag(-1)
+                        Text("5 minutes").tag(5)
+                        Text("15 minutes").tag(15)
+                        Text("1 hour").tag(60)
+                        Text("Never").tag(0)
+                    }
+                    .onChange(of: settings.hideIdleMinutes) { _ in changed = true }
+                } footer: {
+                    SettingsFooter("Stopped rows always leave the menu. A row comes back when that Pinlet works again.")
                 }
-                .onChange(of: settings.hideIdleMinutes) { _ in changed = true }
-                Text("Stopped Pinlets always leave the list. Any Pinlet comes back when it works again.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
+            .modifier(SettingsForm())
             .tabItem { Label("Menu", systemImage: "list.bullet") }
         }
-        .padding(20)
-        .frame(width: 460)
+        .frame(width: 500)
         .safeAreaInset(edge: .bottom) {
             if changed {
                 HStack {
@@ -162,5 +175,29 @@ struct SettingsView: View {
                 .padding([.horizontal, .bottom], 20)
             }
         }
+    }
+}
+
+/// One look for every tab: grouped rows (macOS 13+) at a fixed height, so no
+/// tab jumps or squeezes its text.
+private struct SettingsForm: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .formStyle(.grouped)
+            .frame(minHeight: 300, alignment: .top)
+    }
+}
+
+/// A section's explanation: secondary, wrapping onto as many lines as it needs.
+private struct SettingsFooter: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

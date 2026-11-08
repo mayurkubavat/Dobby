@@ -58,6 +58,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private func rebuild() {
         menu.removeAllItems()
         menu.addItem(header())
+        if let note = engineNote, StatusMenu.isProblem(note) {
+            let details = item("Show Details…", #selector(openLog))
+            details.image = NSImage(systemSymbolName: "doc.text.magnifyingglass", accessibilityDescription: nil)
+            details.toolTip = note
+            menu.addItem(details)
+        }
         menu.addItem(.separator())
         if view.rows.isEmpty && engineNote == nil && view.hidden == 0 {
             let empty = NSMenuItem(title: "Connect an AI app such as Claude or Cursor to start", action: nil, keyEquivalent: "")
@@ -109,11 +115,34 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         }.joined(separator: " ")
     }
 
+    /// A menu-width version of an engine message: paths become their last
+    /// part ("/Users/me/…/.venv/bin/python" → "python"), one line, at most
+    /// 60 characters. The full message is the header's tooltip and in the log.
+    static func shortNote(_ note: String) -> String {
+        let firstLine = note.split(whereSeparator: \.isNewline).first.map(String.init) ?? note
+        let words = firstLine.split(separator: " ", omittingEmptySubsequences: false).map { word -> String in
+            guard word.contains("/") else { return String(word) }
+            let trail = word.hasSuffix(":") ? ":" : ""
+            let bare = word.hasSuffix(":") ? word.dropLast() : word[...]
+            let last = (String(bare) as NSString).lastPathComponent
+            return (last.isEmpty ? String(bare) : last) + trail
+        }
+        let short = words.joined(separator: " ")
+        return short.count <= 60 ? short : String(short.prefix(59)) + "…"
+    }
+
+    /// An engine message that is a failure (not "Starting…" or "Connecting…").
+    static func isProblem(_ note: String) -> Bool {
+        let lower = note.lowercased()
+        return lower.contains("could not") || lower.contains("stopped (exit") || lower.contains("error")
+            || lower.contains("not found") || lower.contains("failed")
+    }
+
     private func header() -> NSMenuItem {
         let text = NSMutableAttributedString(
             string: view.header,
             attributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)])
-        let sub = engineNote ?? view.subtitle
+        let sub = engineNote.map(StatusMenu.shortNote) ?? view.subtitle
         if !sub.isEmpty {
             text.append(NSAttributedString(
                 string: "\n" + sub,
@@ -123,6 +152,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let item = NSMenuItem(title: view.header, action: nil, keyEquivalent: "")
         item.attributedTitle = text
         item.isEnabled = false
+        item.toolTip = engineNote  // the whole message, paths and all
         return item
     }
 

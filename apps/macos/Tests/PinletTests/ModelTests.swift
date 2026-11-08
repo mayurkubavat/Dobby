@@ -94,3 +94,13 @@ import Testing
     #expect(view.rows[1].firstName == "Tibble")
     #expect(ActivityRowView.symbol(view.rows[2].actions[0]) == "sun.max.fill")
 }
+
+@Test func menuShortensLongEngineMessages() {
+    let note = "Could not start /Users/mkubavat/Silicon/active/pinlet/.venv/bin/python: The file “python” doesn’t exist."
+    let short = StatusMenu.shortNote(note)
+    #expect(short.hasPrefix("Could not start python: The file"))
+    #expect(short.count <= 60)
+    #expect(StatusMenu.isProblem(note))
+    #expect(!StatusMenu.isProblem("Starting… (the first start loads the models)"))
+    #expect(StatusMenu.shortNote("Connecting…") == "Connecting…")
+}
