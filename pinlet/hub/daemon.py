@@ -273,6 +273,21 @@ def _take_lock() -> Any | None:
     return fh
 
 
+async def _quit_when_app_gone(hub: Hub, parent: int, interval: float = 2.0) -> None:
+    """Quits once Pinlet.app, which started us, is gone.
+
+    Without this an app-owned Pinlet outlived a quit or crashed app and kept
+    running an old engine that a rebuilt or updated app could not replace.
+    """
+    from pinlet.parentwatch import parent_gone
+
+    if parent <= 1:
+        return
+    while not parent_gone(parent):
+        await anyio.sleep(interval)
+    hub.quit("Pinlet.app went away")
+
+
 async def _quit_on_signal(hub: Hub) -> None:
     """Quits the shared Pinlet on SIGTERM or SIGINT the same way the app's Quit does.
 
@@ -337,6 +352,8 @@ def serve() -> int:
             hub.task_group = tg
             tg.start_soon(hub.idle_watch, tg)
             tg.start_soon(_quit_on_signal, hub)
+            if os.environ.get("PINLET_APP_OWNED") == "1":
+                tg.start_soon(_quit_when_app_gone, hub, os.getppid())
             await listener.serve(hub.handle, task_group=tg)
 
     try:

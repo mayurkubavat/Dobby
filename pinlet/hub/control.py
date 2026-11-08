@@ -36,6 +36,7 @@ and the Linux tray draw the same thing.
 from __future__ import annotations
 
 import os
+import sys
 import time
 from collections.abc import Callable
 from typing import Any
@@ -77,7 +78,13 @@ def agents() -> list[dict[str, Any]]:
 
 def status() -> dict[str, Any]:
     """Server pid, open sessions and every agent, for the menu."""
-    return {"server_pid": os.getpid(), "sessions": sessions.snapshot(), "agents": agents()}
+    return {
+        "server_pid": os.getpid(),
+        "python": sys.executable,
+        "app_owned": os.environ.get("PINLET_APP_OWNED") == "1",
+        "sessions": sessions.snapshot(),
+        "agents": agents(),
+    }
 
 
 def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> dict[str, Any]:

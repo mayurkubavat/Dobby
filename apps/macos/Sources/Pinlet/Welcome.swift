@@ -77,9 +77,7 @@ struct WelcomeView: View {
                  detail: "To take the screenshots your AI looks at. macOS may ask you to reopen Pinlet.",
                  action: "Allow…") { Permissions.askScreenRecording() }
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: tools.found.contains(where: \.connected) ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(tools.found.contains(where: \.connected) ? Color.green : Color.secondary)
+                Image(systemName: toolsIcon).font(.system(size: 20)).foregroundStyle(toolsColor)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Connect your AI tools").font(.headline)
                     if installed {
@@ -107,6 +105,17 @@ struct WelcomeView: View {
             if now && !installed { tools.refresh() }
             installed = now
         }
+    }
+
+    private var toolsReady: Bool {
+        !tools.found.isEmpty && tools.found.allSatisfy { $0.connected && !$0.needsRepair }
+    }
+    private var toolsIcon: String {
+        tools.found.contains(where: \.needsRepair) ? "exclamationmark.triangle.fill"
+            : (toolsReady ? "checkmark.circle.fill" : "circle")
+    }
+    private var toolsColor: Color {
+        tools.found.contains(where: \.needsRepair) ? .orange : (toolsReady ? .green : .secondary)
     }
 
     private func step(done: Bool, title: String, detail: String, action: String,

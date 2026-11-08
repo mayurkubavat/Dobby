@@ -138,12 +138,21 @@ struct AIToolsList: View {
                     }
                 }
             }
-            if compact && model.found.contains(where: { !$0.connected }) {
+            if compact && model.found.contains(where: { !$0.connected || $0.needsRepair }) {
                 HStack {
+                    if model.found.contains(where: \.needsRepair) {
+                        Text("Some tools still start Pinlet from an old place.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Spacer()
                     if model.busy { ProgressView().controlSize(.small) }
-                    Button("Connect") { model.connect(Array(chosen)) }
-                        .disabled(model.busy || chosen.isEmpty)
+                    if model.found.contains(where: \.needsRepair) {
+                        Button("Update Them") { model.repair() }.disabled(model.busy)
+                    }
+                    if model.found.contains(where: { !$0.connected }) {
+                        Button("Connect") { model.connect(Array(chosen)) }
+                            .disabled(model.busy || chosen.isEmpty)
+                    }
                 }
             }
             if let message = model.message {

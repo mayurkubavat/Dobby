@@ -41,7 +41,7 @@ final class Engine {
 
     private func launch() {
         guard !quitting, process == nil else { return }
-        if ControlClient.isListening(path: socketPath) {
+        if ControlClient.isListening(path: socketPath) && !replaceLeftoverEngine() {
             state = .external
             return
         }
@@ -73,6 +73,24 @@ final class Engine {
         } catch {
             state = .crashed("Could not start \(config.python): \(error.localizedDescription)")
         }
+    }
+
+    /// A shared Pinlet an earlier Pinlet.app started (one that outlived it, or an old
+    /// engine after an update) is asked to quit, so this app runs the current engine.
+    /// One an AI client or terminal started itself (`app_owned: false`) is left alone.
+    private func replaceLeftoverEngine() -> Bool {
+        let client = ControlClient(path: socketPath)
+        defer { client.close() }
+        guard let status = client.request("status"), (status["ok"] as? Bool) != false else { return false }
+        if (status["app_owned"] as? Bool) == false { return false }  // older engines lack the key
+        NSLog("Pinlet: replacing the leftover engine (pid \(status["server_pid"] ?? "?"))")
+        _ = client.request("quit")
+        client.close()
+        for _ in 0..<100 {  // up to 10 s for it to let go of the socket
+            if !ControlClient.isListening(path: socketPath) { return true }
+            usleep(100_000)
+        }
+        return false
     }
 
     private func exited(_ proc: Process) {

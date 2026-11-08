@@ -110,9 +110,9 @@ struct EngineConfig: Equatable {
         return EngineConfig(data: data)
     }
 
-    /// The engine to start, never a Python that is gone: `PINLET_PYTHON`, then the
-    /// connector's app.json while its Python still exists, then Pinlet's own runtime.
-    /// nil means Pinlet is not installed yet.
+    /// The engine to start, never a Python that is gone: `PINLET_PYTHON` (working on
+    /// Pinlet from a checkout), then Pinlet's own runtime, then, before that is installed,
+    /// the connector's app.json while its Python still exists. nil means not installed.
     static func resolve(env: [String: String] = ProcessInfo.processInfo.environment,
                         appConfig: URL = EngineConfig.path,
                         runtimePython: URL = RuntimePaths.python()) -> EngineConfig? {
@@ -121,15 +121,15 @@ struct EngineConfig: Equatable {
             let path = (custom as NSString).expandingTildeInPath
             if fm.isExecutableFile(atPath: path) { return EngineConfig(python: path, cwd: nil, env: [:]) }
         }
+        if fm.isExecutableFile(atPath: runtimePython.path) {
+            return EngineConfig(python: runtimePython.path, cwd: nil, env: load(from: appConfig)?.env ?? [:])
+        }
         if var cfg = load(from: appConfig), fm.isExecutableFile(atPath: cfg.python) {
             var isDir: ObjCBool = false
             if let cwd = cfg.cwd, !(fm.fileExists(atPath: cwd, isDirectory: &isDir) && isDir.boolValue) {
                 cfg.cwd = nil
             }
             return cfg
-        }
-        if fm.isExecutableFile(atPath: runtimePython.path) {
-            return EngineConfig(python: runtimePython.path, cwd: nil, env: [:])
         }
         return nil
     }

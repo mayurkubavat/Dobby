@@ -116,11 +116,14 @@ import Testing
     // Pinlet's own runtime takes over when the checkout's venv is gone.
     let managed = URL(fileURLWithPath: "/bin/sh")
     #expect(EngineConfig.resolve(env: [:], appConfig: app, runtimePython: managed)?.python == "/bin/sh")
-    // A live app.json wins, and a cwd that is gone is dropped.
+    // Once installed, the own runtime wins over a live checkout venv in app.json.
+    try Data(#"{"python": "/bin/ls", "cwd": "/gone"}"#.utf8).write(to: app)
+    #expect(EngineConfig.resolve(env: [:], appConfig: app, runtimePython: managed)?.python == "/bin/sh")
+    // Before that, a live app.json is used, and a cwd that is gone is dropped.
     try Data(#"{"python": "/bin/sh", "cwd": "/gone"}"#.utf8).write(to: app)
     let cfg = try #require(EngineConfig.resolve(env: [:], appConfig: app, runtimePython: missing))
     #expect(cfg.python == "/bin/sh" && cfg.cwd == nil)
-    #expect(EngineConfig.resolve(env: ["PINLET_PYTHON": "/bin/ls"], appConfig: app, runtimePython: missing)?.python == "/bin/ls")
+    #expect(EngineConfig.resolve(env: ["PINLET_PYTHON": "/bin/ls"], appConfig: app, runtimePython: managed)?.python == "/bin/ls")
 }
 
 @Test func installerProgressLines() {
