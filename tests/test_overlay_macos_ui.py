@@ -667,6 +667,14 @@ def test_modern_sleeping_bar_is_compact_and_grows_on_hover(make):
 
 def test_modern_bar_has_glass(make):
     c, _ = _modern(make)
+    # Liquid Glass on macOS 26 and later, the frosted NSVisualEffectView before that.
+    glass = c.pill.glass if c.pill.glass is not None else c.pill.backdrop
+    assert glass is not None and glass.superview() is c.pill.view
+
+
+def test_modern_bar_without_liquid_glass_is_frosted(make):
+    c, _ = _modern(make, liquid_glass="off")
+    assert c.pill.glass is None
     assert c.pill.backdrop is not None and c.pill.backdrop.superview() is c.pill.view
 
 
