@@ -7,8 +7,14 @@ Wire format on the socket: one hello line each way, then MCP JSON-RPC
 messages exactly as on stdio (one JSON object per line)::
 
     connector -> {"pinlet_hello": 1, "pid": 4242, "parent_pid": 4100, "mode": "turbo",
-                  "name": "Antigravity", "cwd": "/Users/me/proj"}
-    server    -> {"pinlet_ready": 1, "server_pid": 3900, "session": 7}
+                  "name": "Antigravity", "cwd": "/Users/me/proj",
+                  "agent_key": "9f2c...", "first_name": "Pip"}
+    server    -> {"pinlet_ready": 1, "server_pid": 3900, "session": 7, "first_name": "Pip"}
+
+``agent_key`` is made once per connector process, so it is the same on every
+reconnect; ``first_name`` is the name the last Pinlet gave this client (only
+sent on a reconnect). Together they keep the client's name and lease place
+across a restart of the shared Pinlet.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -237,15 +244,22 @@ def handshake(
     argv: Sequence[str],
     timeout_s: float = CONNECT_TIMEOUT_S,
     name: str | None = None,
+    agent_key: str | None = None,
+    first_name: str | None = None,
 ) -> dict[str, object]:
     """Sends this client's hello and returns the shared Pinlet's reply.
 
     ``name`` (the client's MCP ``clientInfo.name``) beats the parent process
-    name, unless ``PINLET_AGENT_NAME`` is set.
+    name, unless ``PINLET_AGENT_NAME`` is set. ``agent_key`` and
+    ``first_name`` identify a reconnecting client (see the module docstring).
     """
     greeting = hello(argv)
     if name and not os.environ.get("PINLET_AGENT_NAME"):
         greeting["name"] = name
+    if agent_key:
+        greeting["agent_key"] = agent_key
+    if first_name:
+        greeting["first_name"] = first_name
     sock.sendall((json.dumps(greeting) + "\n").encode())
     line = _read_line(sock, timeout_s)
     reply = json.loads(line.decode() or "{}")
@@ -361,6 +375,8 @@ class Bridge:
         self.reconnects = 0
         self._client_name: str | None = None
         self._first: bytes | None = None
+        self.agent_key = uuid.uuid4().hex  # same for every Pinlet this client talks to
+        self.first_name: str | None = None  # what the last Pinlet called this client
 
     def _client_gone(self) -> bool:
         with self._cond:
@@ -477,7 +493,16 @@ class Bridge:
     def _attach(self, sock: socket.socket) -> bool:
         """Hello, then the client's initialize again when this is a reconnect."""
         try:
-            handshake(sock, self.argv, name=self._client_name)
+            reply = handshake(
+                sock,
+                self.argv,
+                name=self._client_name,
+                agent_key=self.agent_key,
+                first_name=self.first_name,
+            )
+            got = reply.get("first_name")
+            if isinstance(got, str) and got:
+                self.first_name = got
             down = sock.makefile("rb")
             if self._init is not None:
                 replay_id = f"pinlet-reconnect-{self.reconnects}"

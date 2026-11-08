@@ -121,7 +121,10 @@ def session_controller(ctl: Controller | None) -> Iterator[None]:
 
 
 def new_session_controller(
-    name: str, pid: int | None = None, first_name: str | None = None
+    name: str,
+    pid: int | None = None,
+    first_name: str | None = None,
+    agent_id: str | None = None,
 ) -> Controller | None:
     """A controller for one client of the shared Pinlet, or None when control is off."""
     if not control_enabled():
@@ -137,6 +140,7 @@ def new_session_controller(
         priority=priority,
         settings=settings_from_env(),
         pid=pid,
+        agent_id=agent_id,
     )
     ctl.first_name = first  # type: ignore[attr-defined]
     ctl.name_locked = False  # type: ignore[attr-defined]
@@ -148,8 +152,12 @@ def new_session_controller(
 _HAL_FOR_SESSIONS: Any = None
 
 
-def pick_first_name(pid: int) -> str:
-    """An elf name no running Pinlet uses yet (see :mod:`pinlet.control.names`)."""
+def pick_first_name(pid: int, prefer: str | None = None) -> str:
+    """An elf name no running Pinlet uses yet (see :mod:`pinlet.control.names`).
+
+    ``prefer`` (the name a reconnecting client had before) wins when nobody
+    else took it meanwhile, so "Tibble" stays Tibble across a Pinlet restart.
+    """
     try:
         from . import registry
 
@@ -165,6 +173,9 @@ def pick_first_name(pid: int) -> str:
         taken += [str(s.get("first_name") or "") for s in sessions.snapshot()]
     except Exception:  # noqa: BLE001
         pass
+    prefer = (prefer or "").strip()[:40]
+    if prefer and prefer not in taken and names.is_pool_name(prefer):
+        return prefer
     return names.pick(taken, pid)
 
 

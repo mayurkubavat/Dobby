@@ -64,14 +64,20 @@ class Controller:
         sleep: Callable[[float], None] = time.sleep,
         alive: Callable[[int], bool] = pid_alive,
         register: bool = True,
+        agent_id: str | None = None,
     ) -> None:
         import os
 
         self.root = Path(root)
         self.settings = settings or ControlSettings()
         pid = os.getpid() if pid is None else pid
+        # ``agent_id`` is stable across shared-Pinlet restarts (the connector's
+        # agent key), so a client that reconnects keeps its place in the lease.
         self.agent = Agent(
-            id=f"{pid}-{uuid.uuid4().hex[:6]}", name=name, pid=pid, priority=priority
+            id=agent_id or f"{pid}-{uuid.uuid4().hex[:6]}",
+            name=name,
+            pid=pid,
+            priority=priority,
         )
         self.store = LeaseStore(self.root)
         self._clock = clock

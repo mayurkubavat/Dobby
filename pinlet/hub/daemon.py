@@ -128,19 +128,32 @@ class Hub:
 
             # Pick the name and reserve it before any await, so two clients
             # connecting at once never both get "Tibble".
-            first = pick_first_name(pid or 0)
-            info = sessions.open_session(display(first, name), pid, mode)
+            # A reconnecting client (this Pinlet restarted) sends the agent key
+            # and name it had: it keeps its name and its place in the lease.
+            key = sessions.clean_agent_key(hello.get("agent_key"))
+            first = pick_first_name(pid or 0, prefer=str(hello.get("first_name") or ""))
+            info = sessions.open_session(display(first, name), pid, mode, agent_key=key)
             info.first_name, info.client = first, name
+            agent_id = f"{pid or 0}-{key[:12]}" if key else None
             ctl = await anyio.to_thread.run_sync(
-                lambda: new_session_controller(name, pid, first_name=first)
+                lambda: new_session_controller(name, pid, first_name=first, agent_id=agent_id)
             )
-            log.info("client %s connected: %s (pid %s, %s)", info.id, name, pid, mode)
-            await stream.send(
-                (
-                    json.dumps({"pinlet_ready": 1, "server_pid": os.getpid(), "session": info.id})
-                    + "\n"
-                ).encode()
+            log.info(
+                "client %s connected: %s (pid %s, %s, agent %s%s)",
+                info.id,
+                name,
+                pid,
+                mode,
+                key[:12] or "-",
+                ", reconnect" if hello.get("first_name") else "",
             )
+            ready = {
+                "pinlet_ready": 1,
+                "server_pid": os.getpid(),
+                "session": info.id,
+                "first_name": first,
+            }
+            await stream.send((json.dumps(ready) + "\n").encode())
             token = sessions.CURRENT.set(info)
             try:
                 with session_mode(mode), session_controller(ctl):

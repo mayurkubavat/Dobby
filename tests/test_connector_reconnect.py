@@ -26,6 +26,8 @@ class FakePinlet:
         self.path = path
         self.answer = answer
         self.got: list[dict] = []
+        self.hellos: list[dict] = []
+        self.ready: dict = {"pinlet_ready": 1}
         self.conn: socket.socket | None = None
         self.srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.srv.bind(str(path))
@@ -37,8 +39,10 @@ class FakePinlet:
         conn, _ = self.srv.accept()
         self.conn = conn
         f = conn.makefile("rb")
-        assert json.loads(f.readline())["pinlet_hello"] == 1
-        conn.sendall(b'{"pinlet_ready": 1}\n')
+        greeting = json.loads(f.readline())
+        assert greeting["pinlet_hello"] == 1
+        self.hellos.append(greeting)
+        conn.sendall((json.dumps(self.ready) + "\n").encode())
         for line in f:
             msg = json.loads(line)
             self.got.append(msg)
@@ -226,5 +230,39 @@ def test_a_quitting_pinlet_is_waited_out_not_replaced_by_a_private_one():
         assert bridge.reconnects == 0  # a first connection, not announced as a restart
         os.close(cin_w)
         holder[0].die()
+    finally:
+        shutil.rmtree(short, ignore_errors=True)
+
+
+def test_a_reconnecting_client_keeps_its_agent_key_and_name():
+    short = Path(tempfile.mkdtemp(prefix="pbk", dir="/tmp"))
+    path = short / "p.sock"
+    try:
+        first = FakePinlet(path)
+        first.ready = {"pinlet_ready": 1, "first_name": "Pip"}
+        cin_r, cin_w = os.pipe()
+        cout_r, cout_w = os.pipe()
+        seen: list[dict] = []
+        stop = threading.Event()
+        threading.Thread(target=_lines, args=(cout_r, seen, stop), daemon=True).start()
+        bridge = Bridge(
+            ["pinlet"], stdin_fd=cin_r, stdout_fd=cout_w, connect=_connect(path), reconnect_s=10
+        )
+        threading.Thread(target=bridge.run, args=(_connect(path)(),), daemon=True).start()
+        os.write(
+            cin_w,
+            b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"t"}}}\n',
+        )
+        assert _until(lambda: any(m.get("id") == 1 for m in seen))
+        assert first.hellos[0]["agent_key"] == bridge.agent_key
+        assert "first_name" not in first.hellos[0]  # nothing to keep yet
+        first.die()
+        second = FakePinlet(path)
+        assert _until(lambda: len(second.hellos) == 1)
+        assert second.hellos[0]["agent_key"] == bridge.agent_key
+        assert second.hellos[0]["first_name"] == "Pip"
+        os.close(cin_w)
+        stop.set()
+        second.die()
     finally:
         shutil.rmtree(short, ignore_errors=True)

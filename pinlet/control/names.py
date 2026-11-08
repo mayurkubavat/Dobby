@@ -108,6 +108,15 @@ def pick(taken: Iterable[str], pid: int, names: list[str] | None = None) -> str:
         n += 1
 
 
+def is_pool_name(name: str, names: list[str] | None = None) -> bool:
+    """True for a name :func:`pick` could hand out ("Tibble", "Tibble 2")."""
+    names = pool() if names is None else names
+    if name in names:
+        return True
+    base, _, n = name.rpartition(" ")
+    return bool(base) and n.isdigit() and int(n) >= 2 and base in names
+
+
 def display(first: str, client: str | None) -> str:
     """Display name such as "Tibble · Claude Code", or just "Tibble" before the client says who it is."""
     client = (client or "").strip()

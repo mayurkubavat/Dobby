@@ -35,6 +35,9 @@ class SessionInfo:
     elapsed: float | None = None
     first_name: str = ""  # "Tibble": shown as "Tibble · <client>"
     client: str = ""
+    # Made by the client's connector when it starts and sent again on every
+    # reconnect, so it outlives a restart of the shared Pinlet ("" = unknown).
+    agent_key: str = ""
 
     @property
     def turbo(self) -> bool:
@@ -55,9 +58,17 @@ CURRENT: contextvars.ContextVar[SessionInfo | None] = contextvars.ContextVar(
 )
 
 
-def open_session(name: str, pid: int | None, mode: str) -> SessionInfo:
+def clean_agent_key(raw: Any) -> str:
+    """A client's agent key if it looks like one (hex, 8 to 64 characters), else ""."""
+    key = str(raw or "").strip().lower()
+    if 8 <= len(key) <= 64 and all(c in "0123456789abcdef" for c in key):
+        return key
+    return ""
+
+
+def open_session(name: str, pid: int | None, mode: str, agent_key: str = "") -> SessionInfo:
     """Registers a new client session and returns its info."""
-    info = SessionInfo(id=next(_ids), name=name, pid=pid, mode=mode)
+    info = SessionInfo(id=next(_ids), name=name, pid=pid, mode=mode, agent_key=agent_key)
     with _lock:
         _sessions[info.id] = info
     return info
