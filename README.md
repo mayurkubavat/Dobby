@@ -254,8 +254,9 @@ When Dobby acts you see it:
   with a tag saying what it is doing ("Dobby › Click 'Run Synthesis'") until
   its next action, and numbered marks where it clicked that fade out;
 - a soft **glow** around the window it is working in;
-- a **control bar** at the top of the screen: "Dobby is sleeping" when idle,
-  "Dobby is working · Click 'Send' · step 7 · 0:42" while working, with
+- a **control bar** at the top of the screen while Dobby works, asks or is
+  paused (out of sight while it rests; `DOBBY_OVERLAY_PILL=always` keeps a
+  small "Dobby is sleeping" bar): "Dobby is working · Click 'Send' · step 7 · 0:42", with
   **Pause** and **Stop**. When two or more Dobbys are busy at once it also
   shows one coloured dot per Dobby ("2 Dobbys"); click them to pause or stop one.
 
@@ -298,8 +299,15 @@ last step the agent pointer and the "thinking" glow go away.
 | Hide / show the bar | Ctrl+Opt+H | |
 
 **Keep Dobby on call.** Ask the AI to call `wait_for_wake` when it is done.
-The bar then says "click to wake"; clicking it hands control back to the AI.
-If you paused Dobby and the AI is waiting, Resume hands back too.
+The menu bar item then lists that Dobby as "Waiting for you" with **Wake**,
+which hands control back to the AI (with `DOBBY_OVERLAY_PILL=always` the bar
+says "click to wake" too). If you paused Dobby and the AI is waiting, Resume
+hands back too.
+
+**Tell Dobby what to do while it works.** Anything you type in Dobby.app's
+activity panel (or send with the `tell` control op) reaches the AI with its
+next tool result as `person_says`, and wakes a Dobby that waits in
+`wait_for_wake`.
 
 The overlay is hidden from Dobby's own screenshots, so the model never sees
 it. Settings go in the client's `env`:
@@ -307,6 +315,7 @@ it. Settings go in the client's `env`:
 | Variable | Effect |
 | --- | --- |
 | `DOBBY_OVERLAY=0` | Turn the overlay off |
+| `DOBBY_OVERLAY_PILL=always` | Keep the small "Dobby is sleeping" bar on screen while Dobby rests (default `auto`: the bar shows only while Dobby works, asks or is paused; `off`: never) |
 | `DOBBY_OVERLAY_STYLE=classic` | Use the older, larger look |
 | `DOBBY_OVERLAY_THEME=light` | The light bar and prompts instead of the default dark look; `auto` follows the desktop's light or dark mode |
 | `DOBBY_OVERLAY_GLASS=clear` | On macOS 26 and later, pin clear Liquid Glass (the default is clear while the bar sleeps and regular once it has text); `regular` pins regular; `0` keeps the older frosted bar |

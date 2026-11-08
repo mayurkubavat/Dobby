@@ -62,10 +62,11 @@ On by default when `DISPLAY` is set (`DOBBY_OVERLAY=0` turns it off). Panels
 are click-through override-redirect windows; with a compositor they are
 translucent and clicks ripple, without one they are cut to shape. The overlay
 is unmapped for every capture, so screenshots, OCR and Gemma never see it.
-The control bar sits at the top centre: "Dobby is sleeping" with Pause and
-Stop, "working" while Dobby acts, "paused", "stopped". Click the bar itself to
-wake Dobby (it shows it is ready for a task) or put it back to sleep.
-`DOBBY_OVERLAY_PILL=auto` shows it only while working, `off` hides it.
+The control bar sits at the top centre while Dobby acts ("working", with Pause
+and Stop), is paused or stopped; while Dobby rests it stays out of sight and
+the tray icon has Wake. `DOBBY_OVERLAY_PILL=always` also keeps a "Dobby is
+sleeping" bar (click it to wake Dobby or put it back to sleep), `off` hides
+the bar entirely.
 Ctrl+Alt+Esc stops Dobby, Ctrl+Alt+P pauses and resumes. GNOME and Metacity
 use Ctrl+Alt+Esc for cycle-panels, so there Stop moves to Ctrl+Alt+End; the
 Stop button's tooltip shows the key that is live. Not yet on Linux:

@@ -915,7 +915,7 @@ def test_wrap_hal_starts_overlay_early_only_for_always_bar():
         def start_async(self):
             self.started += 1
 
-    always, auto = Probe({}), Probe({"pill": "auto"})
+    always, auto = Probe({"pill": "always"}), Probe({})  # "auto" is the default
     wrap_hal(object(), always)
     wrap_hal(object(), auto)
     assert always.started == 1 and auto.started == 0

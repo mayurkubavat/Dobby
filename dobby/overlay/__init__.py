@@ -234,7 +234,7 @@ def wrap_hal(hal: Any, overlay: NullOverlay | None = None, **kwargs: Any) -> Any
         return hal
     overlay = overlay if overlay is not None else make_overlay()
     if isinstance(overlay, OverlayClient) or overlay.__class__ is not NullOverlay:
-        if isinstance(overlay, OverlayClient) and overlay.config.get("pill", "always") == "always":
+        if isinstance(overlay, OverlayClient) and overlay.config.get("pill", "auto") == "always":
             overlay.start_async()  # show the control bar as soon as Dobby runs
         from .grants import AppGrants
 

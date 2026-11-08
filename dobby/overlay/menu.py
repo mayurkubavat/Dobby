@@ -156,7 +156,9 @@ def bar_view(
     ``handoff``: that wake went to an AI waiting in ``wait_for_wake``;
     otherwise no AI was waiting and the bar says so briefly.
     ``ai_waiting``: this helper's AI waits for a wake; any helper shows it, so
-    the click reaches the AI that waits. ``other_waiting``: another helper's AI
+    the click reaches the AI that waits, except in ``bar_mode`` "auto" (the
+    default), where a resting Dobby keeps the bar out of sight and is woken
+    from the menu bar item or the activity panel instead. ``other_waiting``: another helper's AI
     waits or another Dobby shows a bar (working, paused, Allow/Deny…), so the
     bar owner hides its plain idle bar instead of drawing it under that one.
     An Allow/Deny prompt is shown separately and is never hidden.
@@ -194,7 +196,7 @@ def bar_view(
         else:
             label = "Dobby is awake · no AI is waiting — ask your AI for a task"
         return ("awake", label, "Pause", "Stop", "ok", 1.0)
-    if ai_waiting:
+    if ai_waiting and bar_mode != "auto":
         label = (
             "Dobby ⚡ Turbo · sleeping · click to wake"
             if turbo

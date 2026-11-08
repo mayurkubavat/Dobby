@@ -181,9 +181,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "linger_secs": 20.0,
     "awake_secs": 120.0,  # woken from the bar: stays awake this long without a task
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
-    # Control bar at the top: "always" (stays while Dobby runs; the user can
-    # hide it), "auto" (only while working) or "off".
-    "pill": "always",
+    # Control bar at the top: "auto" (default: only while Dobby works, asks or
+    # is paused; out of sight while it rests), "always" (also the resting bar;
+    # the user can hide it) or "off".
+    "pill": "auto",
     # False: the bar never appears in any capture (so Dobby's own screenshots
     # need not hide it and it never blinks). True: visible in recordings, but
     # it hides for a moment during each of Dobby's captures.
@@ -411,6 +412,9 @@ class _Target(NSObject):
 
     def menuAgentPauseToggle_(self, sender):
         self.owner.agent_pause_toggle(int(sender.representedObject()))
+
+    def menuAgentWake_(self, sender):
+        self.owner.agent_wake(int(sender.representedObject()))
 
     def menuAgentStop_(self, sender):
         self.owner.agent_stop(int(sender.representedObject()))
@@ -1568,7 +1572,7 @@ class OverlayController:
         self.others_checked = 0.0
         self.probe = _AXProbe()
         self.target = _Target.alloc().initWithOwner_(self)
-        mode = self.cfg.get("pill", "always")
+        mode = self.cfg.get("pill", "auto")
         if mode is True:
             mode = "always"
         self.pill_mode = mode if mode in ("always", "auto") else "off"
@@ -2819,6 +2823,15 @@ class OverlayController:
         commands, root = self._commands()
         commands.set_paused(root, pid, not commands.read(root, pid)["paused"])
 
+    def agent_wake(self, pid: int) -> None:
+        """Wakes the Dobby with ``pid`` (its AI waits in ``wait_for_wake``) from the menu."""
+        if pid == self.server_pid:
+            self.wake()
+            return
+        from dobby.control import control_root, inbox
+
+        inbox.request_wake(control_root(), pid)
+
     def agent_stop(self, pid: int) -> None:
         """Stops the agent with ``pid`` from the menu."""
         if pid == self.server_pid:
@@ -2979,9 +2992,11 @@ class OverlayController:
                 sub = NSMenu.alloc().initWithTitle_(row.title)
                 sub.setAutoenablesItems_(False)
                 for title, action in row.actions:
-                    selector = {"pause_toggle": "menuAgentPauseToggle:", "stop": "menuAgentStop:"}[
-                        action
-                    ]
+                    selector = {
+                        "pause_toggle": "menuAgentPauseToggle:",
+                        "stop": "menuAgentStop:",
+                        "wake": "menuAgentWake:",
+                    }[action]
                     self._menu_item(sub, title, selector).setRepresentedObject_(row.pid)
                 item.setSubmenu_(sub)
                 item.setEnabled_(True)

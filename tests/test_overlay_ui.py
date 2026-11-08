@@ -122,7 +122,12 @@ class TestBarAiWaiting:
     def test_any_helper_shows_its_waiting_ai(self):
         # the bar lock does not hide it: the click must reach this helper's AI
         assert view(ai_waiting=True, owner=False)[0] == "ready"
-        assert view(ai_waiting=True, bar_mode="auto")[0] == "ready"
+
+    def test_auto_bar_stays_out_of_sight_while_resting(self):
+        # The default: wake from the menu bar item or the activity panel instead.
+        assert view(ai_waiting=True, bar_mode="auto") is None
+        assert view(ai_waiting=True, bar_mode="auto", working=True)[0] == "working"
+        assert view(ai_waiting=True, bar_mode="auto", paused=True)[0] == "paused"
 
     def test_owner_steps_aside_while_another_helpers_ai_waits(self):
         assert view(other_waiting=True) is None
