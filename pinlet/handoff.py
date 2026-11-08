@@ -127,7 +127,7 @@ def classify(exc: BaseException) -> dict[str, Any] | None:
     if kind is None:
         return None
     look_again, retry_ok, advice = _ADVICE[kind]
-    return {
+    out = {
         "ok": False,
         "success": False,
         "handoff": kind,
@@ -136,3 +136,22 @@ def classify(exc: BaseException) -> dict[str, Any] | None:
         "detail": str(exc),
         "note": advice,
     }
+    if kind in ("denied", "blocked"):
+        said = _deny_reason()
+        if said:
+            out["person_said"] = said
+            out["note"] = (
+                "The person denied this step and told you why (person_said). Follow what they "
+                "said; do not do the denied step another way."
+            )
+    return out
+
+
+def _deny_reason() -> str:
+    """What the person typed on the Deny card for this thread's last question, if anything."""
+    try:
+        from pinlet.hub import prompts
+
+        return prompts.take_reason()
+    except Exception:  # noqa: BLE001
+        return ""

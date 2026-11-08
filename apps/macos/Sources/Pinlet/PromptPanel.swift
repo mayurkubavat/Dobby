@@ -9,7 +9,7 @@ import SwiftUI
 /// Pinlet's dark tint; earlier systems get the regular material. It takes the
 /// Look setting (dark by default, like the bar).
 final class PromptPanel {
-    var onAnswer: (_ promptID: Int, _ ok: Bool, _ always: Bool) -> Void = { _, _, _ in }
+    var onAnswer: (_ promptID: Int, _ ok: Bool, _ always: Bool, _ reason: String) -> Void = { _, _, _, _ in }
 
     private var panel: KeyPanel?
     private(set) var shown: Prompt?
@@ -42,11 +42,12 @@ final class PromptPanel {
                               accent: Color(nsColor: Palette.color("fill", in: palette, fallback: Palette.fill)),
                               caution: Color(nsColor: Palette.color("caution", in: palette, fallback: Palette.caution)),
                               danger: Color(nsColor: Palette.color("danger", in: palette, fallback: Palette.danger)),
-                              dark: dark) {
-            [weak self] ok, always in
+                              dark: dark,
+                              resized: { [weak self] in self?.fitToContent() }) {
+            [weak self] ok, always, reason in
             guard let self, let shown = self.shown, shown.id == prompt.id else { return }
             self.hide()
-            self.onAnswer(prompt.id, ok, always)
+            self.onAnswer(prompt.id, ok, always, reason)
         }
         let host = NSHostingView(rootView: card)
         let size = host.fittingSize
@@ -69,6 +70,18 @@ final class PromptPanel {
         }
         NSAccessibility.post(element: panel, notification: .announcementRequested,
                              userInfo: [.announcement: "Pinlet asks: \(prompt.text)", .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    }
+}
+
+extension PromptPanel {
+    /// The card grew (the reason field opened): resize the panel, keeping its top edge.
+    fileprivate func fitToContent() {
+        guard let panel, let host = panel.contentView else { return }
+        let size = host.fittingSize
+        var frame = panel.frame
+        frame.origin.y += frame.height - size.height
+        frame.size = size
+        panel.setFrame(frame, display: true, animate: false)
     }
 }
 
@@ -99,8 +112,13 @@ struct PromptCard: View {
     var caution: Color = .orange
     var danger: Color = .red
     var dark: Bool = true
-    let answer: (_ ok: Bool, _ always: Bool) -> Void
+    var resized: () -> Void = {}
+    let answer: (_ ok: Bool, _ always: Bool, _ reason: String) -> Void
     @State private var always = false
+    /// "Tell the AI why": the person's words go back to the AI with the Deny.
+    @State private var explaining = false
+    @State private var reason = ""
+    @FocusState private var reasonFocused: Bool
 
     private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
@@ -122,20 +140,37 @@ struct PromptCard: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if prompt.isAccess && !prompt.app.isEmpty {
+                if prompt.isAccess && !prompt.app.isEmpty && !explaining {
                     Toggle("Always allow in \(prompt.app)", isOn: $always)
                         .toggleStyle(.checkbox)
                         .font(.subheadline)
                 }
+                if explaining {
+                    // Return here denies with the reason; it never allows.
+                    TextField("Tell the AI why, or what to do instead", text: $reason)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($reasonFocused)
+                        .onSubmit { answer(false, false, reason) }
+                        .onAppear { reasonFocused = true }
+                }
                 HStack(spacing: 8) {
                     Countdown(deadline: deadline)
                     Spacer(minLength: 12)
-                    Button(prompt.deny) { answer(false, false) }
+                    if !explaining {
+                        Button("Deny and say why…") {
+                            explaining = true
+                            DispatchQueue.main.async { resized() }
+                        }
+                            .buttonStyle(.link)
+                            .font(.subheadline)
+                    }
+                    Button(prompt.deny) { answer(false, false, reason) }
                         .keyboardShortcut(.cancelAction)
                         .controlSize(.large)
                     // A risky step never goes through on a stray Return: it takes Cmd+Return.
-                    Button(prompt.allow) { answer(true, always) }
-                        .keyboardShortcut(prompt.isAccess ? .defaultAction : KeyboardShortcut(.return, modifiers: .command))
+                    // While the person types a reason, Return belongs to the text field.
+                    Button(prompt.allow) { answer(true, always, "") }
+                        .keyboardShortcut(prompt.isAccess && !explaining ? .defaultAction : KeyboardShortcut(.return, modifiers: .command))
                         .buttonStyle(.borderedProminent)
                         .tint(prompt.isAccess ? accent : danger)
                         .controlSize(.large)

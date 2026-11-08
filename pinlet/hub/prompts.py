@@ -4,7 +4,8 @@ When the Mac app owns the shared Pinlet (``PINLET_APP_OWNED=1``) and is
 polling the control socket, :meth:`OverlayClient.confirm` hands the question
 here instead of drawing the overlay's pill. The app reads
 :func:`pending` (sent with every ``topbar`` reply), shows the card and answers
-with the control op ``answer``. The card counts down ``secs``; a question
+with the control op ``answer``. The card's "Deny and say why" sends the person's words with the Deny; the AI
+gets them as ``person_said`` (see :mod:`pinlet.handoff`). The card counts down ``secs``; a question
 nobody answered then is "missed" and keeps waiting in the menu, with Allow and
 Deny there, for up to ``PINLET_PROMPT_HOLD`` seconds (default 300) before it is
 a Deny. For "may Pinlet use this app?" questions the answer can carry
@@ -30,6 +31,11 @@ _ids = itertools.count(1)
 _lock = threading.Lock()
 _pending: dict[int, Prompt] = {}
 _last_poll = 0.0
+MAX_REASON = 500
+# The Deny reason of the last question asked from this thread: the tool that
+# asked raises OverlayDenied right after, in the same thread, and
+# pinlet.handoff hands the reason to the AI.
+_local = threading.local()
 
 
 @dataclass
@@ -50,6 +56,7 @@ class Prompt:
     deadline: float = 0.0  # then it waits in the menu until this
     answer: bool | None = None
     always: bool = False
+    reason: str = ""  # what the person typed with a Deny ("use the test account")
     done: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def as_dict(self, now: float | None = None) -> dict[str, Any]:
@@ -141,25 +148,38 @@ def ask(
     p.deadline = p.created + total
     with _lock:
         _pending[p.id] = p
+    _local.reason = ""
     try:
         p.done.wait(total)
     finally:
         with _lock:
             _pending.pop(p.id, None)
+    if not p.answer:
+        _local.reason = p.reason
     return bool(p.answer)
 
 
-def answer(prompt_id: int, ok: bool, always: bool = False) -> bool:
+def take_reason() -> str:
+    """The person's words with this thread's last Deny, once ("" when they typed none)."""
+    reason = getattr(_local, "reason", "") or ""
+    _local.reason = ""
+    return reason
+
+
+def answer(prompt_id: int, ok: bool, always: bool = False, reason: str = "") -> bool:
     """The app's answer. False when that prompt is no longer waiting.
 
     ``always`` with Allow on an "access" question also saves the app as allowed
-    from now on (``~/.pinlet/apps.json``).
+    from now on (``~/.pinlet/apps.json``). ``reason`` with a Deny is what the
+    person typed for the AI; it reaches the AI as ``person_said``.
     """
     with _lock:
         p = _pending.get(int(prompt_id))
     if p is None or p.done.is_set():
         return False
     p.answer = bool(ok)
+    if not ok:
+        p.reason = " ".join(str(reason or "").split())[:MAX_REASON]
     p.always = bool(always and ok and p.kind == "access" and p.app)
     if p.always:
         try:

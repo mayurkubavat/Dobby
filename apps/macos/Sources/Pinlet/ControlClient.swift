@@ -129,8 +129,8 @@ final class ControlClient {
 
     /// The card's (or a notification's) answer. False when the question is gone.
     @discardableResult
-    func answer(_ promptID: Int, ok: Bool, always: Bool = false) -> Bool {
-        request("answer", ["prompt_id": promptID, "ok": ok, "always": always])?["answered"] as? Bool == true
+    func answer(_ promptID: Int, ok: Bool, always: Bool = false, reason: String = "") -> Bool {
+        request("answer", ["prompt_id": promptID, "ok": ok, "always": always, "reason": reason])?["answered"] as? Bool == true
     }
 
     /// Sends the person's instruction to the Pinlet with `pid` (control op "tell").

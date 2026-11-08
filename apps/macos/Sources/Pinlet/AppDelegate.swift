@@ -29,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: ActivityPanel.showRequest, object: nil, queue: .main) {
             [weak self] _ in self?.activity.show()
         }
-        promptPanel.onAnswer = { [weak self] id, ok, always in self?.answer(id, ok: ok, always: always) }
+        promptPanel.onAnswer = { [weak self] id, ok, always, reason in
+            self?.answer(id, ok: ok, always: always, reason: reason)
+        }
         notifier.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
         notifier.onOpenPrompt = { [weak self] in self?.promptPanel.focus() }
         notifier.start()
@@ -141,10 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func answer(_ promptID: Int, ok: Bool, always: Bool = false) {
+    private func answer(_ promptID: Int, ok: Bool, always: Bool = false, reason: String = "") {
         if promptPanel.shown?.id == promptID { promptPanel.hide() }
         control.queue.async { [weak self] in
-            self?.control.answer(promptID, ok: ok, always: always)
+            self?.control.answer(promptID, ok: ok, always: always, reason: reason)
             DispatchQueue.main.async { self?.poll() }
         }
     }

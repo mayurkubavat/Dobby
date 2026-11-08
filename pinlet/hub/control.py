@@ -11,7 +11,8 @@ then one JSON request per line, each answered with the same ``id``::
     {"id": 2, "op": "topbar"}                    -> {"id": 2, "ok": true, "view": {..}}
     {"id": 3, "op": "action", "key": "stop", "pid": 4242}
     {"id": 4, "op": "quit"}                      -> the shared Pinlet exits
-    {"id": 5, "op": "answer", "prompt_id": 3, "ok": true}  -> an Allow/Deny card's answer
+    {"id": 5, "op": "answer", "prompt_id": 3, "ok": false, "reason": "use the test account"}
+                                                         -> an Allow/Deny card's answer
     {"id": 6, "op": "tell", "pid": 4242, "text": "use the March file"}  -> {"queued": 1, "woke": false}
 
 ``topbar`` also returns ``prompts``: the Allow/Deny questions waiting for the
@@ -247,6 +248,7 @@ def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -
                     int(request.get("prompt_id") or 0),
                     bool(request.get("ok")),
                     always=bool(request.get("always")),
+                    reason=str(request.get("reason") or ""),
                 )
             }
         elif op == "action":
