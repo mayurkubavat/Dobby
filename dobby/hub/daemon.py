@@ -188,9 +188,13 @@ class Hub:
                 self.quit()
                 return
 
-    def quit(self) -> None:
-        """Ask the shared Dobby to exit (from the app's Quit)."""
-        log.info("quit requested by the Dobby app")
+    def quit(self, reason: str = "the Dobby app") -> None:
+        """Ask the shared Dobby to exit (from the app's Quit, or a signal).
+
+        Args:
+            reason: Who asked, for the log.
+        """
+        log.info("quit requested by %s", reason)
         self.quitting = True
         if self.task_group is not None:
             self.task_group.cancel_scope.cancel()
@@ -269,6 +273,26 @@ def _take_lock() -> Any | None:
     return fh
 
 
+async def _quit_on_signal(hub: Hub) -> None:
+    """Quits the shared Dobby on SIGTERM or SIGINT the same way the app's Quit does.
+
+    The app stops us with SIGTERM. Cancelling the task group lets every session
+    close cleanly; raising KeyboardInterrupt from a signal handler instead could
+    land in the middle of the event loop's own shutdown and leave the process
+    hanging.
+    """
+    import signal
+
+    try:
+        receiver = anyio.open_signal_receiver(signal.SIGTERM, signal.SIGINT)
+        with receiver as signals:
+            async for signum in signals:
+                hub.quit(signal.Signals(signum).name)
+                return
+    except NotImplementedError:  # no signal handlers on this event loop (Windows)
+        await anyio.sleep_forever()
+
+
 def serve() -> int:
     """Runs the shared Dobby until it is told to quit or goes idle.
 
@@ -312,15 +336,9 @@ def serve() -> int:
         async with anyio.create_task_group() as tg:
             hub.task_group = tg
             tg.start_soon(hub.idle_watch, tg)
+            tg.start_soon(_quit_on_signal, hub)
             await listener.serve(hub.handle, task_group=tg)
 
-    import signal
-
-    def _on_term(_sig: int, _frame: Any) -> None:
-        raise KeyboardInterrupt  # the app quits us with SIGTERM: clean up the socket
-
-    with contextlib.suppress(ValueError):
-        signal.signal(signal.SIGTERM, _on_term)
     try:
         anyio.run(run)
     except KeyboardInterrupt:
