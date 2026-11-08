@@ -39,6 +39,9 @@ jobs:
         run: python -m compileall -q dobby
       - name: Tests
         # The suite never sends real mouse or keyboard input (DOBBY_LIVE_DESKTOP_TESTS is unset).
+        # Shared runners are slower than a developer machine: 3x the latency budgets.
+        env:
+          DOBBY_PERF_SCALE: "3"
         run: python -m pytest -q
 
   audit:
