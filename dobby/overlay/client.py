@@ -585,7 +585,9 @@ class OverlayClient(NullOverlay):
 
             if prompts.app_listening():  # Dobby.app shows it as a native card + notification
                 self.intent("Waiting for you: " + text)
-                return prompts.ask(text, secs=secs, detail=detail, allow=allow, deny=deny, kind=kind)
+                return prompts.ask(
+                    text, secs=secs, detail=detail, allow=allow, deny=deny, kind=kind
+                )
         except ImportError:
             pass
         if not self._ensure_started():

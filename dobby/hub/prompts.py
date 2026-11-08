@@ -18,54 +18,69 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 LISTEN_WINDOW_S = 3.0  # the app polls every second; three misses means it is gone
 
 _ids = itertools.count(1)
 _lock = threading.Lock()
-_pending: Dict[int, "Prompt"] = {}
+_pending: dict[int, Prompt] = {}
 _last_poll = 0.0
 
 
 @dataclass
 class Prompt:
+    """An Allow/Deny question waiting for an answer in Dobby.app."""
+
     id: int
     text: str
     detail: str = ""
     allow: str = "Allow"
     deny: str = "Deny"
-    kind: str = "danger"      # "danger" (a risky step) or "access" (may Dobby use an app?)
-    pid: Optional[int] = None  # the client whose Dobby asks, when known
-    name: str = ""             # "Tibble · Claude Code"
+    kind: str = "danger"  # "danger" (a risky step) or "access" (may Dobby use an app?)
+    pid: int | None = None  # the client whose Dobby asks, when known
+    name: str = ""  # "Tibble · Claude Code"
     created: float = field(default_factory=time.time)
     deadline: float = 0.0
-    answer: Optional[bool] = None
+    answer: bool | None = None
     done: threading.Event = field(default_factory=threading.Event, repr=False)
 
-    def as_dict(self, now: Optional[float] = None) -> Dict[str, Any]:
+    def as_dict(self, now: float | None = None) -> dict[str, Any]:
+        """The prompt as JSON for the app, with the seconds left before it times out."""
         now = time.time() if now is None else now
-        return {"id": self.id, "text": self.text, "detail": self.detail, "allow": self.allow,
-                "deny": self.deny, "kind": self.kind, "pid": self.pid, "name": self.name,
-                "secs_left": round(max(0.0, self.deadline - now), 1)}
+        return {
+            "id": self.id,
+            "text": self.text,
+            "detail": self.detail,
+            "allow": self.allow,
+            "deny": self.deny,
+            "kind": self.kind,
+            "pid": self.pid,
+            "name": self.name,
+            "secs_left": round(max(0.0, self.deadline - now), 1),
+        }
 
 
 def enabled() -> bool:
-    return os.environ.get("DOBBY_APP_OWNED") == "1" and os.environ.get("DOBBY_APP_PROMPTS", "1") != "0"
+    """True when Dobby.app owns this engine and app prompts are not turned off."""
+    return (
+        os.environ.get("DOBBY_APP_OWNED") == "1" and os.environ.get("DOBBY_APP_PROMPTS", "1") != "0"
+    )
 
 
-def note_poll(now: Optional[float] = None) -> None:
+def note_poll(now: float | None = None) -> None:
     """The app asked for the menu: it is alive and will show prompts."""
     global _last_poll
     _last_poll = time.monotonic() if now is None else now
 
 
-def app_listening(now: Optional[float] = None) -> bool:
+def app_listening(now: float | None = None) -> bool:
+    """True when the app has polled the menu recently enough to show a prompt."""
     now = time.monotonic() if now is None else now
     return enabled() and _last_poll > 0 and now - _last_poll <= LISTEN_WINDOW_S
 
 
-def _who() -> Dict[str, Any]:
+def _who() -> dict[str, Any]:
     try:
         from . import sessions
 
@@ -77,12 +92,25 @@ def _who() -> Dict[str, Any]:
     return {"pid": info.pid, "name": info.name}
 
 
-def ask(text: str, secs: float = 30.0, detail: str = "", allow: str = "Allow", deny: str = "Deny",
-        kind: str = "danger") -> bool:
+def ask(
+    text: str,
+    secs: float = 30.0,
+    detail: str = "",
+    allow: str = "Allow",
+    deny: str = "Deny",
+    kind: str = "danger",
+) -> bool:
     """Show the question in the app and wait for it. False on Deny or timeout."""
     secs = max(1.0, float(secs))
-    p = Prompt(id=next(_ids), text=text, detail=detail or "", allow=allow or "Allow",
-               deny=deny or "Deny", kind=kind or "danger", **_who())
+    p = Prompt(
+        id=next(_ids),
+        text=text,
+        detail=detail or "",
+        allow=allow or "Allow",
+        deny=deny or "Deny",
+        kind=kind or "danger",
+        **_who(),
+    )
     p.deadline = p.created + secs
     with _lock:
         _pending[p.id] = p
@@ -116,7 +144,8 @@ def deny_all() -> int:
     return len(waiting)
 
 
-def pending(now: Optional[float] = None) -> List[Dict[str, Any]]:
+def pending(now: float | None = None) -> list[dict[str, Any]]:
+    """The unanswered prompts, oldest first, as JSON for the app."""
     with _lock:
         waiting = sorted(_pending.values(), key=lambda p: p.id)
     return [p.as_dict(now) for p in waiting if not p.done.is_set()]

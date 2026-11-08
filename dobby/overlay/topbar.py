@@ -164,6 +164,7 @@ class Hiding:
 
     @classmethod
     def load(cls, path: str | None = None, idle_secs: float | None = None) -> Hiding:
+        """Reads the saved hiding state, or starts empty if there is none."""
         path = path or HIDDEN_PATH
         out = cls(idle_secs=_idle_hide_default() if idle_secs is None else idle_secs, path=path)
         try:
@@ -176,6 +177,7 @@ class Hiding:
         return out
 
     def save(self) -> None:
+        """Writes the hiding state atomically; does nothing without a path."""
         if not self.path:
             return
         try:
@@ -191,18 +193,21 @@ class Hiding:
             pass
 
     def hide(self, pids: Iterable[int], now: float | None = None) -> None:
+        """Hides the rows of ``pids`` until those Dobbys work again."""
         now = time.time() if now is None else now
         for pid in pids:
             self.pids[int(pid)] = now
         self.save()
 
     def show_all(self, now: float | None = None) -> None:
+        """Shows every row again, including ones hidden for being asleep."""
         self.pids.clear()
         self.shown_at = time.time() if now is None else now
         self.save()
 
     def prune(self, live: Iterable[int]) -> None:
-        live = set(int(p) for p in live)
+        """Forgets hidden pids that are no longer running."""
+        live = {int(p) for p in live}
         gone = [p for p in self.pids if p not in live]
         for p in gone:
             del self.pids[p]
@@ -210,6 +215,10 @@ class Hiding:
             self.save()
 
     def hidden(self, pid: int, state: str, last_active: float, now: float) -> bool:
+        """True when the row for ``pid`` should be left out of the menu.
+
+        Rows that need the person (Allow/Deny, paused, taken over) are always shown.
+        """
         if state in ("confirm", "paused", "takeover"):
             return False  # it needs the person: always on show
         at = self.pids.get(pid)

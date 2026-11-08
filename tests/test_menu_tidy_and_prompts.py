@@ -11,7 +11,10 @@ from dobby.overlay import topbar
 
 
 def _agents(*pids, started=1000.0):
-    return [{"pid": p, "name": f"D{p}", "paused": False, "waiting": False, "started": started} for p in pids]
+    return [
+        {"pid": p, "name": f"D{p}", "paused": False, "waiting": False, "started": started}
+        for p in pids
+    ]
 
 
 def test_without_hiding_every_row_shows():
@@ -26,7 +29,9 @@ def test_long_asleep_rows_hide_and_come_back_when_working():
     assert view.rows == [] and view.hidden == 2
     assert view.subtitle.endswith("2 hidden")
     assert ("Show 2 hidden", "show_hidden") in view.all_actions
-    view = topbar.topbar_view(_agents(1, 2), {1: {"mode": "working"}}, hiding=hiding, now=1000 + 800)
+    view = topbar.topbar_view(
+        _agents(1, 2), {1: {"mode": "working"}}, hiding=hiding, now=1000 + 800
+    )
     assert [r.pid for r in view.rows] == [1] and view.hidden == 1
 
 
@@ -55,7 +60,9 @@ def test_a_stopped_shared_session_stays_hidden_while_working_lingers():
     assert topbar.topbar_view(_agents(7), lingering, hiding=hiding, now=now + 2).rows == []
     # A new tool call after Stop: back in the list.
     fresh = {7: {"mode": "working", "last_call": now + 5}}
-    assert [r.pid for r in topbar.topbar_view(_agents(7), fresh, hiding=hiding, now=now + 6).rows] == [7]
+    assert [
+        r.pid for r in topbar.topbar_view(_agents(7), fresh, hiding=hiding, now=now + 6).rows
+    ] == [7]
 
 
 def test_hiding_is_saved_and_pruned(tmp_path):
@@ -127,19 +134,26 @@ def test_the_app_answers_through_the_control_socket(app_owned, monkeypatch):
     reply = control.handle({"id": 1, "op": "topbar"})
     assert prompts.app_listening()
     (p,) = reply["prompts"]
-    assert p["text"] == "Allow Dobby to press Send?" and p["detail"] == "In Mail" and p["pid"] == 4242
+    assert (
+        p["text"] == "Allow Dobby to press Send?" and p["detail"] == "In Mail" and p["pid"] == 4242
+    )
     assert p["name"] == "Tibble · Claude Code" and 0 < p["secs_left"] <= 5
     assert reply["view"]["rows"][0]["state"] == "confirm"
-    assert control.handle({"id": 2, "op": "action", "key": "allow", "prompt_id": p["id"]})["answered"]
+    assert control.handle({"id": 2, "op": "action", "key": "allow", "prompt_id": p["id"]})[
+        "answered"
+    ]
     t.join(2)
     assert out["ok"] is True and prompts.pending() == []
     # A second answer to the same prompt does nothing.
-    assert control.handle({"id": 3, "op": "answer", "prompt_id": p["id"], "ok": False})["answered"] is False
+    assert (
+        control.handle({"id": 3, "op": "answer", "prompt_id": p["id"], "ok": False})["answered"]
+        is False
+    )
 
 
 def test_timeout_and_stop_all_deny(app_owned, monkeypatch):
     assert prompts.ask("Delete?", secs=1.0) is False  # nobody answered
-    monkeypatch.setattr(control, "agents", lambda: [])
+    monkeypatch.setattr(control, "agents", list)
     t, out = _ask_in_thread(text="Pay?", secs=5)
     control.handle({"id": 1, "op": "action", "key": "stop_all"})
     t.join(2)
