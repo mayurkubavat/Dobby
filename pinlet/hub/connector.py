@@ -322,7 +322,8 @@ def pump(sock: socket.socket, stdin_fd: int = 0, stdout_fd: int = 1) -> None:
 
 RESTARTED = (
     "Pinlet restarted while this call ran (the Pinlet app was updated, relaunched or quit), "
-    "so it may or may not have acted. Look at the screen again, then call the tool again."
+    "so it may or may not have acted. Look at the screen to see whether it happened before "
+    "you call the tool again."
 )
 UNREACHABLE = (
     "Pinlet is not running and did not come back in time. Open Pinlet.app (or run "

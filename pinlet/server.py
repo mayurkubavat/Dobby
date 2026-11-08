@@ -262,10 +262,29 @@ class PinletServer(MCPServer):
         from pinlet.hub import sessions as _sessions
 
         _sessions.note_call(name)
+        receipt = _receipt_for(name, arguments)
+        if receipt is not None and receipt.get("blocked") is not None:
+            import json as _json
+
+            from mcp.types import CallToolResult, TextContent
+
+            from pinlet.hub import receipts as _receipts
+
+            tool_log.info("%s%s not repeated after a restart", _session_tag(), name)
+            # An error result: clients check structured content against the
+            # tool's output schema only on success.
+            blocked = _receipts.blocked_result(receipt["blocked"])
+            return CallToolResult(
+                content=[TextContent(type="text", text=_json.dumps(blocked))], is_error=True
+            )
+        if receipt is not None:
+            _receipt_mark(receipt, None)
         started = time.monotonic()
         try:
             result = await self._call_in_scope(name, arguments, context)
         except BaseException as exc:
+            if receipt is not None:
+                _receipt_mark(receipt, False)
             tool_log.error(
                 "%s%s failed after %.2fs: %s: %s",
                 _session_tag(),
@@ -276,6 +295,8 @@ class PinletServer(MCPServer):
             )
             raise
         is_error = bool(getattr(result, "is_error", getattr(result, "isError", False)))
+        if receipt is not None:
+            _receipt_mark(receipt, not is_error)
         tool_log.log(
             logging.ERROR if is_error else logging.INFO,
             "%s%s %s %.2fs",
@@ -294,6 +315,42 @@ class PinletServer(MCPServer):
         # stays busy until the tool returns, so another agent never cuts in between.
         with ctl.tool_scope():
             return await super().call_tool(name, arguments, context)
+
+
+def _receipt_for(name: str, arguments: Any) -> dict[str, Any] | None:
+    """Receipt bookkeeping for one acting call of a shared-Pinlet client (see ``pinlet.hub.receipts``).
+
+    Returns None when no receipt applies; ``{"blocked": rec}`` when the call
+    repeats one an earlier Pinlet was running when it restarted.
+    """
+    try:
+        from pinlet.control import control_root
+        from pinlet.hub import receipts as _receipts
+        from pinlet.hub import sessions as _sessions
+
+        info = _sessions.CURRENT.get()
+        if info is None or not info.agent_key or name not in _receipts.GUARDED:
+            return None
+        root = control_root()
+        fp = _receipts.fingerprint(name, arguments if isinstance(arguments, dict) else {})
+        found = _receipts.check(root, info.agent_key, name, fp)
+        return {"root": root, "key": info.agent_key, "tool": name, "fp": fp, "blocked": found}
+    except Exception:  # noqa: BLE001 - receipts must never break a tool
+        return None
+
+
+def _receipt_mark(receipt: dict[str, Any], ok: bool | None) -> None:
+    """``ok`` None: the call starts; True/False: it ended."""
+    try:
+        from pinlet.hub import receipts as _receipts
+
+        args = (receipt["root"], receipt["key"], receipt["tool"], receipt["fp"])
+        if ok is None:
+            _receipts.started(*args)
+        else:
+            _receipts.finished(*args, ok=ok)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _image_as_content(result: Any) -> Any:
