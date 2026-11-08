@@ -2,7 +2,7 @@
 
 # Pinlet MCP tools
 
-59 tools. Only `core` is on by default; enable others with `manage_toolsets(action="enable", domains=[...])`.
+63 tools. Only `core` is on by default; enable others with `manage_toolsets(action="enable", domains=[...])`.
 
 ## core
 
@@ -25,6 +25,10 @@
 | `list_agents` | none | Lists the AI agents using this computer's Pinlet: name, pid, who holds control, who waits. |
 | `send_to_agent` | `to`, `text` | Sends a short message to another AI agent using Pinlet (by name like "Pip", or pid). |
 | `hand_control_to` | `to`, `note=''` | Gives the desktop to a named agent next, with a note on where things stand. |
+| `post_task` | `title`, `detail=''`, `for_agent=''` | Posts a task on the board every AI agent using Pinlet shares. |
+| `list_tasks` | `status=''` | The shared task board: open, claimed, done and failed tasks, oldest first. |
+| `claim_task` | `task_id` | Takes an open task from the shared board so other agents leave it to you. |
+| `finish_task` | `task_id`, `result=''`, `failure=''` | Closes a task you claimed, and tells the agent that posted it. |
 | `release_control` | none | Gives up desktop control so a waiting agent can start at once. |
 | `hold_control` | `seconds=30.0` | Keeps control for up to `seconds` (capped) even while idle or past the slice. |
 | `wait_for_wake` | `timeout_s=600`, `reason=''` | Call when you have finished the current task and want to stay available. |

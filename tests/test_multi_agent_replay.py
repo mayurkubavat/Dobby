@@ -204,3 +204,29 @@ def test_two_agents_take_turns_and_hand_over(hub):
     assert "Tibble" in text and "Pip" in text
     assert [m["kind"] for m in feed["messages"]] == ["message", "handoff"]
     assert feed["messages"][0]["from"] == "Tibble · claude-code"
+
+
+def test_a_task_goes_from_one_agent_to_another_and_back(hub):
+    connect, sock_path, _home = hub
+    tibble = connect("claude-code")
+    pip = connect("cursor-vscode")
+    assert tibble.call("list_agents")["agents"]
+
+    posted = tibble.call("post_task", title="Rename the March files", for_agent="Pip")
+    assert posted["posted"] is True
+    task_id = posted["task"]["id"]
+
+    # Pip hears about it with its next call, claims it and finishes it.
+    news = pip.call("list_tasks")
+    assert news["agent_messages"][0]["kind"] == "task"
+    assert news["tasks"][0]["status"] == "open"
+    assert tibble.call("claim_task", task_id=task_id)["claimed"] is False  # it is Pip's
+    assert pip.call("claim_task", task_id=task_id)["claimed"] is True
+    board = _control(sock_path, "tasks")["tasks"]
+    assert board[0]["line"].endswith("Pip is on it")
+    assert pip.call("finish_task", task_id=task_id, result="12 files renamed")["finished"] is True
+
+    # Tibble hears how it went.
+    back = tibble.call("list_tasks", status="done")
+    assert back["tasks"][0]["result"] == "12 files renamed"
+    assert "12 files renamed" in back["agent_messages"][0]["text"]

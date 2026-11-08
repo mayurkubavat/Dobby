@@ -41,6 +41,9 @@ The first public release will be 0.1.0. It contains:
 - Pinlet.app notifies when an AI finishes and waits in `wait_for_wake`
   ("Tibble is waiting for you", with the reason it gave), and when three tool
   calls in a row fail ("Tibble is having trouble"; Settings can turn it off).
+- A shared task board for agents: `post_task`, `list_tasks`, `claim_task` and
+  `finish_task` (with failure codes), `pinlet tasks`, and a Tasks section in
+  the activity panel. The poster hears when a task is finished.
 
 ### Changed
 

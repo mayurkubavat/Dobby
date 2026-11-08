@@ -12,6 +12,7 @@
     pinlet policy       check an admin policy file before deploying it, or show the one in force
                         (pinlet policy check policy.json, pinlet policy show)
     pinlet activity     what the agents did lately, from the activity journal (--raw, -n N)
+    pinlet tasks        the agents' shared task board (--all, --json)
     pinlet triage       write a debugging report and start your AI tool on it
                         (--agent claude|codex|gemini|cursor, --print)
 
@@ -58,6 +59,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         from pinlet.journal import main as activity
 
         sys.exit(activity(argv[argv.index("activity") + 1 :]))
+    if command == "tasks":
+        from pinlet.control.tasks import main as tasks
+
+        sys.exit(tasks(argv[argv.index("tasks") + 1 :]))
     if command == "triage":
         from pinlet.triage import main as triage
 

@@ -68,6 +68,22 @@ after 10 minutes paused.
 `control_status`, `request_control(max_wait_s)`, `release_control`,
 `hold_control(seconds)` (capped at 120 s). All are in the core profile.
 
+## Working together
+
+- `list_agents` shows who is connected. `send_to_agent(to, text)` sends a note
+  that arrives with that agent's next tool call (or wakes it from
+  `wait_for_wake`), marked as coming from an AI. `hand_control_to(to, note)`
+  releases control and keeps it for that agent for 30 s.
+- The shared task board: `post_task(title, detail, for_agent)`, `list_tasks`,
+  `claim_task(id)` and `finish_task(id, result, failure)`. Failure codes are
+  `needs_person`, `blocked`, `not_found` and `error`; `gave_up` puts the task
+  back as open. The poster hears how it went with its next tool call. A task
+  whose owner's process is gone opens again. The board is
+  `~/.pinlet/control/tasks.json`; `pinlet tasks` prints it, and the activity
+  panel shows open and claimed tasks.
+- Messages and tasks come from another AI, never the person: they cannot answer
+  Allow/Deny, change a permission level or grant an app.
+
 ## Configuration (per client, in its MCP server `env`)
 
 | Variable | Default | Meaning |

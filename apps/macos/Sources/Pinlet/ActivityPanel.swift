@@ -198,6 +198,8 @@ final class ActivityModel: ObservableObject {
 
     /// The activity journal and agent-to-agent messages, newest first.
     @Published private(set) var feed: [FeedItem] = []
+    /// Open and claimed tasks on the agents' shared board, one line each.
+    @Published private(set) var tasks: [String] = []
 
     func absorbFeed(_ reply: [String: Any]) {
         var items: [FeedItem] = []
@@ -219,6 +221,8 @@ final class ActivityModel: ObservableObject {
         items.sort { ($0.time ?? .distantPast) > ($1.time ?? .distantPast) }
         let kept = Array(items.prefix(ActivityModel.feedLimit))
         if kept != feed { feed = kept }
+        let board = (reply["tasks"] as? [[String: Any]] ?? []).compactMap { $0["line"] as? String }
+        if board != tasks { tasks = board }
     }
 
     private static let isoFull: ISO8601DateFormatter = {
@@ -319,6 +323,7 @@ struct ActivityView: View {
                     recentSteps(lines)
                 }
             }
+            if !model.tasks.isEmpty { taskList }
             if !model.feed.isEmpty { feedList }
             if !model.view.rows.isEmpty {
                 field
@@ -370,6 +375,28 @@ struct ActivityView: View {
             }
         }
         .padding(.horizontal, 4)
+    }
+
+    private var taskList: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Tasks").font(.caption).foregroundStyle(.secondary)
+            ForEach(Array(model.tasks.prefix(4).enumerated()), id: \.offset) { item in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: item.element.hasSuffix("is on it") ? "circle.lefthalf.filled" : "circle")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
+                        .accessibilityHidden(true)
+                    Text(item.element).font(.caption).lineLimit(1)
+                }
+            }
+            if model.tasks.count > 4 {
+                Text("and \(model.tasks.count - 4) more (pinlet tasks)").font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Tasks: " + model.tasks.joined(separator: "; "))
     }
 
     private var feedList: some View {

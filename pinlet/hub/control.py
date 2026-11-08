@@ -18,7 +18,9 @@ then one JSON request per line, each answered with the same ``id``::
 ``activity`` returns ``lines``: the activity journal grouped into sentences
 ("Tibble · Cursor clicked 4 times in Safari"), oldest first (see :mod:`pinlet.journal`),
 and ``messages``: the last messages agents sent each other (``from``, ``to``, ``text``,
-``kind``, ``t``; see :mod:`pinlet.control.peers`).
+``kind``, ``t``; see :mod:`pinlet.control.peers`), and ``tasks``: the open and claimed
+tasks on the shared board, each with a one-line ``line`` (see :mod:`pinlet.control.tasks`).
+``tasks`` returns the board alone (``"all": true`` adds finished tasks).
 
 ``topbar`` also returns ``prompts``: the Allow/Deny questions waiting for the
 app's card (see :mod:`pinlet.hub.prompts`).
@@ -70,6 +72,16 @@ def _root():
     from pinlet.control import control_root
 
     return control_root()
+
+
+def _board(include_finished: bool = False) -> list[dict[str, Any]]:
+    """The shared task board for the app: open and claimed tasks (all with ``include_finished``)."""
+    from pinlet.control import tasks
+
+    rows = tasks.board(_root())
+    if not include_finished:
+        rows = [t for t in rows if t["status"] in (tasks.OPEN, tasks.CLAIMED)]
+    return [{**t, "line": tasks.line(t)} for t in rows]
 
 
 def agents() -> list[dict[str, Any]]:
@@ -255,7 +267,10 @@ def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -
             body = {
                 "lines": journal.summarize(journal.read(max(1, min(limit, 2000)))),
                 "messages": peers.recent_messages(_root(), 10),
+                "tasks": _board(),
             }
+        elif op == "tasks":
+            body = {"tasks": _board(include_finished=bool(request.get("all")))}
         elif op == "answer":
             from . import prompts
 
