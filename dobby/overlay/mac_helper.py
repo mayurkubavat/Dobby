@@ -1016,7 +1016,7 @@ _BAR_RADIUS = 12.0
 _GLASS_STYLES = {"clear": 1, "regular": 0}  # NSGlassEffectViewStyle
 
 
-def _liquid_glass(cfg: Dict[str, Any], height: float):
+def _liquid_glass(cfg: dict[str, Any], height: float):
     """A clear (or regular) NSGlassEffectView (macOS 26+ Liquid Glass), or None where unavailable or off."""
     choice = str(cfg.get("liquid_glass", "clear")).lower()
     if choice in ("off", "false", "0", "no"):
@@ -1176,7 +1176,9 @@ class _Pill:
         if self.glass is not None:
             # A faint palette tint on the glass keeps Dobby's colour without hiding the lensing.
             try:
-                self.glass.setTintColor_(_ns_color(bg, _GLASS_TINT_DARK if dark else _GLASS_TINT_LIGHT))
+                self.glass.setTintColor_(
+                    _ns_color(bg, _GLASS_TINT_DARK if dark else _GLASS_TINT_LIGHT)
+                )
             except Exception:  # noqa: BLE001
                 pass
             if self.tint is not None:
@@ -1328,7 +1330,9 @@ class _Pill:
             x += 14.0
         self.dot.setBackgroundColor_(_cg(rgb, spec.dot_alpha))
         if self.glass is None:  # Liquid Glass draws its own edge
-            self.view.layer().setBorderColor_(_cg(rgb, 0.55 if (self.modern and spec.compact) else 0.7))
+            self.view.layer().setBorderColor_(
+                _cg(rgb, 0.55 if (self.modern and spec.compact) else 0.7)
+            )
         lh = self.label.frame().size.height
         self.label.setFrameOrigin_((x, (H - lh) / 2))
         x += self.label.frame().size.width

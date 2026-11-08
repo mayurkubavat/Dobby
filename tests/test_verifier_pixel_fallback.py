@@ -34,11 +34,17 @@ class AskedGemma:
 
     def evaluate_step(self, action, args, expected, ax_diff):
         self.asked = True
-        return {"verified": False, "confidence": 0.0, "reason": "image does not show any mouse click action"}
+        return {
+            "verified": False,
+            "confidence": 0.0,
+            "reason": "image does not show any mouse click action",
+        }
 
 
 def _controller(hal, gemma=None):
-    return BicameralStepController(hal=hal, local_gemma_client=gemma, settle_timeout_s=0.05, settle_poll_s=0.01)
+    return BicameralStepController(
+        hal=hal, local_gemma_client=gemma, settle_timeout_s=0.05, settle_poll_s=0.01
+    )
 
 
 def test_visible_change_passes_at_tier0_without_asking_gemma():
@@ -66,6 +72,8 @@ def test_no_change_says_so_instead_of_a_vague_model_answer():
 def test_a_visual_question_still_goes_to_the_local_model():
     gemma = AskedGemma()
     _controller(NoAXHAL(changes=False), gemma).execute_step(
-        "mouse_click", {"x": 10, "y": 10}, {"expect_ax_change": True, "visual_question": "Is the preview open?"}
+        "mouse_click",
+        {"x": 10, "y": 10},
+        {"expect_ax_change": True, "visual_question": "Is the preview open?"},
     )
     assert gemma.asked is True

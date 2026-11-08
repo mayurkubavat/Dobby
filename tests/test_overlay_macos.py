@@ -28,7 +28,9 @@ def test_liquid_glass_capsule_where_the_os_has_it():
     try:
         objc.lookUpClass("NSGlassEffectView")
     except objc.nosuchclass_error:
-        assert mac_helper._liquid_glass({"liquid_glass": "auto"}, 34.0) is None  # older macOS: frosted bar
+        assert (
+            mac_helper._liquid_glass({"liquid_glass": "auto"}, 34.0) is None
+        )  # older macOS: frosted bar
         return
     glass = mac_helper._liquid_glass({"liquid_glass": "clear"}, 34.0)
     assert glass is not None
