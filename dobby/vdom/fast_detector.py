@@ -480,6 +480,26 @@ def build_default_ui_detector_model(
     return output_path
 
 
+# SHA-256 of dobby/models/ui_detector_fast.onnx as shipped. A changed file at
+# that path is refused, so a tampered model never runs inside Dobby.
+BUNDLED_MODEL_SHA256 = "94f69599e33b083378991aeb430050edc4e0dae5e2164a6367edfa328eddf7f5"
+BUNDLED_MODEL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "ui_detector_fast.onnx"))
+
+
+def bundled_model_ok(path: str) -> bool:
+    """False only when ``path`` is the bundled model file and its bytes changed."""
+    if os.path.abspath(path) != BUNDLED_MODEL_PATH:
+        return True  # a model the person chose on purpose
+    import hashlib
+
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.hexdigest() == BUNDLED_MODEL_SHA256
+
+
 class FastONNXUIDetector:
     """
     Sub-20ms neural UI bounding box detector using ONNX Runtime with CPU AVX-512 acceleration.
@@ -522,6 +542,12 @@ class FastONNXUIDetector:
         """Initializes ONNX Runtime session, generating default model if missing."""
         try:
             import onnxruntime as ort
+
+            if os.path.exists(self.model_path) and not bundled_model_ok(self.model_path):
+                logger.error(f"Refusing to load '{self.model_path}': it does not match the model shipped with "
+                             "Dobby (SHA-256 differs). Reinstall Dobby to restore it.")
+                self._session = None
+                return
 
             # Auto-generate default model if not present
             if not os.path.exists(self.model_path):

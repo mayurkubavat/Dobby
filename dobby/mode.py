@@ -11,6 +11,9 @@
 Pick secure with ``dobby --secure`` or ``DOBBY_MODE=secure`` (``DOBBY_SECURE=1``
 works too) in the MCP client's config. The mode is fixed for the life of the
 server so an AI cannot switch it off mid-task.
+
+An admin policy with ``"mode": "secure"`` (see ``dobby.policy``) makes every
+client secure; ``--turbo`` and ``DOBBY_MODE=turbo`` are then ignored.
 """
 
 from __future__ import annotations
@@ -41,6 +44,10 @@ def session_mode(mode: Optional[str]) -> Iterator[None]:
 
 
 def security_mode(env: Optional[Mapping[str, str]] = None, argv: Optional[Sequence[str]] = None) -> str:
+    from dobby.policy import current as _admin_policy
+
+    if _admin_policy().forces_secure:
+        return SECURE
     if env is None and argv is None:
         current = _SESSION_MODE.get()
         if current is not None:

@@ -269,6 +269,7 @@ it. Settings go in the client's `env`:
 | `DOBBY_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |
 | `DOBBY_APP_GRANTS=off` | Secure mode without the per-app question |
 | `DOBBY_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |
+| `DOBBY_ALLOW_SHELL=1` | Let the AI run shell commands (`run_terminal_command`). Off by default |
 | `DOBBY_INPUT_LOCK=window` | Keep your clicks out of the window Dobby works in; buttons are then pressed through accessibility so your pointer stays put (macOS and Linux). `DOBBY_BACKGROUND_CLICKS=0` uses the real mouse instead |
 | `DOBBY_OVERLAY_COLOR=#7c5cff` | Fix the colour (otherwise each Dobby gets its own) |
 | `DOBBY_OVERLAY_CAPTURE_VISIBLE=0` | Hide the overlay from your screen recordings too |
@@ -282,6 +283,14 @@ plain, and a new line shows at most every 20 seconds.
 
 On Linux the trail of recent clicks, the scan sweep and take-over detection
 are not drawn yet.
+
+### For organisations: admin policy
+
+An administrator can lock Dobby down for everyone on a computer with one
+file that people cannot override: `/Library/Application Support/Dobby/policy.json`
+(macOS) or `/etc/dobby/policy.json` (Linux). It can force secure mode, turn
+tools off, allow only listed shell commands, and set what Dobby may do in each
+app. Details and an example: [docs/admin-policy.md](docs/admin-policy.md).
 
 ---
 
@@ -366,6 +375,7 @@ More: [docs/shared-control.md](docs/shared-control.md).
 - [docs/architecture.md](docs/architecture.md): how the pieces fit
 - [docs/linux.md](docs/linux.md): Linux details, XWayland, a headless test rig
 - [docs/shared-control.md](docs/shared-control.md): the control lease in depth
+- [docs/admin-policy.md](docs/admin-policy.md): the organisation-wide policy file
 - [plugins/dobby/README.md](plugins/dobby/README.md): the agent skills
 
 ## Development

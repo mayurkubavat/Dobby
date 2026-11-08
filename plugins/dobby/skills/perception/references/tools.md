@@ -47,7 +47,7 @@
 | `move_cursor` | `x`, `y` | Moves the mouse pointer to absolute coordinates (x, y) without clicking. |
 | `drag_and_drop` | `start_x`, `start_y`, `end_x`, `end_y`, `duration_sec=0.3`, `verify_delta=True` | Smoothly drags mouse pointer from start coordinates to end coordinates. |
 | `scroll_until_visible` | `query`, `direction='down'`, `max_scrolls=6`, `scroll_amount=6`, `verify_delta=True` | Autonomous scroll loop: Iteratively scrolls the viewport until the query element is found. |
-| `run_terminal_command` | `command`, `timeout_seconds=CONFIG.command_timeout_seconds` | Executes a shell command in the background for hybrid CLI navigation. |
+| `run_terminal_command` | `command`, `timeout_seconds=CONFIG.command_timeout_seconds` | Runs one shell command and returns its output, for hybrid CLI navigation. |
 | `execute_trajectory` | `trajectory_spec` | Local Macro & Trajectory Dispatcher: Executes a structured multi-step declarative trajectory locally at native OS speeds, eliminating dozens of intermediate round-trips to multimodal LLMs. |
 | `compact_history` | `max_tokens=12000`, `keep_last_n=2` | Compacts the server-side trajectory log into the 8-part state checkpoint. |
 

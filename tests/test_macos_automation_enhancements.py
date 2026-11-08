@@ -77,7 +77,7 @@ class MockHAL:
         return (500, 400)
 
 
-def test_trajectory_is_error_flag():
+def test_trajectory_is_error_flag(shell_on):
     """Validates that trajectory execution results include the fail-fast is_error flag."""
     hal = MockHAL()
     controller = FeedbackLoopController(hal)

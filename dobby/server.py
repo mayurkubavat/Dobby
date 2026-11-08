@@ -9,7 +9,6 @@ import logging
 import os
 import sys
 import tempfile
-import subprocess
 import time
 from typing import Optional, List, Dict, Any
 
@@ -47,8 +46,19 @@ def setup_server_log(path: str = SERVER_LOG, max_bytes: int = 1_000_000, backups
         if isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", "") == os.path.abspath(path):
             return h
     try:
+        if os.path.abspath(path) == os.path.abspath(SERVER_LOG):
+            # ~/.dobby holds logs, app grants and model choices: this user only.
+            from pathlib import Path
+            from dobby.hub.paths import ensure_private_dir
+
+            ensure_private_dir(Path(SERVER_LOG).parent.parent)
+            ensure_private_dir(Path(SERVER_LOG).parent)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         handler = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8")
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
     except OSError:
         return None
     handler.setFormatter(logging.Formatter(f"%(asctime)s [{os.getpid()}] %(levelname)s %(name)s: %(message)s"))
@@ -153,7 +163,10 @@ class DobbyServer(MCPServer):
     async def list_tools(self):
         tools = await super().list_tools()
         active = {schema["name"] for schema in toolset_manager.get_active_mcp_schemas()}
-        return [tool for tool in tools if tool.name in active]
+        from dobby import policy as _policy
+
+        rules = _policy.current()
+        return [tool for tool in tools if tool.name in active and rules.tool_allowed(tool.name)]
 
     async def call_tool(self, name, arguments, context=None):
         if context is not None and getattr(context, "session", None) is not None:
@@ -161,6 +174,12 @@ class DobbyServer(MCPServer):
             import asyncio
 
             self.active_loop = asyncio.get_running_loop()
+        from dobby import policy as _policy
+
+        rules = _policy.current()
+        if not rules.tool_allowed(name):
+            tool_log.warning("%s refused by admin policy %s", name, rules.source)
+            raise ToolError(rules.tool_refusal(name))
         if not toolset_manager.is_tool_active(name):
             raise ToolError(f"Tool '{name}' is outside the active tool profile. Call manage_toolsets to enable it.")
         _adopt_client_name(context)
@@ -1365,41 +1384,14 @@ def run_terminal_command(
     timeout_seconds: int = CONFIG.command_timeout_seconds,
 ) -> Dict[str, Any]:
     """
-    Executes a shell command in the background for hybrid CLI navigation.
-    """
-    if not CONFIG.allow_terminal_commands:
-        return {"success": False, "error": "Terminal commands are disabled in configuration."}
+    Runs one shell command and returns its output, for hybrid CLI navigation.
 
-    start = time.perf_counter()
-    try:
-        proc = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-        )
-        elapsed = time.perf_counter() - start
-        return {
-            "success": proc.returncode == 0,
-            "exit_code": proc.returncode,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
-            "execution_time_sec": round(elapsed, 3),
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "exit_code": -1,
-            "error": f"Command timed out after {timeout_seconds} seconds",
-            "execution_time_sec": timeout_seconds,
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "exit_code": -1,
-            "error": str(e),
-        }
+    Off unless the person set DOBBY_ALLOW_SHELL=1 or the admin policy turns it on.
+    Under a policy allow list only listed commands run, without a shell.
+    """
+    from dobby.policy import run_command
+
+    return run_command(command, timeout=timeout_seconds)
 
 
 @mcp_server.tool()
