@@ -9,6 +9,8 @@
                         (--dry-run to preview, --list to see each tool; pinlet setup --help)
     pinlet doctor       check that Pinlet can run here and say how to fix what is missing
     pinlet mode         how much Pinlet asks, per AI client (pinlet mode cursor careful)
+    pinlet policy       check an admin policy file before deploying it, or show the one in force
+                        (pinlet policy check policy.json, pinlet policy show)
     pinlet activity     what the agents did lately, from the activity journal (--raw, -n N)
 
 Set ``PINLET_SHARED=0`` to make plain ``pinlet`` behave like ``pinlet stdio``.
@@ -46,6 +48,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         from pinlet.mode import main as mode
 
         sys.exit(mode(argv[argv.index("mode") + 1 :]))
+    if command == "policy":
+        from pinlet.policy import main as policy
+
+        sys.exit(policy(argv[argv.index("policy") + 1 :]))
     if command == "activity":
         from pinlet.journal import main as activity
 

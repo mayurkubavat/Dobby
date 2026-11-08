@@ -75,3 +75,48 @@ def test_careful_asks_before_risky_steps_but_not_per_app():
     assert secure.asks_app_access
     legacy = OverlayHAL(object(), secure=True)  # no access policy: same as secure
     assert legacy.asks_app_access
+
+
+# ----------------------------------------------------- policy check / show
+def test_unknown_policy_keys_fail_closed(tmp_path, monkeypatch):
+    _policy(tmp_path, monkeypatch, {"tool": {"deny": ["run_terminal_command"]}})
+    try:
+        p = policy.current()
+        assert p.broken and "tool" in p.broken and p.forces_secure
+        _policy(tmp_path, monkeypatch, {"tools": {"denny": ["x"]}})
+        assert "tools.denny" in policy.current().broken
+    finally:
+        monkeypatch.delenv("PINLET_POLICY_FILE")
+        policy.reset_cache()
+
+
+def test_policy_check_and_show(tmp_path, monkeypatch, capsys):
+    good = tmp_path / "good.json"
+    good.write_text(
+        json.dumps(
+            {
+                "organization": "Example Corp",
+                "support_url": "https://it.example.com",
+                "mode": "careful",
+                "tools": {"deny": ["run_terminal_command"]},
+            }
+        )
+    )
+    assert policy.main(["check", str(good)]) == 0
+    out = capsys.readouterr().out
+    assert "Managed by Example Corp" in out and "careful" in out and "fingerprint" in out
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"mode": "loud"}')
+    assert policy.main(["check", str(bad)]) == 1
+    assert "UNUSABLE" in capsys.readouterr().out
+    assert policy.main(["check", str(tmp_path / "missing.json")]) == 2
+    capsys.readouterr()
+    monkeypatch.setenv("PINLET_POLICY_FILE", str(good))
+    try:
+        assert policy.main(["show", "--json"]) == 0
+        shown = json.loads(capsys.readouterr().out)
+        assert shown["organization"] == "Example Corp" and len(shown["fingerprint"]) == 16
+    finally:
+        monkeypatch.delenv("PINLET_POLICY_FILE")
+        policy.reset_cache()
+    assert policy.main([]) == 2

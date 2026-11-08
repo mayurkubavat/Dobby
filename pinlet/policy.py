@@ -95,6 +95,9 @@ class Policy:
     shell_allow: tuple[str, ...] = ()
     apps: dict[str, str] = field(default_factory=dict)
     app_default: str | None = None
+    organization: str | None = None  # shown as "Managed by <organization>"
+    support_url: str | None = None
+    fingerprint: str | None = None  # sha256 of the file, first 16 hex digits
     broken: str | None = None  # why the file could not be used
 
     # ------------------------------------------------------------ queries
@@ -150,6 +153,9 @@ class Policy:
         return {
             "active": True,
             "file": self.source,
+            "fingerprint": self.fingerprint,
+            "organization": self.organization,
+            "support_url": self.support_url,
             "broken": self.broken,
             "mode": self.floor or "person decides",
             "tools_denied": sorted(self.tools_deny),
@@ -176,12 +182,37 @@ def _strings(value: Any) -> list[str]:
     return []
 
 
+KNOWN_KEYS = frozenset(
+    {"mode", "tools", "shell", "apps", "app_default", "organization", "support_url"}
+)
+_KNOWN_SUB = {"tools": frozenset({"deny", "allow"}), "shell": frozenset({"enabled", "allow"})}
+
+
+def _unknown_keys(data: dict[str, Any]) -> list[str]:
+    bad = sorted(str(k) for k in data if k not in KNOWN_KEYS)
+    for key, allowed in _KNOWN_SUB.items():
+        sub = data.get(key)
+        if isinstance(sub, dict):
+            bad += sorted(f"{key}.{k}" for k in sub if k not in allowed)
+        elif sub is not None:
+            bad.append(f"{key} (must be an object)")
+    return bad
+
+
 def parse(data: Any, source: str) -> Policy:
-    """Build a :class:`Policy` from the decoded JSON. Unknown keys are ignored."""
+    """Build a :class:`Policy` from the decoded JSON.
+
+    A key Pinlet does not know (a typo such as ``"tool"``) makes the policy
+    broken, so it fails closed instead of silently allowing what the admin
+    meant to lock.
+    """
     from pinlet.overlay.grants import normalize
 
     if not isinstance(data, dict):
         return Policy(source=source, broken="the file is not a JSON object")
+    unknown = _unknown_keys(data)
+    if unknown:
+        return Policy(source=source, broken=f"unknown key(s): {', '.join(unknown)}")
     mode = str(data.get("mode", "")).strip().lower() or None
     if mode not in (None, "secure", "careful", "turbo"):
         return Policy(source=source, broken=f"unknown mode {mode!r}")
@@ -207,6 +238,8 @@ def parse(data: Any, source: str) -> Policy:
         shell_allow=tuple(" ".join(p.split()) for p in _strings(shell.get("allow"))),
         apps=apps,
         app_default=None if default == "ask" else default,
+        organization=str(data["organization"]).strip()[:120] if data.get("organization") else None,
+        support_url=str(data["support_url"]).strip()[:300] if data.get("support_url") else None,
     )
 
 
@@ -222,11 +255,15 @@ def read_policy(path: Path) -> Policy:
         return Policy()
     except OSError as exc:
         return Policy(source=str(path), broken=f"cannot read it: {exc.strerror or exc}")
+    import dataclasses
+    import hashlib
+
+    fingerprint = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
     try:
         data = json.loads(text)
     except ValueError as exc:
-        return Policy(source=str(path), broken=f"not valid JSON: {exc}")
-    return parse(data, str(path))
+        return Policy(source=str(path), broken=f"not valid JSON: {exc}", fingerprint=fingerprint)
+    return dataclasses.replace(parse(data, str(path)), fingerprint=fingerprint)
 
 
 class _Loader:
@@ -400,3 +437,56 @@ def run_command(command: str, timeout: float, cwd: str | None = None) -> dict[st
         "stderr": proc.stderr,
         "execution_time_sec": round(time.perf_counter() - start, 3),
     }
+
+
+# ------------------------------------------------------------------ CLI
+def describe(p: Policy) -> list[str]:
+    """What a policy will do, in plain lines (for ``pinlet policy``)."""
+    if not p.active:
+        return ["No admin policy: each person decides."]
+    lines = [f"Policy file: {p.source} (fingerprint {p.fingerprint or '-'})"]
+    if p.broken:
+        return [
+            *lines,
+            f"UNUSABLE: {p.broken}.",
+            "Pinlet fails closed: every client is secure, every tool is blocked, apps are read-only.",
+        ]
+    if p.organization:
+        lines.append(
+            f"Managed by {p.organization}" + (f" ({p.support_url})" if p.support_url else "")
+        )
+    lines.append(f"Least asking level: {p.floor or 'the person decides'}")
+    if p.tools_deny:
+        lines.append(f"Tools turned off: {', '.join(sorted(p.tools_deny))}")
+    if p.tools_allow:
+        lines.append(f"Only these tools: {', '.join(sorted(p.tools_allow))}")
+    lines.append(f"Shell tool: {shell_summary(p)}")
+    for app, tier in sorted(p.apps.items()):
+        lines.append(f"App {app}: {tier}")
+    lines.append(f"Other apps: {p.app_default or 'ask (the person decides)'}")
+    return lines
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``pinlet policy check <file> | show [--json]``."""
+    argv = list(argv or [])
+    as_json = "--json" in argv
+    argv = [a for a in argv if a != "--json"]
+    if argv[:1] == ["check"] and len(argv) == 2:
+        p = read_policy(Path(os.path.expanduser(argv[1])))
+        if not p.active:
+            print(f"pinlet policy: {argv[1]} does not exist")
+            return 2
+    elif argv[:1] == ["show"] and len(argv) == 1:
+        reset_cache()
+        p = current()
+    else:
+        print("usage: pinlet policy check <file> | pinlet policy show  [--json]")
+        return 2
+    if as_json:
+        print(json.dumps(p.summary(), indent=2))
+    else:
+        print("\n".join(describe(p)))
+        if argv[0] == "show" and p.active:
+            print("Pinlet re-reads this file whenever it changes; no restart is needed.")
+    return 1 if p.broken else 0
