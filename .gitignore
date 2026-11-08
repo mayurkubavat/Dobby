@@ -10,3 +10,7 @@ build/
 references/
 # Skill references are part of the skills plugin
 !plugins/dobby/skills/*/references/
+
+# Local agent notes (kept out of the repo)
+AGENTS.md
+STATUS.md
