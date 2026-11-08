@@ -86,7 +86,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "linger_secs": 20.0,  # then "thinking" stops and the pointer is put away
     "awake_secs": 120.0,  # woken from the bar: stays awake this long without a task
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
-    "pill": "always",  # control bar: "always", "auto" (only while working) or "off"
+    "pill": "auto",  # control bar: "auto" (only while working), "always" or "off"
     "narrate": True,  # modern look: say what Dobby does on the bar and the tag
     "input_lock": "off",  # "window": shield Dobby's window while it works (inputlock)
     "menu_bar": True,  # tray icon in the panel listing every Dobby (topbar); bar owner only
@@ -789,7 +789,7 @@ class X11Overlay:
         self.handoff = False  # the current wake went to a waiting AI
         self.others_waiting = False  # another helper's AI waits (bar owner steps aside)
         self.others_checked = 0.0
-        self.bar_mode = str(self.cfg.get("pill", "always"))
+        self.bar_mode = str(self.cfg.get("pill", "auto"))
         self.bar_owner = BarOwner(self.cfg.get("bar_lock", BAR_LOCK))
         self.bar_owner_retry = 0.0
         self.wait_dir = waiting_dir(self.cfg.get("bar_lock", BAR_LOCK))
@@ -1259,6 +1259,13 @@ class X11Overlay:
             self._refresh_bar()
         elif topbar.menu_action(action, view=self.topbar_view(), pid=pid):
             pass  # Clear finished / Show hidden
+        elif action == "wake" and pid is not None:
+            from dobby.control import inbox
+
+            if pid == self.server_pid:
+                self.wake()
+            else:
+                inbox.request_wake(root, pid)
         elif action in ("pause_toggle", "stop"):
             if action == "stop" and pid is not None:
                 topbar.Hiding.load().hide([pid])  # stopped: out of the list

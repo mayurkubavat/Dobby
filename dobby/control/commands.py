@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from . import registry
+from . import inbox, registry
 from .lease import LeaseStore, file_lock
 
 
@@ -71,7 +71,12 @@ def clear(root: Path, pid: int) -> None:
 
 
 def overview(root: Path) -> list[dict[str, Any]]:
-    """Running Dobbys for the picker: name, pid, paused, holding, waiting."""
+    """Running Dobbys for the picker and menu.
+
+    Each has name, pid, paused, holding, waiting, started, color, and from the
+    :mod:`~dobby.control.inbox`: ``listening`` (its AI waits for a wake) and
+    ``queued`` (instructions from the person not yet handed to the AI).
+    """
     root = Path(root)
     try:
         state = LeaseStore(root).snapshot()
@@ -82,6 +87,7 @@ def overview(root: Path) -> list[dict[str, Any]]:
     out = []
     for rec in registry.list_agents(root):
         pid = int(rec.get("pid", 0))
+        box = inbox.read(root, pid)
         out.append(
             {
                 "pid": pid,
@@ -91,6 +97,8 @@ def overview(root: Path) -> list[dict[str, Any]]:
                 "waiting": pid in waiting,
                 "started": float(rec.get("started", 0) or 0),
                 "color": rec.get("color"),
+                "listening": box["listening"],
+                "queued": len(box["notes"]),
             }
         )
     out.sort(key=lambda a: (a["name"].lower(), a["pid"]))

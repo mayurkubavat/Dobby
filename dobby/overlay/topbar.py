@@ -140,7 +140,7 @@ def read_states(directory: str = STATUS_DIR, now: float | None = None) -> dict[i
 # sleeping rows. Stopped Dobbys, "Clear finished" and Dobbys asleep for a
 # while drop out of the dropdown; any of them comes back the moment it works
 # (or asks) again. "Show N hidden" brings them all back.
-_ACTIVE_STATES = ("working", "awake", "confirm", "paused", "takeover")
+_ACTIVE_STATES = ("working", "awake", "confirm", "paused", "takeover", "listening")
 _FINISHED_STATES = ("ready", "waiting", "stopped")
 _last_active: dict[int, float] = {}  # pid -> last time this process saw it busy
 
@@ -264,6 +264,7 @@ _STATES = {
     "takeover": ("You're in control", "hand", "caution"),
     "working": ("Working", "spark", "agent"),
     "awake": ("Awake · handing back to the AI", "spark", "agent"),
+    "listening": ("Waiting for you · wake it or tell it what to do", "moon", "ok"),
     "waiting": ("Waiting for its turn", "clock", "idle"),
     "ready": ("Sleeping", "moon", "idle"),
 }
@@ -283,6 +284,7 @@ class Row:
     shape: str  # icon glyph: spark, moon, pause, alert, hand, stop, clock
     own: bool  # the Dobby whose helper draws this menu
     actions: list[tuple[str, str]] = field(default_factory=list)  # (title, action key)
+    queued: int = 0  # instructions from the person the AI has not picked up yet
 
 
 @dataclass
@@ -315,7 +317,9 @@ class View:
         """Changes when the dropdown would look different (rebuild only then)."""
         return (
             self.subtitle,
-            tuple((r.pid, r.title, r.detail, r.color, r.shape) for r in self.rows),
+            tuple(
+                (r.pid, r.title, r.detail, r.color, r.shape, tuple(r.actions)) for r in self.rows
+            ),
         )
 
 
@@ -341,6 +345,8 @@ def _state_of(agent: Mapping[str, object], status: Mapping[str, object]) -> str:
         return "paused"
     if mode in ("takeover", "stopped", "working", "awake"):
         return mode
+    if agent.get("listening"):
+        return "listening"  # its AI sits in wait_for_wake
     if agent.get("waiting"):
         return "waiting"
     return "ready"
@@ -410,17 +416,24 @@ def topbar_view(
                 continue
         halted = state in ("paused", "takeover")
         actions = [("Resume" if halted else "Pause", "pause_toggle"), ("Stop", "stop")]
+        if state == "listening":
+            actions.insert(0, ("Wake", "wake"))
+        queued = int(a.get("queued") or 0)
+        detail = _detail(state, status)
+        if queued:
+            detail += f" · {_plural(queued, 'note')} waiting"
         rows.append(
             Row(
                 pid=pid,
                 name=str(a.get("name") or f"Dobby-{pid}"),
                 state=state,
                 title=_short(str(a.get("name") or f"Dobby-{pid}"), 32),
-                detail=_detail(state, status),
+                detail=detail,
                 color=color,
                 shape=shape,
                 own=pid == own_pid,
                 actions=actions,
+                queued=queued,
             )
         )
     rows.sort(key=lambda r: (_ORDER.index(r.state), r.name.lower(), r.pid))
@@ -439,7 +452,10 @@ def topbar_view(
             bits.append(f"{needs} need{'s' if needs == 1 else ''} you")
         if paused:
             bits.append(f"{paused} paused")
-        if not working and not needs and not paused:
+        listening = sum(r.state == "listening" for r in rows)
+        if listening:
+            bits.append(f"{listening} waiting for you")
+        if not working and not needs and not paused and not listening:
             bits.append("all sleeping" if running > 1 else "sleeping")
         subtitle = " · ".join(bits)
     if hidden:

@@ -74,7 +74,7 @@ final class CircleButton: NSButton {
         self.handler = handler
         super.init(frame: NSRect(x: 0, y: 0, width: 26, height: 26))
         let resume = action.label.lowercased().hasPrefix("resume")
-        let symbol = isStop ? "stop.fill" : (resume ? "play.fill" : "pause.fill")
+        let symbol = isStop ? "stop.fill" : key == "wake" ? "sun.max.fill" : (resume ? "play.fill" : "pause.fill")
         image = NSImage(systemSymbolName: symbol, accessibilityDescription: action.label)?
             .withSymbolConfiguration(.init(pointSize: 10, weight: .bold))
         imagePosition = .imageOnly

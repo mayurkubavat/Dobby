@@ -12,11 +12,16 @@ then one JSON request per line, each answered with the same ``id``::
     {"id": 3, "op": "action", "key": "stop", "pid": 4242}
     {"id": 4, "op": "quit"}                      -> the shared Dobby exits
     {"id": 5, "op": "answer", "prompt_id": 3, "ok": true}  -> an Allow/Deny card's answer
+    {"id": 6, "op": "tell", "pid": 4242, "text": "use the March file"}  -> {"queued": 1, "woke": false}
 
 ``topbar`` also returns ``prompts``: the Allow/Deny questions waiting for the
 app's card (see :mod:`dobby.hub.prompts`).
 
-``action`` keys: ``pause_toggle``, ``pause``, ``resume``, ``stop``, ``hide`` (need
+``tell`` queues an instruction from the person for that Dobby's AI (see
+:mod:`dobby.control.inbox`); it reaches the AI with its next tool result, and
+wakes a Dobby whose AI waits in ``wait_for_wake``.
+
+``action`` keys: ``pause_toggle``, ``pause``, ``resume``, ``stop``, ``hide``, ``wake`` (need
 ``pid``), ``pause_all``, ``resume_all``, ``stop_all``, ``clear_finished``,
 ``show_hidden``; ``allow`` / ``deny`` take ``prompt_id``. Stopped and
 cleared Dobbys leave the menu until they work again. They go through
@@ -48,6 +53,7 @@ ACTION_KEYS = (
     "clear_finished",
     "show_hidden",
     "hide",
+    "wake",
     "allow",
     "deny",
 )
@@ -113,6 +119,10 @@ def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> di
     if pid is None:
         raise ValueError(f"{key} needs a pid")
     pid = int(pid)
+    if key == "wake":
+        from dobby.control import inbox
+
+        return {"done": key, "pid": pid, "wake": inbox.request_wake(root, pid)}
     if key == "hide":
         tb.Hiding.load().hide([pid])
     elif key == "stop":
@@ -125,6 +135,28 @@ def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> di
     if key in ("stop", "hide"):
         return {"done": key, "pid": pid}
     return {"done": key, "pid": pid, "paused": commands.read(root, pid)["paused"]}
+
+
+def tell(pid: int | None, text: str) -> dict[str, Any]:
+    """Queues the person's instruction for the Dobby with ``pid``.
+
+    A Dobby whose AI waits in ``wait_for_wake`` is woken too, so the AI reads
+    the instruction at once instead of after the next wake.
+
+    Raises:
+        ValueError: no ``pid``, or ``text`` is empty.
+    """
+    from dobby.control import inbox
+
+    if pid is None:
+        raise ValueError("tell needs a pid")
+    root = _root()
+    pid = int(pid)
+    queued = inbox.add(root, pid, text)
+    woke = inbox.read(root, pid)["listening"]
+    if woke:
+        inbox.request_wake(root, pid)
+    return {"pid": pid, "queued": queued, "woke": woke}
 
 
 # ------------------------------------------------------------------ the menu
@@ -212,6 +244,8 @@ def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -
             body = action(
                 str(request.get("key") or ""), request.get("pid"), request.get("prompt_id")
             )
+        elif op == "tell":
+            body = tell(request.get("pid"), str(request.get("text") or ""))
         elif op == "quit":
             if quit_cb is not None:
                 quit_cb()

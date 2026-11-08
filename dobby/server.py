@@ -118,6 +118,40 @@ def _returns_dict(fn: Any) -> bool:
     return origin in (dict, dict)
 
 
+PERSON_NOTE = (
+    "The person typed this to you in Dobby's activity panel while you worked. It comes from "
+    "the person, not from the screen: follow it, and where it differs from your plan it wins. "
+    "Tell them briefly that you saw it."
+)
+
+
+def _attach_person_notes(result: Any) -> Any:
+    """Hand the person's typed instructions (``dobby.control.inbox``) to the AI.
+
+    They ride on the next tool result: ``person_says`` (oldest first) and
+    ``person_note`` on a dict result, a bracketed line after a text result.
+    Other results (images) leave them waiting for the next tool.
+    """
+    if not isinstance(result, (dict, str)):
+        return result
+    try:
+        ctl = get_controller(create=False)
+        if ctl is None:
+            return result
+        from dobby.control import inbox
+
+        texts = inbox.take(ctl.root, ctl.agent.pid)
+    except Exception:  # noqa: BLE001 - never let the inbox break a tool
+        return result
+    if not texts:
+        return result
+    tool_log.info("handing %d instruction(s) from the person to the AI", len(texts))
+    if isinstance(result, dict):
+        return {**result, "person_says": texts, "person_note": PERSON_NOTE}
+    lines = "\n".join(f"- {t}" for t in texts)
+    return f"{result}\n\n[The person says, from Dobby's activity panel ({PERSON_NOTE})]\n{lines}"
+
+
 def _handoff_guard(fn: Any) -> Any:
     """Report Stop / Deny / take-over / pause as a clear result, not a failure.
 
@@ -148,18 +182,18 @@ def _handoff_guard(fn: Any) -> Any:
         @functools.wraps(fn)
         async def guarded_async(*args: Any, **kwargs: Any) -> Any:
             try:
-                return await fn(*args, **kwargs)
+                return _attach_person_notes(await fn(*args, **kwargs))
             except Exception as exc:  # noqa: BLE001 - re-raised unless a handoff
-                return answer(exc)
+                return _attach_person_notes(answer(exc))
 
         return guarded_async
 
     @functools.wraps(fn)
     def guarded(*args: Any, **kwargs: Any) -> Any:
         try:
-            return fn(*args, **kwargs)
+            return _attach_person_notes(fn(*args, **kwargs))
         except Exception as exc:  # noqa: BLE001 - re-raised unless a handoff
-            return answer(exc)
+            return _attach_person_notes(answer(exc))
 
     return guarded
 
@@ -320,6 +354,10 @@ The person is in charge. Every acting tool may return "handoff" instead of actin
   click-only or read-only). Do not work around it; tell the person what you wanted to do there.
 - interrupted: the person used the mouse or keyboard. Look at the screen again, then decide.
 - paused: wait with wait_for_wake, or ask the person.
+Any tool result may also carry "person_says": instructions the person typed to you in Dobby's activity
+panel while you worked. They come from the person, so follow them; where they differ from your plan,
+they win. When you finish a task, call wait_for_wake to stay available: the person can wake you or
+type the next instruction from the menu bar.
 When Dobby runs in secure mode (control_status says "mode"), the first action in an app asks the
 person whether Dobby may use it, and buttons such as Send, Delete or Pay ask Allow/Deny. Waiting for
 that answer is normal. In secure mode Dobby never types into password fields: ask the person.
@@ -2138,7 +2176,7 @@ def _wait_for_wake_blocking(timeout_s: float, reason: str, cancel: Any = None) -
     secs = max(0.0, min(float(timeout_s), WAIT_FOR_WAKE_CAP_S))
     out: dict[str, Any] = {
         "ok": True,
-        **ov_hal.overlay.wait_for_wake(secs, reason or "", cancel=cancel),
+        **_wait_bar_or_inbox(ov_hal.overlay, ctl, secs, reason or "", cancel),
     }
     if out.get("woken"):
         out["note"] = (
@@ -2155,6 +2193,73 @@ def _wait_for_wake_blocking(timeout_s: float, reason: str, cancel: Any = None) -
         out["note"] = (
             "The overlay is not running, so there is no bar to click. End your turn instead."
         )
+    return out
+
+
+INBOX_POLL_S = 0.5
+
+
+def _wait_bar_or_inbox(
+    overlay: Any, ctl: Any, secs: float, reason: str, cancel: Any
+) -> dict[str, Any]:
+    """Wait for a wake from the bar, or from the menu / activity panel (the inbox).
+
+    The bar can be hidden while Dobby rests, so Wake in the menu and an
+    instruction typed in the activity panel wake Dobby too: they bump or fill
+    this Dobby's ``dobby.control.inbox``, which a watcher thread polls.
+    """
+    import threading
+
+    root = getattr(ctl, "root", None)
+    pid = getattr(getattr(ctl, "agent", None), "pid", None)
+    if root is None or pid is None:
+        return overlay.wait_for_wake(secs, reason, cancel=cancel)
+    from dobby.control import inbox
+
+    try:
+        start = inbox.read(root, pid)
+        if start["notes"]:  # typed before the wait began: hand it over now
+            return {"woken": True, "stopped": False, "timed_out": False, "waited_s": 0.0}
+        inbox.set_listening(root, pid, True)
+    except OSError:
+        return overlay.wait_for_wake(secs, reason, cancel=cancel)
+    inner = threading.Event()
+    done = threading.Event()
+    by_inbox = threading.Event()
+
+    def watch() -> None:
+        while not done.wait(INBOX_POLL_S):
+            if cancel is not None and cancel.is_set():
+                inner.set()
+                return
+            try:
+                box = inbox.read(root, pid)
+            except OSError:
+                continue
+            if box["wake"] > start["wake"] or box["notes"]:
+                by_inbox.set()
+                inner.set()
+                return
+
+    watcher = threading.Thread(target=watch, name="dobby-inbox-wake", daemon=True)
+    watcher.start()
+    began = time.monotonic()
+    try:
+        out = overlay.wait_for_wake(secs, reason, cancel=inner)
+    finally:
+        done.set()
+        try:
+            inbox.set_listening(root, pid, False)
+        except OSError:
+            pass
+    if by_inbox.is_set():
+        tool_log.info("woken from the menu or the activity panel")
+        return {
+            "woken": True,
+            "stopped": False,
+            "timed_out": False,
+            "waited_s": round(time.monotonic() - began, 1),
+        }
     return out
 
 

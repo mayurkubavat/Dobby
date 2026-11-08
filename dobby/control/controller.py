@@ -11,7 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import commands, registry
+from . import commands, inbox, registry
 from .lease import Agent, ControlSettings, LeaseStore, decide, pid_alive, prune
 
 
@@ -114,6 +114,7 @@ class Controller:
         if self._registered:
             registry.unregister(self.root, self.agent.pid)
             commands.clear(self.root, self.agent.pid)
+            inbox.clear(self.root, self.agent.pid)
             self._registered = False
 
     # --------------------------------------------------------------- lease
