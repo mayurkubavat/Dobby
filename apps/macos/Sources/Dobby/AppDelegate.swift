@@ -6,6 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menu: StatusMenu!
     private let promptPanel = PromptPanel()
     private let notifier = Notifier()
+    private let settingsWindow = SettingsWindowController()
+    private let welcome = WelcomeWindowController()
     private var timer: Timer?
     private var polling = false
 
@@ -14,11 +16,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: { [weak self] key, pid in self?.send(key, pid: pid) },
             restartEngine: { [weak self] in self?.engine.restart() },
             openLog: { NSWorkspace.shared.open(DobbyPaths.daemonLog) },
+            openSettings: { [weak self] in self?.settingsWindow.show() },
+            openWelcome: { [weak self] in self?.welcome.show() },
             quit: { [weak self] in self?.quit() }))
         promptPanel.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
         notifier.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
         notifier.onOpenPrompt = { [weak self] in self?.promptPanel.focus() }
         notifier.start()
+        settingsWindow.restartEngine = { [weak self] in self?.engine.restart() }
+        welcome.showIfNeeded()
         engine.onChange = { [weak self] _ in self?.poll() }
         engine.start()
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.poll() }

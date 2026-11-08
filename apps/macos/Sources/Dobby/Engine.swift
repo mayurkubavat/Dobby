@@ -54,7 +54,9 @@ final class Engine {
         proc.executableURL = URL(fileURLWithPath: config.python)
         proc.arguments = ["-m", "dobby", "serve"]
         if let cwd = config.cwd { proc.currentDirectoryURL = URL(fileURLWithPath: cwd) }
-        proc.environment = config.environment(base: ProcessInfo.processInfo.environment)
+        var env = config.environment(base: ProcessInfo.processInfo.environment)
+        for (k, v) in AppSettings.shared.engineEnvironment() { env[k] = v }  // the Settings window wins
+        proc.environment = env
         if let log = Engine.openLog() {
             proc.standardOutput = log
             proc.standardError = log

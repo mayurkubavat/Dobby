@@ -11,7 +11,8 @@ let package = Package(
             name: "Dobby",
             path: "Sources/Dobby",
             linkerSettings: [.linkedFramework("AppKit"), .linkedFramework("ServiceManagement"),
-                             .linkedFramework("SwiftUI"), .linkedFramework("UserNotifications")]
+                             .linkedFramework("SwiftUI"), .linkedFramework("UserNotifications"),
+                             .linkedFramework("AppIntents")]
         ),
         .testTarget(name: "DobbyTests", dependencies: ["Dobby"], path: "Tests/DobbyTests"),
     ]

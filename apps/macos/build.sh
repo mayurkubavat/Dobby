@@ -37,13 +37,31 @@ CNF
   echo "grant Screen Recording and Accessibility to Dobby once more, and they will stick."
   exit 0
 fi
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/Dobby"
 APP=build/Dobby.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Dobby"
-cp Resources/Info.plist "$APP/Contents/Info.plist"
+mkdir -p build
+# With XcodeGen and Xcode, build a real app target: only that runs the App
+# Intents metadata step (Spotlight / Shortcuts actions). DOBBY_SWIFTPM=1 forces
+# the plain SwiftPM build.
+if [[ -z "${DOBBY_SWIFTPM:-}" ]] && command -v xcodegen >/dev/null \
+   && xcodebuild -version >/dev/null 2>&1; then
+  xcodegen generate --quiet
+  xcodebuild -project Dobby.xcodeproj -scheme Dobby -configuration Release \
+    -derivedDataPath .build/xcode -quiet build
+  cp -R .build/xcode/Build/Products/Release/Dobby.app "$APP"
+  BIN="$APP/Contents/MacOS/Dobby"
+  [[ -d "$APP/Contents/Resources/Metadata.appintents" ]] \
+    && echo "App Intents registered (Spotlight, Shortcuts, Siri)" \
+    || echo "note: no Metadata.appintents in the build; App Intents will not show up"
+else
+  command -v xcodegen >/dev/null || echo "note: brew install xcodegen for App Intents (Spotlight, Shortcuts)"
+  swift build -c release
+  BIN="$(swift build -c release --show-bin-path)/Dobby"
+  mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+  cp "$BIN" "$APP/Contents/MacOS/Dobby"
+  cp Resources/Info.plist "$APP/Contents/Info.plist"
+fi
+mkdir -p "$APP/Contents/Resources"
 ICONSET="$(mktemp -d)/Dobby.iconset"
 "$BIN" --icon "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Dobby.icns"

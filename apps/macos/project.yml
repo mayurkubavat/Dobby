@@ -1,0 +1,34 @@
+# XcodeGen spec for Dobby.app. build.sh uses it when `xcodegen` is installed
+# (brew install xcodegen): an Xcode app target runs the App Intents metadata
+# step, so Spotlight, Shortcuts and Siri see Dobby's actions. Without it,
+# build.sh falls back to the SwiftPM build (no App Intents registered).
+name: Dobby
+options:
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+targets:
+  Dobby:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Dobby
+    settings:
+      base:
+        PRODUCT_NAME: Dobby
+        PRODUCT_BUNDLE_IDENTIFIER: dev.dobby.app
+        INFOPLIST_FILE: Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGNING_ALLOWED: NO   # build.sh signs with "Dobby Local Signing"
+        ENABLE_HARDENED_RUNTIME: NO
+        COMBINE_HIDPI_IMAGES: YES
+    dependencies:
+      - sdk: AppKit.framework
+      - sdk: ServiceManagement.framework
+      - sdk: SwiftUI.framework
+      - sdk: UserNotifications.framework
+      - sdk: AppIntents.framework

@@ -8,6 +8,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         var action: (_ key: String, _ pid: Int?) -> Void
         var restartEngine: () -> Void
         var openLog: () -> Void
+        var openSettings: () -> Void
+        var openWelcome: () -> Void
         var quit: () -> Void
     }
 
@@ -76,6 +78,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         login.target = self
         login.state = LoginItem.enabled ? .on : .off
         menu.addItem(login)
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+        let welcome = NSMenuItem(title: "Permissions…", action: #selector(openWelcome), keyEquivalent: "")
+        welcome.target = self
+        menu.addItem(welcome)
         let done = NSMenuItem(title: "Notify When Done", action: #selector(toggleNotifyDone), keyEquivalent: "")
         done.target = self
         done.state = Notifier.notifyWhenDone ? .on : .off
@@ -167,6 +175,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     @objc private func askScreen() { Permissions.askScreenRecording() }
     @objc private func askAccessibility() { Permissions.askAccessibility() }
     @objc private func openLog() { callbacks.openLog() }
+    @objc private func openSettings() { callbacks.openSettings() }
+    @objc private func openWelcome() { callbacks.openWelcome() }
     @objc private func restartEngine() { callbacks.restartEngine() }
     @objc private func quit() { callbacks.quit() }
 }
