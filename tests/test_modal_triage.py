@@ -3,16 +3,16 @@ Unit and integration tests for Phase 2: Semantic Modal Dialog Triage & Policy Ro
 Tests SemanticModalRouter, ObstructionInterceptor, risk classification tiers, and resolve_modal_dialog.
 """
 
-from dobby.agent_loop.obstruction import (
+from pinlet.agent_loop.obstruction import (
     ObstructionInterceptor,
     SemanticModalRouter,
 )
-from dobby.hal.base import IDesktopHAL
-from dobby.server import (
+from pinlet.hal.base import IDesktopHAL
+from pinlet.server import (
     dismiss_obstructions,
     resolve_modal_dialog,
 )
-from dobby.types import (
+from pinlet.types import (
     BoundingBox,
     ModalButtonOption,
     ModalRiskTier,

@@ -5,9 +5,9 @@ import json
 
 from mcp.types import CallToolResult, ImageContent, TextContent
 
-from dobby import server
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.types import BoundingBox, WindowInfo
+from pinlet import server
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.types import BoundingBox, WindowInfo
 
 
 def test_inlined_image_becomes_an_image_block():
@@ -100,7 +100,7 @@ def test_a_sliver_active_window_is_not_used_for_clipping(mock_hal, monkeypatch):
         title="bar",
         bbox=BoundingBox(x=14, y=900, width=1484, height=21),
         is_active=True,
-        app_name="Dobby",
+        app_name="Pinlet",
     )
     monkeypatch.setattr(mock_hal, "get_active_window", lambda: strip)
     shot = FeedbackLoopController(mock_hal).capture_state(mode="raw", clip_to_active_window=True)

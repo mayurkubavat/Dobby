@@ -1,6 +1,6 @@
-# Contributing to Dobby
+# Contributing to Pinlet
 
-Thanks for helping. Dobby drives a real mouse and keyboard, so the bar for
+Thanks for helping. Pinlet drives a real mouse and keyboard, so the bar for
 changes is "safe by default, tested without touching the desktop".
 
 ## Set up
@@ -9,8 +9,8 @@ You need Python 3.10 or newer and git. [uv](https://docs.astral.sh/uv/) is the
 fastest way; plain `pip` works too.
 
 ```bash
-git clone https://github.com/mayurkubavat/Dobby.git
-cd Dobby
+git clone https://github.com/mayurkubavat/Pinlet.git
+cd Pinlet
 python3 -m venv .venv
 source .venv/bin/activate
 uv pip install -e ".[dev,linux]"      # Linux
@@ -32,7 +32,7 @@ python scripts/build_skill_refs.py --check   # skill references are up to date
 ```
 
 The test suite never moves your mouse or types unless you set
-`DOBBY_LIVE_DESKTOP_TESTS=1`. Keep it that way: tests that need a desktop use
+`PINLET_LIVE_DESKTOP_TESTS=1`. Keep it that way: tests that need a desktop use
 the mock or replay HAL (`DESKTOP_HAL=replay`), or skip themselves when there is
 no display.
 
@@ -47,7 +47,7 @@ no display.
 - A method that implements a documented base method (a HAL, a grounding
   provider, an OCR engine) can be marked `@override` from `typing_extensions`
   instead of repeating the docstring.
-- **MCP tool docstrings** in `dobby/server.py` are the tool descriptions the
+- **MCP tool docstrings** in `pinlet/server.py` are the tool descriptions the
   model reads. Changing them changes the agent's behaviour, so treat them as
   prompts: keep them short and concrete, and say why in the pull request.
 - Use type hints on public functions. Prefer `X | None` and built-in generics
@@ -55,7 +55,7 @@ no display.
 
 ## Safety rules for new features
 
-- New actions go through the HAL (`dobby/hal/`) so the overlay, app grants,
+- New actions go through the HAL (`pinlet/hal/`) so the overlay, app grants,
   Allow/Deny prompts and the admin policy all see them.
 - Anything outward-facing or hard to undo (sending, deleting, paying, running a
   shell command) must be off by default or ask first in secure mode.
@@ -75,7 +75,7 @@ no display.
 ## Reporting bugs and security issues
 
 Open a GitHub issue for bugs and feature ideas. For anything that could let
-Dobby act without the person's consent, read data it shouldn't, or bypass the
+Pinlet act without the person's consent, read data it shouldn't, or bypass the
 admin policy, follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
 ## License

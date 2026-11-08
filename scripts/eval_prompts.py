@@ -172,10 +172,10 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="print the full report as JSON")
     args = ap.parse_args()
 
-    from dobby.config import CONFIG
-    from dobby.gemma.prompts import get_prompt
-    from dobby.perception.ocr import get_ocr_engine
-    from dobby.vdom.gemma3_sidecar import Gemma3Grounder
+    from pinlet.config import CONFIG
+    from pinlet.gemma.prompts import get_prompt
+    from pinlet.perception.ocr import get_ocr_engine
+    from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
 
     if args.prompt_dir is not None:
         CONFIG.gemma3_prompt_dir = args.prompt_dir

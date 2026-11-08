@@ -1,6 +1,6 @@
 # AMD Vivado EDA Plugin
 
-`dobby` includes a dedicated application plugin for automating AMD Xilinx Vivado (v2025.1) during FPGA logic design and SystemVerilog verification.
+`pinlet` includes a dedicated application plugin for automating AMD Xilinx Vivado (v2025.1) during FPGA logic design and SystemVerilog verification.
 
 ---
 

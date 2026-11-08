@@ -7,7 +7,7 @@ a logit-scored choice against a generated JSON answer on the same question.
     python scripts/probe_logprobs.py --model gemma3:4b --repeats 5
 
 Exit code 0 when logprobs work, 3 when this Ollama returns none (upgrade Ollama
-to use dobby.gemma.decide; it falls back to uncalibrated answers until then).
+to use pinlet.gemma.decide; it falls back to uncalibrated answers until then).
 Read-only: never touches the desktop.
 """
 
@@ -23,10 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def main() -> int:
-    from dobby.config import CONFIG
-    from dobby.gemma.client import GemmaClient
-    from dobby.gemma.decide import GemmaDecider
-    from dobby.gemma.gate import gate
+    from pinlet.config import CONFIG
+    from pinlet.gemma.client import GemmaClient
+    from pinlet.gemma.decide import GemmaDecider
+    from pinlet.gemma.gate import gate
 
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter

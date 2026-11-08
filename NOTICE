@@ -1,7 +1,7 @@
-Dobby
+Pinlet
 Copyright 2026 Mayur Kubavat
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
-Dobby uses third-party open-source packages, installed separately through pip
+Pinlet uses third-party open-source packages, installed separately through pip
 and listed in pyproject.toml, each under its own license.

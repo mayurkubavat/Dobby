@@ -7,15 +7,15 @@ import tempfile
 
 from PIL import Image, ImageDraw
 
-from dobby.agent_loop.cache import (
+from pinlet.agent_loop.cache import (
     ActionCache,
     base64_to_image,
     compute_dhash,
     hamming_distance,
     image_to_base64_thumbnail,
 )
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.types import BoundingBox, WindowInfo
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.types import BoundingBox, WindowInfo
 
 
 class MockHAL:
@@ -349,7 +349,7 @@ def test_controller_find_and_click_healed():
 
 def test_manage_cache_verify_and_heal(live_screen):
     """Validates manage_cache tool with verify, heal, and stats actions."""
-    from dobby.server import manage_cache
+    from pinlet.server import manage_cache
 
     # 1. Stats action
     stats = manage_cache(action="stats")

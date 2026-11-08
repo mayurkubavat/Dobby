@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-`dobby` exposes 37 tools across 6 functional categories.
+`pinlet` exposes 37 tools across 6 functional categories.
 
 ---
 

@@ -1,0 +1,75 @@
+import Foundation
+import Testing
+@testable import Pinlet
+
+// swift-testing ships with the Command Line Tools, so `swift test` runs without Xcode.
+
+@Test func topbarDecodesPythonJSON() throws {
+    let json = """
+    {"header": "Pinlet", "subtitle": "2 running · 1 working", "running": 2, "working": 1, "attention": false,
+     "rows": [{"pid": 42, "name": "Claude Code", "state": "working", "title": "Claude Code",
+               "detail": "Working · click", "color": "#5B3FE0", "shape": "spark", "own": false,
+               "actions": [["Pause", "pause_toggle"], ["Stop", "stop"]]}],
+     "all_actions": [["Pause all", "pause_all"]], "icon_state": "working", "icon_title": "2",
+     "tooltip": "Pinlet: 2 running", "palette": {"ok": "#22A365"}}
+    """
+    let obj = try #require(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+    let view = try #require(TopbarView(json: obj))
+    #expect(view.rows.first?.pid == 42)
+    #expect(view.rows.first?.actions.map(\.key) == ["pause_toggle", "stop"])
+    #expect(view.allActions.first?.label == "Pause all")
+    #expect(view.iconState == "working")
+    #expect(view.palette["ok"] == "#22A365")
+}
+
+@Test func engineConfig() throws {
+    let data = Data(#"{"python": "/v/bin/python", "cwd": "/src", "env": {"PINLET_MODEL": "x", "N": 1}}"#.utf8)
+    let cfg = try #require(EngineConfig(data: data))
+    let env = cfg.environment(base: ["HOME": "/u", "PINLET_IDLE_EXIT": "5"])
+    #expect(env["PINLET_MODEL"] == "x")
+    #expect(env["N"] == nil)
+    #expect(env["PINLET_IDLE_EXIT"] == "0")
+    #expect(env["PINLET_OVERLAY_MENU_BAR"] == "0")
+    #expect(env["HOME"] == "/u")
+}
+
+@Test func urlScheme() {
+    #expect(PinletURL.action(for: URL(string: "pinlet://pause-all")!)?.key == "pause_all")
+    #expect(PinletURL.action(for: URL(string: "pinlet://stop?pid=7")!)?.pid == 7)
+    #expect(PinletURL.action(for: URL(string: "pinlet://stop")!) == nil)
+    #expect(PinletURL.action(for: URL(string: "https://pause-all")!) == nil)
+}
+
+@Test func promptsDecodePythonJSON() throws {
+    let raw: [[String: Any]] = [
+        ["id": 3, "text": "Allow Pinlet to press Send?", "detail": "In Mail", "allow": "Allow", "deny": "Deny",
+         "kind": "danger", "pid": 4242, "name": "Tibble · Claude Code", "secs_left": 24.5],
+        ["id": 4, "text": "Let Pinlet use Notes?", "kind": "access", "pid": NSNull()],
+        ["text": "no id"],
+    ]
+    let prompts = Prompt.list(raw)
+    #expect(prompts.count == 2)
+    #expect(prompts[0].pid == 4242 && prompts[0].secsLeft == 24.5 && !prompts[0].isAccess)
+    #expect(prompts[1].isAccess && prompts[1].pid == nil && prompts[1].allow == "Allow" && prompts[1].secsLeft == 30)
+}
+
+@Test func menuTitlesUseTitleCase() {
+    #expect(StatusMenu.menuTitle("Show 3 hidden") == "Show 3 Hidden")
+    #expect(StatusMenu.menuTitle("Clear finished") == "Clear Finished")
+    #expect(StatusMenu.menuTitle("Pause all") == "Pause All")
+}
+
+@Test func lookDefaultsToDarkAndPassesThemeToEngine() throws {
+    #expect(AppSettings.appearanceName(for: "") == .darkAqua)
+    #expect(AppSettings.appearanceName(for: "dark") == .darkAqua)
+    #expect(AppSettings.appearanceName(for: "light") == .aqua)
+    #expect(AppSettings.appearanceName(for: "auto") == nil)
+
+    let defaults = try #require(UserDefaults(suiteName: "pinlet.tests.look"))
+    defaults.removePersistentDomain(forName: "pinlet.tests.look")
+    let settings = AppSettings(defaults: defaults)
+    #expect(settings.engineEnvironment()["PINLET_OVERLAY_THEME"] == nil)
+    defaults.set("light", forKey: "theme")
+    #expect(settings.engineEnvironment()["PINLET_OVERLAY_THEME"] == "light")
+    defaults.removePersistentDomain(forName: "pinlet.tests.look")
+}

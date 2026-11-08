@@ -11,8 +11,8 @@ pytest.importorskip("google.adk")
 from google.adk.models import BaseLlm, LlmRequest, LlmResponse
 from google.genai import types
 
-from dobby.adk.plan import ACTION_TOOLS, Plan
-from dobby.adk.runner import run_plan
+from pinlet.adk.plan import ACTION_TOOLS, Plan
+from pinlet.adk.runner import run_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -256,7 +256,7 @@ def test_plan_validation_and_domains():
 
 
 def test_action_tool_domains_match_server():
-    import dobby.server as server
+    import pinlet.server as server
 
     for tool, domain in ACTION_TOOLS.items():
         assert server._TOOL_DOMAINS[tool][0] == domain, tool
@@ -264,10 +264,10 @@ def test_action_tool_domains_match_server():
 
 def test_example_plan_on_cassette_in_process(monkeypatch):
     """The shipped example plan runs end to end on the example cassette (no Ollama, no desktop)."""
-    import dobby.server as server
-    from dobby.adk.backends import InProcessBackend
-    from dobby.agent_loop.controller import FeedbackLoopController
-    from dobby.hal.factory import get_desktop_hal, reset_desktop_hal
+    import pinlet.server as server
+    from pinlet.adk.backends import InProcessBackend
+    from pinlet.agent_loop.controller import FeedbackLoopController
+    from pinlet.hal.factory import get_desktop_hal, reset_desktop_hal
 
     reset_desktop_hal()
     session = get_desktop_hal(

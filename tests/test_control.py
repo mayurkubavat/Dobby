@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from dobby.control import (
+from pinlet.control import (
     ControlBusy,
     ControlChanged,
     ControlHAL,
@@ -21,8 +21,8 @@ from dobby.control import (
     settings_from_env,
     wrap_hal,
 )
-from dobby.control.lease import Agent, decide, empty_state
-from dobby.control.registry import AgentPidCache, list_agents
+from pinlet.control.lease import Agent, decide, empty_state
+from pinlet.control.registry import AgentPidCache, list_agents
 
 
 class Clock:
@@ -182,7 +182,7 @@ def test_own_actions_never_trigger_new_look(tmp_path):
 
 
 def test_higher_priority_waiter_goes_first(tmp_path):
-    from dobby.control.lease import LeaseStore
+    from pinlet.control.lease import LeaseStore
 
     c = Clock()
     a = make(tmp_path, c, "Claude", 1)
@@ -256,7 +256,7 @@ def test_status_lists_waiters_and_rules(tmp_path):
     c = Clock()
     a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
     act(a)
-    from dobby.control.lease import LeaseStore
+    from pinlet.control.lease import LeaseStore
 
     with LeaseStore(tmp_path).transaction() as st:
         st["waiters"]["x"] = {
@@ -307,8 +307,8 @@ def test_control_hal_wraps_actions_and_marks_observations(tmp_path):
 
 
 def test_wrap_hal_noop_without_controller(monkeypatch):
-    monkeypatch.setenv("DOBBY_CONTROL", "0")
-    from dobby import control
+    monkeypatch.setenv("PINLET_CONTROL", "0")
+    from pinlet import control
 
     control.set_controller(None)
     h = FakeHAL()
@@ -318,20 +318,24 @@ def test_wrap_hal_noop_without_controller(monkeypatch):
 def test_control_off_under_pytest_by_default():
     assert control_enabled({"PYTEST_CURRENT_TEST": "x"}) is False
     assert control_enabled({}) is True
-    assert control_enabled({"DOBBY_CONTROL": "1", "PYTEST_CURRENT_TEST": "x"}) is True
+    assert control_enabled({"PINLET_CONTROL": "1", "PYTEST_CURRENT_TEST": "x"}) is True
 
 
 def test_settings_from_env():
     s = settings_from_env(
-        {"DOBBY_CONTROL_IDLE_GRACE": "4", "DOBBY_CONTROL_SLICE": "x", "DOBBY_CONTROL_PREEMPT": "1"}
+        {
+            "PINLET_CONTROL_IDLE_GRACE": "4",
+            "PINLET_CONTROL_SLICE": "x",
+            "PINLET_CONTROL_PREEMPT": "1",
+        }
     )
     assert s.idle_grace == 4 and s.slice == 60 and s.preempt
 
 
 def test_overlay_found_through_control_hal(tmp_path):
-    from dobby.hal.session import DesktopSession
-    from dobby.overlay import NullOverlay, OverlayHAL, find_overlay_hal
-    from dobby.types import DisplayMetrics, DisplayTopology
+    from pinlet.hal.session import DesktopSession
+    from pinlet.overlay import NullOverlay, OverlayHAL, find_overlay_hal
+    from pinlet.types import DisplayMetrics, DisplayTopology
 
     class Shown(NullOverlay):
         def __init__(self):
@@ -359,10 +363,10 @@ def test_overlay_found_through_control_hal(tmp_path):
 
 
 def test_overlay_label_defaults_to_agent_name():
-    from dobby.overlay import overlay_config
+    from pinlet.overlay import overlay_config
 
-    assert overlay_config({"DOBBY_AGENT_NAME": "Agy"})["label"] == "Agy"
-    assert overlay_config({"DOBBY_AGENT_NAME": "Agy", "DOBBY_OVERLAY_LABEL": "X"})["label"] == "X"
+    assert overlay_config({"PINLET_AGENT_NAME": "Agy"})["label"] == "Agy"
+    assert overlay_config({"PINLET_AGENT_NAME": "Agy", "PINLET_OVERLAY_LABEL": "X"})["label"] == "X"
 
 
 # ---------------------------------------------------------------- registry
@@ -407,11 +411,11 @@ def test_dead_pid_not_listed(tmp_path):
 
 # ------------------------------------------------------------ server tools
 def test_server_tools_report_off_and_on(tmp_path, monkeypatch):
-    server = pytest.importorskip("dobby.server")
-    from dobby import control
+    server = pytest.importorskip("pinlet.server")
+    from pinlet import control
 
     control.set_controller(None)
-    monkeypatch.setenv("DOBBY_CONTROL", "0")
+    monkeypatch.setenv("PINLET_CONTROL", "0")
     assert server.control_status()["shared_control"] is False
     c = Clock()
     ctl = make(tmp_path, c, "Claude", os.getpid())
@@ -472,9 +476,9 @@ def test_two_processes_never_overlap(tmp_path):
     assert {"A", "B"} <= set(whos)
 
 
-# --------------------------------------------------- Dobby picker commands
+# --------------------------------------------------- Pinlet picker commands
 def test_pause_from_picker_waits_then_resumes(tmp_path):
-    from dobby.control import commands
+    from pinlet.control import commands
 
     c = Clock()
     a = make(tmp_path, c, "Claude", 1)
@@ -495,18 +499,18 @@ def test_pause_from_picker_waits_then_resumes(tmp_path):
 
 
 def test_stop_from_picker_raises_once(tmp_path):
-    from dobby.control import ControlStopped, commands
+    from pinlet.control import ControlStopped, commands
 
     c = Clock()
     a = make(tmp_path, c, "Claude", 1)
     commands.request_stop(tmp_path, 1)
-    with pytest.raises(ControlStopped, match="Dobby menu"):
+    with pytest.raises(ControlStopped, match="Pinlet menu"):
         act(a)
     act(a)  # a new task after the stop runs
 
 
-def test_paused_mid_tool_lets_other_dobby_work(tmp_path):
-    from dobby.control import commands
+def test_paused_mid_tool_lets_other_pinlet_work(tmp_path):
+    from pinlet.control import commands
 
     c = Clock()
     a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
@@ -530,13 +534,13 @@ def test_paused_mid_tool_lets_other_dobby_work(tmp_path):
 
 
 def test_overview_and_picker_groups(tmp_path):
-    from dobby.control import commands
-    from dobby.control.registry import register
-    from dobby.overlay.menu import picker_groups
+    from pinlet.control import commands
+    from pinlet.control.registry import register
+    from pinlet.overlay.menu import picker_groups
 
     me, other = os.getpid(), os.getppid()
     register(tmp_path, "a", "Claude", me)
-    assert picker_groups(commands.overview(tmp_path), me) == []  # one Dobby: no picker
+    assert picker_groups(commands.overview(tmp_path), me) == []  # one Pinlet: no picker
     register(tmp_path, "b", "Agy", other)
     commands.set_paused(tmp_path, other, True)
     c = Clock()
@@ -544,7 +548,7 @@ def test_overview_and_picker_groups(tmp_path):
     act(ctl)
     groups = picker_groups(commands.overview(tmp_path), me)
     titles = [g[0] for g in groups]
-    assert titles == ["Agy  · paused", "Claude  · this bar, in control", "All Dobbys"]
+    assert titles == ["Agy  · paused", "Claude  · this bar, in control", "All Pinlets"]
     assert groups[0][1] == other and groups[0][2][0] == ("Resume", "menuAgentPauseToggle:")
     assert groups[1][2] == [("Pause", "menuAgentPauseToggle:"), ("Stop", "menuAgentStop:")]
     assert groups[2][1] == 0

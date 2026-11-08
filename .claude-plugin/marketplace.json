@@ -1,14 +1,14 @@
 {
-  "name": "dobby",
+  "name": "pinlet",
   "owner": {
     "name": "Mayur Kubavat"
   },
-  "description": "Local marketplace for the dobby skills plugin.",
+  "description": "Local marketplace for the pinlet skills plugin.",
   "plugins": [
     {
-      "name": "dobby",
-      "source": "./plugins/dobby",
-      "description": "Skills for the dobby MCP server."
+      "name": "pinlet",
+      "source": "./plugins/pinlet",
+      "description": "Skills for the pinlet MCP server."
     }
   ]
 }

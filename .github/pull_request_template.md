@@ -9,7 +9,7 @@
 ## Checklist
 
 - [ ] `ruff check .` and `ruff format --check .` pass
-- [ ] `pytest` passes, and no test sends real input without `DOBBY_LIVE_DESKTOP_TESTS=1`
+- [ ] `pytest` passes, and no test sends real input without `PINLET_LIVE_DESKTOP_TESTS=1`
 - [ ] New public functions and classes have docstrings
 - [ ] Tool parameters or descriptions changed: ran `python scripts/build_skill_refs.py`
 - [ ] Anything that sends, deletes, pays or runs commands is off by default or asks first

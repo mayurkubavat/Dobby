@@ -1,9 +1,9 @@
 """Screenshots of every overlay look on this Mac, for reviewing UI changes.
 
-    python scripts/overlay_gallery.py --out /tmp/dobby-gallery [--style modern|classic]
+    python scripts/overlay_gallery.py --out /tmp/pinlet-gallery [--style modern|classic]
 
 Draws the overlay for each state (sleeping, hover, working, thinking, paused,
-two Dobbys, tag at the screen edge, risky step) and saves a crop of the top
+two Pinlets, tag at the screen edge, risky step) and saves a crop of the top
 bar and of the pointer/glow area for each. It only draws: it never clicks,
 types or moves the real mouse. Needs Screen Recording permission for the
 terminal that runs it (screencapture).
@@ -34,7 +34,7 @@ def main() -> int:
 
     app = AppKit.NSApplication.sharedApplication()
     app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
-    from dobby.overlay import mac_helper
+    from pinlet.overlay import mac_helper
 
     lock = os.path.join(tempfile.mkdtemp(), "bar.lock")
     c = mac_helper.OverlayController(
@@ -112,7 +112,7 @@ def main() -> int:
     shot("6-risky")
     c.handle({"op": "risk", "level": "ok"})
 
-    # Two Dobbys: this one becomes the second (teal) and the bar shows dots.
+    # Two Pinlets: this one becomes the second (teal) and the bar shows dots.
     c.server_pid = 222
     c._apply_agents(
         [
@@ -122,7 +122,7 @@ def main() -> int:
     )
     c._mark_active()
     c._refresh_pill()
-    shot("7-two-dobbys")
+    shot("7-two-pinlets")
 
     # Tag at the right edge flips to the left of the pointer.
     edge = (sw - 30, rect[1] + 40)

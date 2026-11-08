@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Dobby.app into apps/macos/build/ (ad-hoc signed).
+# Build Pinlet.app into apps/macos/build/ (ad-hoc signed).
 #   ./build.sh            release build
 #   ./build.sh --install  also copy it to ~/Applications
 #   ./build.sh --setup-signing   once: a local signing identity, so macOS
@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 if [[ "${1:-}" == "--setup-signing" ]]; then
   # A self-signed code signing certificate in your login keychain. It never
-  # leaves this Mac and is only used to sign your own Dobby.app builds.
+  # leaves this Mac and is only used to sign your own Pinlet.app builds.
   TMP="$(mktemp -d)"
   cat > "$TMP/cert.cnf" <<'CNF'
 [req]
@@ -17,7 +17,7 @@ distinguished_name = dn
 x509_extensions = ext
 prompt = no
 [dn]
-CN = Dobby Local Signing
+CN = Pinlet Local Signing
 [ext]
 basicConstraints = critical,CA:false
 keyUsage = critical,digitalSignature
@@ -25,7 +25,7 @@ extendedKeyUsage = critical,codeSigning
 CNF
   openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config "$TMP/cert.cnf" \
     -keyout "$TMP/key.pem" -out "$TMP/cert.pem" >/dev/null 2>&1
-  PASS="dobby-$RANDOM$RANDOM"
+  PASS="pinlet-$RANDOM$RANDOM"
   openssl pkcs12 -export -legacy -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -out "$TMP/id.p12" \
     -passout "pass:$PASS" >/dev/null 2>&1 \
     || openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -out "$TMP/id.p12" -passout "pass:$PASS"
@@ -33,45 +33,45 @@ CNF
   # Trust it for code signing only (macOS asks for your password once).
   security add-trusted-cert -p codeSign -k "$HOME/Library/Keychains/login.keychain-db" "$TMP/cert.pem"
   rm -rf "$TMP"
-  echo "Created the \"Dobby Local Signing\" identity. Run ./build.sh --install again;"
-  echo "grant Screen Recording and Accessibility to Dobby once more, and they will stick."
+  echo "Created the \"Pinlet Local Signing\" identity. Run ./build.sh --install again;"
+  echo "grant Screen Recording and Accessibility to Pinlet once more, and they will stick."
   exit 0
 fi
-APP=build/Dobby.app
+APP=build/Pinlet.app
 rm -rf "$APP"
 mkdir -p build
 # With XcodeGen and Xcode, build a real app target: only that runs the App
-# Intents metadata step (Spotlight / Shortcuts actions). DOBBY_SWIFTPM=1 forces
+# Intents metadata step (Spotlight / Shortcuts actions). PINLET_SWIFTPM=1 forces
 # the plain SwiftPM build.
-if [[ -z "${DOBBY_SWIFTPM:-}" ]] && command -v xcodegen >/dev/null \
+if [[ -z "${PINLET_SWIFTPM:-}" ]] && command -v xcodegen >/dev/null \
    && xcodebuild -version >/dev/null 2>&1; then
   xcodegen generate --quiet
-  xcodebuild -project Dobby.xcodeproj -scheme Dobby -configuration Release \
+  xcodebuild -project Pinlet.xcodeproj -scheme Pinlet -configuration Release \
     -derivedDataPath .build/xcode -quiet build
-  cp -R .build/xcode/Build/Products/Release/Dobby.app "$APP"
-  BIN="$APP/Contents/MacOS/Dobby"
+  cp -R .build/xcode/Build/Products/Release/Pinlet.app "$APP"
+  BIN="$APP/Contents/MacOS/Pinlet"
   [[ -d "$APP/Contents/Resources/Metadata.appintents" ]] \
     && echo "App Intents registered (Spotlight, Shortcuts, Siri)" \
     || echo "note: no Metadata.appintents in the build; App Intents will not show up"
 else
   command -v xcodegen >/dev/null || echo "note: brew install xcodegen for App Intents (Spotlight, Shortcuts)"
   swift build -c release
-  BIN="$(swift build -c release --show-bin-path)/Dobby"
+  BIN="$(swift build -c release --show-bin-path)/Pinlet"
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-  cp "$BIN" "$APP/Contents/MacOS/Dobby"
+  cp "$BIN" "$APP/Contents/MacOS/Pinlet"
   cp Resources/Info.plist "$APP/Contents/Info.plist"
 fi
 mkdir -p "$APP/Contents/Resources"
-ICONSET="$(mktemp -d)/Dobby.iconset"
+ICONSET="$(mktemp -d)/Pinlet.iconset"
 "$BIN" --icon "$ICONSET"
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Dobby.icns"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Pinlet.icns"
 # macOS ties Screen Recording and Accessibility to the signature. An ad-hoc
 # signature changes with every build, so permissions would reset each time;
-# a fixed local identity ("Dobby Local Signing", made once by
-# ./build.sh --setup-signing) keeps them. DOBBY_SIGN_IDENTITY overrides.
-LOCAL_ID="Dobby Local Signing"
-if [[ -n "${DOBBY_SIGN_IDENTITY:-}" ]]; then
-  IDENTITY="$DOBBY_SIGN_IDENTITY"
+# a fixed local identity ("Pinlet Local Signing", made once by
+# ./build.sh --setup-signing) keeps them. PINLET_SIGN_IDENTITY overrides.
+LOCAL_ID="Pinlet Local Signing"
+if [[ -n "${PINLET_SIGN_IDENTITY:-}" ]]; then
+  IDENTITY="$PINLET_SIGN_IDENTITY"
 elif security find-identity -p codesigning 2>/dev/null | grep -q "\"$LOCAL_ID\"" \
      || security find-certificate -c "$LOCAL_ID" >/dev/null 2>&1; then
   IDENTITY="$LOCAL_ID"
@@ -83,19 +83,19 @@ codesign --force --deep --sign "$IDENTITY" "$APP"
 echo "Built $APP"
 if [[ "${1:-}" == "--install" ]]; then
   mkdir -p "$HOME/Applications"
-  rm -rf "$HOME/Applications/Dobby.app"
-  cp -R "$APP" "$HOME/Applications/Dobby.app"
-  echo "Installed ~/Applications/Dobby.app"
-  # Only the installed copy should exist for macOS: a second Dobby.app (this
+  rm -rf "$HOME/Applications/Pinlet.app"
+  cp -R "$APP" "$HOME/Applications/Pinlet.app"
+  echo "Installed ~/Applications/Pinlet.app"
+  # Only the installed copy should exist for macOS: a second Pinlet.app (this
   # build folder) shows up in Spotlight and can catch the permission grants.
   LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
   rm -rf "$APP"
   [[ -x "$LSREG" ]] && "$LSREG" -u "$PWD/$APP" >/dev/null 2>&1 || true
-  # A running Dobby is still the old build (and the old signature): restart it.
-  if pgrep -f "Dobby.app/Contents/MacOS/Dobby" >/dev/null; then
-    osascript -e 'quit app "Dobby"' >/dev/null 2>&1 || true
-    for _ in $(seq 1 50); do pgrep -f "Dobby.app/Contents/MacOS/Dobby" >/dev/null || break; sleep 0.1; done
-    open "$HOME/Applications/Dobby.app"
-    echo "Restarted Dobby"
+  # A running Pinlet is still the old build (and the old signature): restart it.
+  if pgrep -f "Pinlet.app/Contents/MacOS/Pinlet" >/dev/null; then
+    osascript -e 'quit app "Pinlet"' >/dev/null 2>&1 || true
+    for _ in $(seq 1 50); do pgrep -f "Pinlet.app/Contents/MacOS/Pinlet" >/dev/null || break; sleep 0.1; done
+    open "$HOME/Applications/Pinlet.app"
+    echo "Restarted Pinlet"
   fi
 fi

@@ -1,12 +1,15 @@
-# Dobby
+# Pinlet
 
-Dobby lets an AI assistant use your desktop the way you do: it looks at the
+_Formerly Dobby. Old `DOBBY_*` settings and `~/.dobby` keep working for now; run
+`pinlet setup` once to update your AI tools._
+
+Pinlet lets an AI assistant use your desktop the way you do: it looks at the
 screen, finds buttons and fields, clicks, types and checks that each step
 worked. It runs as an [MCP](https://modelcontextprotocol.io) server, so any
 MCP client (Claude Code, Claude Desktop, Antigravity, Cursor and others) can
 drive it.
 
-Dobby tries hard not to send screenshots to the cloud model. It reads the
+Pinlet tries hard not to send screenshots to the cloud model. It reads the
 operating system's accessibility tree and local OCR first, and asks a small
 local model (Gemma 3 through Ollama by default) for yes/no checks and picks.
 A screenshot is the last resort, not the first step.
@@ -22,11 +25,11 @@ Windows window listing is not finished yet.
   local OCR (Apple Vision or RapidOCR), a small icon detector, and a numbered
   "screen state" the AI can pick from by number.
 - **Act and verify.** Click, type, scroll, hotkeys, window focus. After each
-  action Dobby waits for the screen to settle and can check the result with
+  action Pinlet waits for the screen to settle and can check the result with
   OCR or a local yes/no question (`ask_screen`) instead of a screenshot.
 - **Local models, your choice.** Every model job has a role you can point at
   any Ollama model.
-- **An on-screen overlay.** A second cursor, a glow around the window Dobby
+- **An on-screen overlay.** A second cursor, a glow around the window Pinlet
   is working in, and a control bar with Pause and Stop, so you always see
   what it is doing and can take over.
 - **Shared control.** Two AI clients can share one desktop and take turns.
@@ -40,8 +43,8 @@ Windows window listing is not finished yet.
 You need Python 3.10 or newer and git.
 
 ```bash
-git clone https://github.com/mayurkubavat/Dobby.git
-cd Dobby
+git clone https://github.com/mayurkubavat/Pinlet.git
+cd Pinlet
 python3 -m venv .venv
 source .venv/bin/activate
 ```
@@ -53,24 +56,24 @@ pip install -e ".[macos,ocr]"
 ```
 
 Then open **System Settings > Privacy & Security** and give the app that
-starts Dobby (Terminal, your IDE, Claude Desktop, Antigravity...) both
-**Accessibility** and **Screen Recording**. Without them Dobby can neither
+starts Pinlet (Terminal, your IDE, Claude Desktop, Antigravity...) both
+**Accessibility** and **Screen Recording**. Without them Pinlet can neither
 read the screen nor click.
 
 ### Linux (X11 or XWayland)
 
 ```bash
 sudo apt install python3-gi python3-gi-cairo gir1.2-atspi-2.0 gir1.2-gtk-3.0 \
-    gir1.2-ayatanaappindicator3-0.1 at-spi2-core x11-utils   # ayatana: Dobby's tray icon
+    gir1.2-ayatanaappindicator3-0.1 at-spi2-core x11-utils   # ayatana: Pinlet's tray icon
 python3 -m venv --system-site-packages .venv   # recreate the venv: PyGObject comes from the system
 source .venv/bin/activate
 pip install -e ".[linux,ocr]"
 gsettings set org.gnome.desktop.interface toolkit-accessibility true
 ```
 
-Native Wayland apps are not visible to Dobby yet. On a GNOME or KDE Wayland
+Native Wayland apps are not visible to Pinlet yet. On a GNOME or KDE Wayland
 desktop, log in to an "on Xorg" session or run apps with `GDK_BACKEND=x11`.
-Chrome, VS Code and other Electron apps started before Dobby need a restart
+Chrome, VS Code and other Electron apps started before Pinlet need a restart
 to expose their accessibility tree. Details: [docs/linux.md](docs/linux.md).
 
 ### Check it
@@ -82,14 +85,14 @@ python scripts/smoke_local.py
 This only reads: it reports screen capture, accessibility, OCR and the local
 model, with timings. It never clicks or types.
 
-When a tool fails in your AI client, look in `~/.dobby/logs/server.log`: one
+When a tool fails in your AI client, look in `~/.pinlet/logs/server.log`: one
 line per tool call with its duration, plus the full traceback of any error.
 
 ---
 
 ## Local models (Ollama)
 
-Dobby's checks run on a local model, so they cost no cloud tokens.
+Pinlet's checks run on a local model, so they cost no cloud tokens.
 
 1. Install [Ollama](https://ollama.com) and start it.
 2. Pull the default model:
@@ -98,7 +101,7 @@ Dobby's checks run on a local model, so they cost no cloud tokens.
    ollama pull gemma3:4b
    ```
 
-That is all you need. Dobby talks to Ollama at `http://127.0.0.1:11434`.
+That is all you need. Pinlet talks to Ollama at `http://127.0.0.1:11434`.
 
 ### Model roles
 
@@ -115,15 +118,15 @@ All four default to `gemma3:4b`.
 To change a role, use any of these (the first one found wins):
 
 1. An environment variable in your MCP client config:
-   `DOBBY_MODEL_VISION=qwen2.5vl:7b`
+   `PINLET_MODEL_VISION=qwen2.5vl:7b`
 2. At runtime, ask the AI to call `set_model_role("visual_pick", "qwen2.5vl:7b")`
-3. A file at `~/.dobby/models.json`, re-read when it changes:
+3. A file at `~/.pinlet/models.json`, re-read when it changes:
 
    ```json
    { "vision": "qwen2.5vl:7b", "visual_pick": "qwen3-vl:8b" }
    ```
 
-Dobby never downloads models; `set_model_role` refuses a model you have not
+Pinlet never downloads models; `set_model_role` refuses a model you have not
 pulled. To compare candidates on the same test cases:
 
 ```bash
@@ -137,50 +140,50 @@ when the target is not there.
 
 ## Connect your AI client
 
-One command sets Dobby up for every AI tool on this computer:
+One command sets Pinlet up for every AI tool on this computer:
 
 ```bash
-/path/to/Dobby/.venv/bin/dobby setup --dry-run   # show what it would change
-/path/to/Dobby/.venv/bin/dobby setup             # do it
+/path/to/Pinlet/.venv/bin/pinlet setup --dry-run   # show what it would change
+/path/to/Pinlet/.venv/bin/pinlet setup             # do it
 ```
 
 It finds Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, Antigravity,
-GitHub Copilot (CLI and VS Code) and OpenCode, adds Dobby to each one's MCP
+GitHub Copilot (CLI and VS Code) and OpenCode, adds Pinlet to each one's MCP
 config (other servers are kept, each file is backed up once as
-`<file>.dobby-backup`, an existing Dobby entry is left alone unless `--force`),
-and links the Dobby skills into the folders those tools read skills from:
+`<file>.pinlet-backup`, an existing Pinlet entry is left alone unless `--force`),
+and links the Pinlet skills into the folders those tools read skills from:
 `~/.agents/skills` (shared by Codex, Cursor, Gemini CLI, Copilot, OpenCode and
-Antigravity) and `~/.claude/skills`. `dobby setup --list` shows every tool and
+Antigravity) and `~/.claude/skills`. `pinlet setup --list` shows every tool and
 its state; `--only cursor,codex`, `--no-mcp` and `--no-skills` narrow it.
 Restart each tool afterwards.
 
-How agents learn to use Dobby, whatever the tool:
+How agents learn to use Pinlet, whatever the tool:
 
-- **Server instructions.** Every MCP client receives Dobby's short guide when
+- **Server instructions.** Every MCP client receives Pinlet's short guide when
   it connects: when to use the desktop, the cheapest way to look, handoffs and
   safety.
-- **Agent Skills.** The `dobby` skill (plus `dobby-perception`,
-  `dobby-app-chrome`, `dobby-app-vivado`...) loads automatically when a task
+- **Agent Skills.** The `pinlet` skill (plus `pinlet-perception`,
+  `pinlet-app-chrome`, `pinlet-app-vivado`...) loads automatically when a task
   needs the desktop, in any tool that supports `SKILL.md` skills.
 - **MCP resources and a prompt.** Clients without skills can read the same
-  guides as `mcp://dobby/skills/<name>`, or start a task with the `dobby` MCP
+  guides as `mcp://pinlet/skills/<name>`, or start a task with the `pinlet` MCP
   prompt (a slash command in clients that offer prompts).
 
-The sections below are the manual way, per client. Replace `/path/to/Dobby`
+The sections below are the manual way, per client. Replace `/path/to/Pinlet`
 with where you cloned it.
 
 ### Claude Code
 
 ```bash
-claude mcp add --scope user Dobby -- /path/to/Dobby/.venv/bin/dobby
+claude mcp add --scope user Pinlet -- /path/to/Pinlet/.venv/bin/pinlet
 ```
 
-Skills: `dobby setup --only claude-code` links them into `~/.claude/skills`,
+Skills: `pinlet setup --only claude-code` links them into `~/.claude/skills`,
 or install them as a plugin instead:
 
 ```
-/plugin marketplace add /path/to/Dobby
-/plugin install dobby@dobby
+/plugin marketplace add /path/to/Pinlet
+/plugin install pinlet@pinlet
 ```
 
 ### Claude Desktop
@@ -193,8 +196,8 @@ Edit the config file and restart Claude Desktop:
 ```json
 {
   "mcpServers": {
-    "Dobby": {
-      "command": "/path/to/Dobby/.venv/bin/dobby"
+    "Pinlet": {
+      "command": "/path/to/Pinlet/.venv/bin/pinlet"
     }
   }
 }
@@ -208,8 +211,8 @@ Open the MCP settings in Antigravity (or edit
 ```json
 {
   "mcpServers": {
-    "Dobby": {
-      "command": "/path/to/Dobby/.venv/bin/dobby"
+    "Pinlet": {
+      "command": "/path/to/Pinlet/.venv/bin/pinlet"
     }
   }
 }
@@ -217,28 +220,28 @@ Open the MCP settings in Antigravity (or edit
 
 ### Codex, Cursor, Gemini CLI, Copilot, OpenCode
 
-`dobby setup` writes these; by hand the entries are:
+`pinlet setup` writes these; by hand the entries are:
 
-- Codex, `~/.codex/config.toml`: `[mcp_servers.Dobby]` with
-  `command = "/path/to/Dobby/.venv/bin/dobby"`
+- Codex, `~/.codex/config.toml`: `[mcp_servers.Pinlet]` with
+  `command = "/path/to/Pinlet/.venv/bin/pinlet"`
 - Cursor, `~/.cursor/mcp.json`, and Gemini CLI, `~/.gemini/settings.json`:
   the same `mcpServers` entry as Claude Desktop above
 - GitHub Copilot CLI, `~/.copilot/mcp-config.json`: `mcpServers` entry with
   `"type": "local"` and `"tools": ["*"]`
 - OpenCode, `~/.config/opencode/opencode.json`: under `mcp`,
-  `{"type": "local", "command": ["/path/to/Dobby/.venv/bin/dobby"]}`
+  `{"type": "local", "command": ["/path/to/Pinlet/.venv/bin/pinlet"]}`
 
-For skills, link `plugins/dobby/skills/*` into `~/.agents/skills/`. Inside this
+For skills, link `plugins/pinlet/skills/*` into `~/.agents/skills/`. Inside this
 repo they are already visible to agents through `.agents/skills`.
 
 ### Any other MCP client
 
-Run `/path/to/Dobby/.venv/bin/dobby` as a stdio server. On Linux, add
+Run `/path/to/Pinlet/.venv/bin/pinlet` as a stdio server. On Linux, add
 `"env": { "DISPLAY": ":0" }` if the client does not pass your display.
 
 ### Fewer tools, smaller prompts
 
-Dobby has 56 tools, grouped into toolsets. It starts with only the core
+Pinlet has 56 tools, grouped into toolsets. It starts with only the core
 tools (`minimal_computer_use`) to keep the AI's prompt small. The AI can
 switch with `manage_toolsets`, for example to `full_developer` (window
 management, plugins, recording, advanced vision) or `eda_automation` (adds
@@ -248,39 +251,39 @@ Vivado and Verdi).
 
 ## The overlay
 
-When Dobby acts you see it:
+When Pinlet acts you see it:
 
 - a violet **agent cursor** that glides to each target and ripples on click,
-  with a tag saying what it is doing ("Dobby › Click 'Run Synthesis'") until
+  with a tag saying what it is doing ("Pinlet › Click 'Run Synthesis'") until
   its next action, and numbered marks where it clicked that fade out;
 - a soft **glow** around the window it is working in;
-- a **control bar** at the top of the screen while Dobby works, asks or is
-  paused (out of sight while it rests; `DOBBY_OVERLAY_PILL=always` keeps a
-  small "Dobby is sleeping" bar): "Dobby is working · Click 'Send' · step 7 · 0:42", with
-  **Pause** and **Stop**. When two or more Dobbys are busy at once it also
-  shows one coloured dot per Dobby ("2 Dobbys"); click them to pause or stop one.
+- a **control bar** at the top of the screen while Pinlet works, asks or is
+  paused (out of sight while it rests; `PINLET_OVERLAY_PILL=always` keeps a
+  small "Pinlet is sleeping" bar): "Pinlet is working · Click 'Send' · step 7 · 0:42", with
+  **Pause** and **Stop**. When two or more Pinlets are busy at once it also
+  shows one coloured dot per Pinlet ("2 Pinlets"); click them to pause or stop one.
 
-**Turbo or secure.** By default Dobby runs in **turbo**: no permission
+**Turbo or secure.** By default Pinlet runs in **turbo**: no permission
 prompts, and it keeps going if you touch the mouse (Stop and Pause still
-work). Start it with `dobby --secure` (or `DOBBY_MODE=secure` in the client's
+work). Start it with `pinlet --secure` (or `PINLET_MODE=secure` in the client's
 `env`) to turn on everything below.
 
-**In secure mode Dobby asks before it uses an app.** The first time it clicks or types in an
-app it shows "Let Dobby use Vivado?" once; your answer lasts until Dobby's
-server exits. Password managers start read-only, and Dobby never types into
+**In secure mode Pinlet asks before it uses an app.** The first time it clicks or types in an
+app it shows "Let Pinlet use Vivado?" once; your answer lasts until Pinlet's
+server exits. Password managers start read-only, and Pinlet never types into
 a password field: the bar says "Your turn" instead. To skip the question for
-apps you trust, or to limit an app, write `~/.dobby/apps.json`:
+apps you trust, or to limit an app, write `~/.pinlet/apps.json`:
 
 ```json
 { "apps": { "Vivado": "full", "Terminal": "click", "Slack": "read" }, "default": "ask" }
 ```
 
-`full` lets Dobby click and type, `click` allows only clicks and scrolling,
+`full` lets Pinlet click and type, `click` allows only clicks and scrolling,
 `read` only looking. `"default": "full"` never asks.
 
 In secure mode, risky steps (quit, close, delete, log out, and clicking buttons such as
 **Send**, **Delete**, **Pay** or **Publish**) turn red and ask you to
-**Allow** or **Deny** first, and if you click, scroll or type while Dobby works,
+**Allow** or **Deny** first, and if you click, scroll or type while Pinlet works,
 it pauses and looks again before its next step (just moving the mouse, for
 example to reach the bar, does not count).
 
@@ -289,7 +292,7 @@ The AI is told exactly what you did: each tool returns `handoff` =
 `paused` with what to do next, so it
 ends the task on Stop, does not work around a Deny, and looks again after you
 took over. A Stop ends the task it was pressed for; one pressed more than two
-minutes before Dobby's next step is ignored. About half a minute after the
+minutes before Pinlet's next step is ignored. About half a minute after the
 last step the agent pointer and the "thinking" glow go away.
 
 | Shortcut | macOS | Linux |
@@ -298,41 +301,41 @@ last step the agent pointer and the "thinking" glow go away.
 | Pause / resume | Ctrl+Opt+P | Ctrl+Alt+P |
 | Hide / show the bar | Ctrl+Opt+H | |
 
-**Keep Dobby on call.** Ask the AI to call `wait_for_wake` when it is done.
-The menu bar item then lists that Dobby as "Waiting for you" with **Wake**,
-which hands control back to the AI (with `DOBBY_OVERLAY_PILL=always` the bar
-says "click to wake" too). If you paused Dobby and the AI is waiting, Resume
+**Keep Pinlet on call.** Ask the AI to call `wait_for_wake` when it is done.
+The menu bar item then lists that Pinlet as "Waiting for you" with **Wake**,
+which hands control back to the AI (with `PINLET_OVERLAY_PILL=always` the bar
+says "click to wake" too). If you paused Pinlet and the AI is waiting, Resume
 hands back too.
 
-**Tell Dobby what to do while it works.** Anything you type in Dobby.app's
+**Tell Pinlet what to do while it works.** Anything you type in Pinlet.app's
 activity panel (or send with the `tell` control op) reaches the AI with its
-next tool result as `person_says`, and wakes a Dobby that waits in
+next tool result as `person_says`, and wakes a Pinlet that waits in
 `wait_for_wake`.
 
-The overlay is hidden from Dobby's own screenshots, so the model never sees
+The overlay is hidden from Pinlet's own screenshots, so the model never sees
 it. Settings go in the client's `env`:
 
 | Variable | Effect |
 | --- | --- |
-| `DOBBY_OVERLAY=0` | Turn the overlay off |
-| `DOBBY_OVERLAY_PILL=always` | Keep the small "Dobby is sleeping" bar on screen while Dobby rests (default `auto`: the bar shows only while Dobby works, asks or is paused; `off`: never) |
-| `DOBBY_OVERLAY_STYLE=classic` | Use the older, larger look |
-| `DOBBY_OVERLAY_THEME=light` | The light bar and prompts instead of the default dark look; `auto` follows the desktop's light or dark mode |
-| `DOBBY_OVERLAY_GLASS=clear` | On macOS 26 and later, pin clear Liquid Glass (the default is clear while the bar sleeps and regular once it has text); `regular` pins regular; `0` keeps the older frosted bar |
-| `DOBBY_OVERLAY_NARRATE=0` | Quieter modern look: no "Dobby is working" text, the tag shows each action only briefly, unnumbered trail dots, a dot for every running Dobby |
-| `DOBBY_MODE=secure` | Same as `dobby --secure`: app grants, Allow/Deny prompts, no typing into password fields, pause on take-over. Default `turbo` |
-| `DOBBY_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |
-| `DOBBY_APP_GRANTS=off` | Secure mode without the per-app question |
-| `DOBBY_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |
-| `DOBBY_ALLOW_SHELL=1` | Let the AI run shell commands (`run_terminal_command`). Off by default |
-| `DOBBY_INPUT_LOCK=window` | Keep your clicks out of the window Dobby works in; buttons are then pressed through accessibility so your pointer stays put (macOS and Linux). `DOBBY_BACKGROUND_CLICKS=0` uses the real mouse instead |
-| `DOBBY_OVERLAY_COLOR=#7c5cff` | Fix the colour (otherwise each Dobby gets its own) |
-| `DOBBY_OVERLAY_CAPTURE_VISIBLE=0` | Hide the overlay from your screen recordings too |
-| `DOBBY_PERSONALITY=elf` | Dobby's house-elf voice on the bar: rotating lines ("Dobby is on it!", "Dobby is thinking hard…"), a cheer when a task ends, rare surprises. `subtle` (default) uses a few fixed words; `off` keeps the plain text |
-| `DOBBY_USER_NAME=Sam` | Dobby calls you by name instead of "sir" |
-| `DOBBY_PERSONALITY_LINES=~/dobby-lines.json` | Your own lines: `{"working": ["Dobby is on it!"], "done": [...]}` replaces that moment's lines |
+| `PINLET_OVERLAY=0` | Turn the overlay off |
+| `PINLET_OVERLAY_PILL=always` | Keep the small "Pinlet is sleeping" bar on screen while Pinlet rests (default `auto`: the bar shows only while Pinlet works, asks or is paused; `off`: never) |
+| `PINLET_OVERLAY_STYLE=classic` | Use the older, larger look |
+| `PINLET_OVERLAY_THEME=light` | The light bar and prompts instead of the default dark look; `auto` follows the desktop's light or dark mode |
+| `PINLET_OVERLAY_GLASS=clear` | On macOS 26 and later, pin clear Liquid Glass (the default is clear while the bar sleeps and regular once it has text); `regular` pins regular; `0` keeps the older frosted bar |
+| `PINLET_OVERLAY_NARRATE=0` | Quieter modern look: no "Pinlet is working" text, the tag shows each action only briefly, unnumbered trail dots, a dot for every running Pinlet |
+| `PINLET_MODE=secure` | Same as `pinlet --secure`: app grants, Allow/Deny prompts, no typing into password fields, pause on take-over. Default `turbo` |
+| `PINLET_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |
+| `PINLET_APP_GRANTS=off` | Secure mode without the per-app question |
+| `PINLET_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |
+| `PINLET_ALLOW_SHELL=1` | Let the AI run shell commands (`run_terminal_command`). Off by default |
+| `PINLET_INPUT_LOCK=window` | Keep your clicks out of the window Pinlet works in; buttons are then pressed through accessibility so your pointer stays put (macOS and Linux). `PINLET_BACKGROUND_CLICKS=0` uses the real mouse instead |
+| `PINLET_OVERLAY_COLOR=#7c5cff` | Fix the colour (otherwise each Pinlet gets its own) |
+| `PINLET_OVERLAY_CAPTURE_VISIBLE=0` | Hide the overlay from your screen recordings too |
+| `PINLET_PERSONALITY=lively` | Pinlet's lively voice on the bar: rotating lines ("Pinlet is on it!", "Pinlet is thinking hard…"), a cheer when a task ends, rare surprises. `subtle` (default) uses a few fixed words; `off` keeps the plain text |
+| `PINLET_USER_NAME=Sam` | Pinlet calls you by name instead of "sir" |
+| `PINLET_PERSONALITY_LINES=~/pinlet-lines.json` | Your own lines: `{"working": ["Pinlet is on it!"], "done": [...]}` replaces that moment's lines |
 
-Dobby's lines only reach the bar and the startup log. What the AI reads back
+Pinlet's lines only reach the bar and the startup log. What the AI reads back
 from tools, the pointer tag, Allow/Deny prompts and "You're in control" stay
 plain, and a new line shows at most every 20 seconds.
 
@@ -341,78 +344,78 @@ are not drawn yet.
 
 ### For organisations: admin policy
 
-An administrator can lock Dobby down for everyone on a computer with one
-file that people cannot override: `/Library/Application Support/Dobby/policy.json`
-(macOS) or `/etc/dobby/policy.json` (Linux). It can force secure mode, turn
-tools off, allow only listed shell commands, and set what Dobby may do in each
+An administrator can lock Pinlet down for everyone on a computer with one
+file that people cannot override: `/Library/Application Support/Pinlet/policy.json`
+(macOS) or `/etc/pinlet/policy.json` (Linux). It can force secure mode, turn
+tools off, allow only listed shell commands, and set what Pinlet may do in each
 app. Details and an example: [docs/admin-policy.md](docs/admin-policy.md).
 
 ---
 
 ## Two AIs, one desktop
 
-### One shared Dobby
+### One shared Pinlet
 
-Every AI client runs the same `dobby` command, but there is only one Dobby
-per computer. The first client starts `dobby serve` in the background (it
+Every AI client runs the same `pinlet` command, but there is only one Pinlet
+per computer. The first client starts `pinlet serve` in the background (it
 loads the models once); later clients connect to it over a private socket
 in a few milliseconds. Each client keeps its own mode (turbo or secure),
-its own name and its own turn at the mouse. The shared Dobby exits 10
+its own name and its own turn at the mouse. The shared Pinlet exits 10
 minutes after the last client leaves.
 
 After updating from an older checkout, run `pip install -e .` again so the
-`dobby` command points at the new connector.
+`pinlet` command points at the new connector.
 
 | Variable | Effect |
 | --- | --- |
-| `DOBBY_SHARED=0` | Run a private Dobby inside this client (the old behaviour) |
-| `DOBBY_IDLE_EXIT=600` | Seconds the shared Dobby waits with no clients before exiting (`0` = never) |
-| `DOBBY_SOCKET=/path/dobby.sock` | Socket location. Default `~/Library/Application Support/Dobby/dobby.sock` on macOS, `$XDG_RUNTIME_DIR/dobby/dobby.sock` on Linux |
+| `PINLET_SHARED=0` | Run a private Pinlet inside this client (the old behaviour) |
+| `PINLET_IDLE_EXIT=600` | Seconds the shared Pinlet waits with no clients before exiting (`0` = never) |
+| `PINLET_SOCKET=/path/pinlet.sock` | Socket location. Default `~/Library/Application Support/Pinlet/pinlet.sock` on macOS, `$XDG_RUNTIME_DIR/pinlet/pinlet.sock` on Linux |
 
-`dobby serve` starts the shared Dobby by hand (its log is
-`~/.dobby/logs/daemon.log`), and `dobby stdio` runs a private one.
+`pinlet serve` starts the shared Pinlet by hand (its log is
+`~/.pinlet/logs/daemon.log`), and `pinlet stdio` runs a private one.
 `control_status` lists every connected client.
 
-### Dobby.app (macOS)
+### Pinlet.app (macOS)
 
-`apps/macos` is a small native Swift app that owns the shared Dobby. Build
+`apps/macos` is a small native Swift app that owns the shared Pinlet. Build
 and install it with:
 
 ```bash
 apps/macos/build.sh --install   # needs the Xcode command line tools
 ```
 
-Once it is installed, `dobby` opens Dobby.app instead of starting the engine
-itself. The app starts `dobby serve` as its own child, so macOS asks for
-Screen Recording and Accessibility for **Dobby** once, whichever AI client
+Once it is installed, `pinlet` opens Pinlet.app instead of starting the engine
+itself. The app starts `pinlet serve` as its own child, so macOS asks for
+Screen Recording and Accessibility for **Pinlet** once, whichever AI client
 or terminal you use. Its menu bar icon lists each connected AI with Pause,
 Resume and Stop, and has Pause / Resume / Stop all, Clear finished, permission
 shortcuts (only while one is missing), Settings, Troubleshoot (permissions,
-log, relaunch) and Quit. Stopped Dobbys leave the list, and sleeping ones hide
-after 15 minutes (`DOBBY_MENU_HIDE_IDLE`, in seconds). Allow/Deny questions
+log, relaunch) and Quit. Stopped Pinlets leave the list, and sleeping ones hide
+after 15 minutes (`PINLET_MENU_HIDE_IDLE`, in seconds). Allow/Deny questions
 show as a card with Return / Esc, and as a notification if you miss it.
-Spotlight and Shortcuts get Pause, Resume and Stop all Dobbys, and "What is
-Dobby doing" (when built with XcodeGen: `brew install xcodegen`). Links such as `dobby://pause-all`,
-`dobby://stop-all` or `dobby://stop?pid=4242` do the same from Shortcuts or a
-script. `DOBBY_APP=0` skips the app; `DOBBY_APP=/path/Dobby.app` picks one.
+Spotlight and Shortcuts get Pause, Resume and Stop all Pinlets, and "What is
+Pinlet doing" (when built with XcodeGen: `brew install xcodegen`). Links such as `pinlet://pause-all`,
+`pinlet://stop-all` or `pinlet://stop?pid=4242` do the same from Shortcuts or a
+script. `PINLET_APP=0` skips the app; `PINLET_APP=/path/Pinlet.app` picks one.
 Run `apps/macos/build.sh --setup-signing` once before your first build: it
-makes a local "Dobby Local Signing" certificate, so Screen Recording and
+makes a local "Pinlet Local Signing" certificate, so Screen Recording and
 Accessibility stay granted across rebuilds (an ad-hoc build loses them each
-time). `DOBBY_SIGN_IDENTITY` picks another identity, such as a Developer ID.
+time). `PINLET_SIGN_IDENTITY` picks another identity, such as a Developer ID.
 
 ### Taking turns
 
-If you run Dobby from two clients at once (say Claude Code and Antigravity),
+If you run Pinlet from two clients at once (say Claude Code and Antigravity),
 they take turns instead of fighting over the mouse. A whole tool call is one
 turn, so nobody cuts in between a click and the typing after it. Control
 passes to the waiting agent when the holder releases it, after 10 seconds
 idle, or after a 60 second slice.
 
-When more than one Dobby runs, the **▾** menu on the control bar lists them,
+When more than one Pinlet runs, the **▾** menu on the control bar lists them,
 so you can pause or stop each one. You always outrank both: Pause, Stop and
 taking over the mouse still work.
 
-There is one bar per busy Dobby. If two are working (or one is asking
+There is one bar per busy Pinlet. If two are working (or one is asking
 Allow/Deny), their bars stack one row apart at the top of the screen, each in
 its own colour, and the "sleeping" bar steps aside until they are done.
 
@@ -420,10 +423,10 @@ Useful settings, per client:
 
 | Variable | Effect |
 | --- | --- |
-| `DOBBY_AGENT_NAME=Antigravity` | Name shown on the overlay and to the other agent |
-| `DOBBY_NAMES=Ada,Grace` | First names handed out to each running Dobby (default: made-up elf names, shown as "Tibble · Claude Code"; also `~/.dobby/names.txt`, one per line; `off` = `Dobby-<pid>`) |
-| `DOBBY_AGENT_PRIORITY=1` | Higher goes first when both are waiting |
-| `DOBBY_CONTROL=0` | Turn shared control off |
+| `PINLET_AGENT_NAME=Antigravity` | Name shown on the overlay and to the other agent |
+| `PINLET_NAMES=Ada,Grace` | First names handed out to each running Pinlet (default: made-up names, shown as "Tibble · Claude Code"; also `~/.pinlet/names.txt`, one per line; `off` = `Pinlet-<pid>`) |
+| `PINLET_AGENT_PRIORITY=1` | Higher goes first when both are waiting |
+| `PINLET_CONTROL=0` | Turn shared control off |
 
 More: [docs/shared-control.md](docs/shared-control.md).
 
@@ -436,7 +439,7 @@ More: [docs/shared-control.md](docs/shared-control.md).
 - [docs/linux.md](docs/linux.md): Linux details, XWayland, a headless test rig
 - [docs/shared-control.md](docs/shared-control.md): the control lease in depth
 - [docs/admin-policy.md](docs/admin-policy.md): the organisation-wide policy file
-- [plugins/dobby/README.md](plugins/dobby/README.md): the agent skills and how each AI tool finds them
+- [plugins/pinlet/README.md](plugins/pinlet/README.md): the agent skills and how each AI tool finds them
 
 ## Development
 
@@ -448,7 +451,7 @@ pytest -m replay          # replay recorded sessions offline
 ```
 
 The test suite never sends real mouse or keyboard input unless you set
-`DOBBY_LIVE_DESKTOP_TESTS=1`. See [CONTRIBUTING.md](CONTRIBUTING.md) for code
+`PINLET_LIVE_DESKTOP_TESTS=1`. See [CONTRIBUTING.md](CONTRIBUTING.md) for code
 style and pull request rules, [SECURITY.md](SECURITY.md) to report a
 vulnerability, and [CHANGELOG.md](CHANGELOG.md) for what changed.
 

@@ -1,4 +1,4 @@
-"""One shared Dobby per computer: connector, socket, sessions."""
+"""One shared Pinlet per computer: connector, socket, sessions."""
 
 import json
 import os
@@ -10,41 +10,41 @@ from pathlib import Path
 
 import pytest
 
-from dobby.hub import connector, paths, sessions
-from dobby.mode import security_mode, session_mode
+from pinlet.hub import connector, paths, sessions
+from pinlet.mode import security_mode, session_mode
 
 
 def test_socket_paths():
-    assert paths.socket_path({"DOBBY_SOCKET": "/tmp/x/d.sock"}) == Path("/tmp/x/d.sock")
+    assert paths.socket_path({"PINLET_SOCKET": "/tmp/x/d.sock"}) == Path("/tmp/x/d.sock")
     mac = paths.socket_path({}, platform="darwin")
-    assert str(mac).endswith("Library/Application Support/Dobby/dobby.sock")
+    assert str(mac).endswith("Library/Application Support/Pinlet/pinlet.sock")
     assert paths.socket_path({"XDG_RUNTIME_DIR": "/"}, platform="linux") == Path(
-        "/dobby/dobby.sock"
+        "/pinlet/pinlet.sock"
     )
 
 
-def test_per_client_settings_stay_out_of_the_shared_dobby():
+def test_per_client_settings_stay_out_of_the_shared_pinlet():
     env = connector.daemon_env(
-        {"DOBBY_AGENT_NAME": "Cursor", "DOBBY_MODE": "secure", "DOBBY_OVERLAY_STYLE": "classic"}
+        {"PINLET_AGENT_NAME": "Cursor", "PINLET_MODE": "secure", "PINLET_OVERLAY_STYLE": "classic"}
     )
-    assert env == {"DOBBY_OVERLAY_STYLE": "classic"}
+    assert env == {"PINLET_OVERLAY_STYLE": "classic"}
 
 
 def test_hello_carries_mode_and_identity(monkeypatch):
-    monkeypatch.setenv("DOBBY_AGENT_NAME", "Antigravity")
-    h = connector.hello(["dobby", "--secure"])
-    assert h["dobby_hello"] == 1 and h["mode"] == "secure" and h["name"] == "Antigravity"
+    monkeypatch.setenv("PINLET_AGENT_NAME", "Antigravity")
+    h = connector.hello(["pinlet", "--secure"])
+    assert h["pinlet_hello"] == 1 and h["mode"] == "secure" and h["name"] == "Antigravity"
     assert h["pid"] == os.getpid()
 
 
 def test_shared_can_be_turned_off():
-    assert not connector.shared_enabled({"DOBBY_SHARED": "0"})
+    assert not connector.shared_enabled({"PINLET_SHARED": "0"})
 
 
 def test_session_mode_is_per_context():
     with session_mode("secure"):
         assert security_mode() == "secure"
-    assert security_mode(env={}, argv=["dobby"]) == "turbo"
+    assert security_mode(env={}, argv=["pinlet"]) == "turbo"
 
 
 def test_sessions_registry():
@@ -73,7 +73,7 @@ def short_sock():
     import tempfile
 
     short = Path(tempfile.mkdtemp(prefix="dby", dir="/tmp" if os.path.isdir("/tmp") else None))
-    yield short / "run" / "dobby.sock"
+    yield short / "run" / "pinlet.sock"
     shutil.rmtree(short, ignore_errors=True)
 
 
@@ -101,17 +101,17 @@ def _client(path, name, mode, info_name=None):
         except OSError:
             time.sleep(0.1)
     else:
-        pytest.fail("shared Dobby did not listen")
+        pytest.fail("shared Pinlet did not listen")
     sock.sendall(
         (
-            json.dumps({"dobby_hello": 1, "pid": os.getpid(), "mode": mode, "name": name}) + "\n"
+            json.dumps({"pinlet_hello": 1, "pid": os.getpid(), "mode": mode, "name": name}) + "\n"
         ).encode()
     )
     buf = [b""]
     while b"\n" not in buf[0]:
         buf[0] += sock.recv(4096)
     ready, buf[0] = buf[0].split(b"\n", 1)
-    assert json.loads(ready)["dobby_ready"] == 1
+    assert json.loads(ready)["pinlet_ready"] == 1
     init = _rpc(
         sock,
         buf,
@@ -132,18 +132,18 @@ def _client(path, name, mode, info_name=None):
 
 
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
-def test_two_clients_share_one_dobby(tmp_path, short_sock):
+def test_two_clients_share_one_pinlet(tmp_path, short_sock):
     sock_path = short_sock
     env = {
         **os.environ,
-        "DOBBY_SOCKET": str(sock_path),
-        "DOBBY_OVERLAY": "0",
-        "DOBBY_IDLE_EXIT": "0",
+        "PINLET_SOCKET": str(sock_path),
+        "PINLET_OVERLAY": "0",
+        "PINLET_IDLE_EXIT": "0",
         "HOME": str(tmp_path),
     }
     root = Path(__file__).resolve().parents[1]
     daemon = subprocess.Popen(
-        [sys.executable, "-m", "dobby", "serve"],
+        [sys.executable, "-m", "pinlet", "serve"],
         cwd=root,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -168,9 +168,9 @@ def test_two_clients_share_one_dobby(tmp_path, short_sock):
             "Pip · Antigravity",
             "Tibble · Claude Code",
         ]
-        # a second shared Dobby refuses to start while this one runs
+        # a second shared Pinlet refuses to start while this one runs
         second = subprocess.run(
-            [sys.executable, "-m", "dobby", "serve"],
+            [sys.executable, "-m", "pinlet", "serve"],
             cwd=root,
             env=env,
             capture_output=True,
@@ -187,10 +187,10 @@ def test_two_clients_share_one_dobby(tmp_path, short_sock):
 
 # ------------------------------------------------------------ the app's control connection
 def test_control_actions_reach_the_command_files(tmp_path, monkeypatch):
-    from dobby.control import commands
-    from dobby.hub import control
+    from pinlet.control import commands
+    from pinlet.hub import control
 
-    monkeypatch.setenv("DOBBY_CONTROL_DIR", str(tmp_path))
+    monkeypatch.setenv("PINLET_CONTROL_DIR", str(tmp_path))
     monkeypatch.setattr(control, "agents", lambda: [{"pid": 11}, {"pid": 12}])
     assert (
         control.handle({"id": 1, "op": "action", "key": "pause_toggle", "pid": 11})["paused"]
@@ -205,7 +205,7 @@ def test_control_actions_reach_the_command_files(tmp_path, monkeypatch):
 
 
 def test_topbar_shows_shared_sessions(monkeypatch):
-    from dobby.hub import control
+    from pinlet.hub import control
 
     info = sessions.open_session("Claude Code", 4242, "secure")
     info.last_call, info.last_tool = time.time(), "click"
@@ -232,24 +232,24 @@ def test_topbar_shows_shared_sessions(monkeypatch):
 
 
 def test_app_is_only_used_on_macos(tmp_path):
-    app = tmp_path / "Dobby.app"
+    app = tmp_path / "Pinlet.app"
     (app / "Contents" / "MacOS").mkdir(parents=True)
-    assert connector.find_app({"DOBBY_APP": str(app)}, platform="darwin") == app
-    assert connector.find_app({"DOBBY_APP": str(app)}, platform="linux") is None
-    assert connector.find_app({"DOBBY_APP": "0"}, platform="darwin") is None
+    assert connector.find_app({"PINLET_APP": str(app)}, platform="darwin") == app
+    assert connector.find_app({"PINLET_APP": str(app)}, platform="linux") is None
+    assert connector.find_app({"PINLET_APP": "0"}, platform="darwin") is None
 
 
-def test_app_config_keeps_dobby_settings_not_secrets():
+def test_app_config_keeps_pinlet_settings_not_secrets():
     cfg = connector.app_config(
         {
-            "DOBBY_MODEL_VISION": "q",
-            "DOBBY_AGENT_NAME": "Cursor",
+            "PINLET_MODEL_VISION": "q",
+            "PINLET_AGENT_NAME": "Cursor",
             "OPENAI_API_KEY": "x",
             "PATH": "/bin",
-            "DOBBY_APP": "/A.app",
+            "PINLET_APP": "/A.app",
         }
     )
-    assert cfg["env"] == {"DOBBY_MODEL_VISION": "q", "PATH": "/bin"}
+    assert cfg["env"] == {"PINLET_MODEL_VISION": "q", "PATH": "/bin"}
     assert cfg["python"] == sys.executable
 
 
@@ -258,15 +258,15 @@ def test_control_connection_end_to_end(tmp_path, short_sock):
     sock_path = short_sock
     env = {
         **os.environ,
-        "DOBBY_SOCKET": str(sock_path),
-        "DOBBY_OVERLAY": "0",
-        "DOBBY_IDLE_EXIT": "0",
+        "PINLET_SOCKET": str(sock_path),
+        "PINLET_OVERLAY": "0",
+        "PINLET_IDLE_EXIT": "0",
         "HOME": str(tmp_path),
-        "DOBBY_CONTROL_DIR": str(tmp_path / "control"),
+        "PINLET_CONTROL_DIR": str(tmp_path / "control"),
     }
     root = Path(__file__).resolve().parents[1]
     daemon = subprocess.Popen(
-        [sys.executable, "-m", "dobby", "serve"],
+        [sys.executable, "-m", "pinlet", "serve"],
         cwd=root,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -286,7 +286,7 @@ def test_control_connection_end_to_end(tmp_path, short_sock):
         )  # adopts clientInfo.name
         app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         app.connect(str(sock_path))
-        app.sendall(b'{"dobby_control": 1}\n')
+        app.sendall(b'{"pinlet_control": 1}\n')
         buf = [b""]
         while b"\n" not in buf[0]:
             buf[0] += app.recv(4096)
@@ -296,7 +296,7 @@ def test_control_connection_end_to_end(tmp_path, short_sock):
         assert [s["client"] for s in status["sessions"]] == ["Claude Code"]
         assert status["sessions"][0]["name"].endswith(" · Claude Code")
         view = _rpc(app, buf, {"id": 2, "op": "topbar"})["view"]
-        assert view["header"] == "Dobby" and isinstance(view["rows"], list)
+        assert view["header"] == "Pinlet" and isinstance(view["rows"], list)
         assert _rpc(app, buf, {"id": 3, "op": "quit"})["quitting"] is True
         daemon.wait(timeout=20)
         assert not sock_path.exists()
@@ -308,20 +308,20 @@ def test_control_connection_end_to_end(tmp_path, short_sock):
             daemon.wait(timeout=10)
 
 
-def test_each_dobby_gets_its_own_name(tmp_path):
-    from dobby.control import names
+def test_each_pinlet_gets_its_own_name(tmp_path):
+    from pinlet.control import names
 
     assert names.pick([], 1) == "Tibble"
     assert names.pick(["Tibble", "Pip"], 1) == "Mopsy"
     assert names.pick(["A"], 1, names=["A"]) == "A 2"
-    assert names.pick([], 7, names=[]) == "Dobby-7"
+    assert names.pick([], 7, names=[]) == "Pinlet-7"
     assert names.display("Luna", "Claude Code") == "Luna · Claude Code"
     assert names.display("Luna", "") == "Luna"
     f = tmp_path / "names.txt"
     f.write_text("# mine\nAda\n\nGrace  # admiral\nAda\n")
     assert names.pool({}, names_file=f) == ["Ada", "Grace"]
-    assert names.pool({"DOBBY_NAMES": "X, Y"}) == ["X", "Y"]
-    assert names.pool({"DOBBY_NAMES": "off"}) == []
+    assert names.pool({"PINLET_NAMES": "X, Y"}) == ["X", "Y"]
+    assert names.pool({"PINLET_NAMES": "off"}) == []
 
 
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
@@ -331,16 +331,16 @@ def test_clients_connecting_at_once_get_different_names(tmp_path, short_sock):
     sock_path = short_sock
     env = {
         **os.environ,
-        "DOBBY_SOCKET": str(sock_path),
-        "DOBBY_OVERLAY": "0",
-        "DOBBY_IDLE_EXIT": "0",
+        "PINLET_SOCKET": str(sock_path),
+        "PINLET_OVERLAY": "0",
+        "PINLET_IDLE_EXIT": "0",
         "HOME": str(tmp_path),
-        "DOBBY_CONTROL": "1",
-        "DOBBY_CONTROL_DIR": str(tmp_path / "control"),
+        "PINLET_CONTROL": "1",
+        "PINLET_CONTROL_DIR": str(tmp_path / "control"),
     }
     root = Path(__file__).resolve().parents[1]
     daemon = subprocess.Popen(
-        [sys.executable, "-m", "dobby", "serve"],
+        [sys.executable, "-m", "pinlet", "serve"],
         cwd=root,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -359,7 +359,7 @@ def test_clients_connecting_at_once_get_different_names(tmp_path, short_sock):
             s.sendall(
                 (
                     json.dumps(
-                        {"dobby_hello": 1, "pid": os.getpid(), "mode": "turbo", "name": f"c{i}"}
+                        {"pinlet_hello": 1, "pid": os.getpid(), "mode": "turbo", "name": f"c{i}"}
                     )
                     + "\n"
                 ).encode()
@@ -376,7 +376,7 @@ def test_clients_connecting_at_once_get_different_names(tmp_path, short_sock):
                 buf += s.recv(4096)
         app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         app.connect(str(sock_path))
-        app.sendall(b'{"dobby_control": 1}\n')
+        app.sendall(b'{"pinlet_control": 1}\n')
         abuf = [b""]
         while b"\n" not in abuf[0]:
             abuf[0] += app.recv(4096)

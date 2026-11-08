@@ -5,16 +5,16 @@ ActionCache, WindowClipper, and ObstructionInterceptor.
 import os
 import tempfile
 
-from dobby.agent_loop.cache import ActionCache
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.agent_loop.obstruction import ObstructionInterceptor
-from dobby.perception.window_clipper import WindowClipper
-from dobby.server import (
+from pinlet.agent_loop.cache import ActionCache
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.agent_loop.obstruction import ObstructionInterceptor
+from pinlet.perception.window_clipper import WindowClipper
+from pinlet.server import (
     capture_window,
     dismiss_obstructions,
     manage_cache,
 )
-from dobby.types import BoundingBox, UIElement
+from pinlet.types import BoundingBox, UIElement
 
 
 def test_action_cache_lifecycle():

@@ -3,8 +3,8 @@
 import pytest
 from PIL import Image
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.types import BoundingBox, UIElement
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.types import BoundingBox, UIElement
 
 
 def test_feedback_loop_coordinate_resolution(mock_hal):

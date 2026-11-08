@@ -2,7 +2,7 @@
 
 from PIL import Image
 
-from dobby.agent_loop.bicameral import BicameralStepController, VerificationTier
+from pinlet.agent_loop.bicameral import BicameralStepController, VerificationTier
 
 
 class NoAXHAL:

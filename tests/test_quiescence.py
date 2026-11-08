@@ -7,10 +7,10 @@ import os
 
 import pytest
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.hal.base import IDesktopHAL
-from dobby.hal.quiescence import X11QuiescenceMonitor
-from dobby.types import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.hal.base import IDesktopHAL
+from pinlet.hal.quiescence import X11QuiescenceMonitor
+from pinlet.types import (
     BoundingBox,
     ExecutionPhase,
     PostConditionAssertion,

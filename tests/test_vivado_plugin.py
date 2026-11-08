@@ -4,11 +4,11 @@ from unittest.mock import MagicMock
 
 from PIL import Image
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.hal.base import IDesktopHAL
-from dobby.plugins.registry import PluginRegistry
-from dobby.plugins.vivado import VivadoPlugin
-from dobby.types import BoundingBox, WindowInfo
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.hal.base import IDesktopHAL
+from pinlet.plugins.registry import PluginRegistry
+from pinlet.plugins.vivado import VivadoPlugin
+from pinlet.types import BoundingBox, WindowInfo
 
 
 def test_vivado_plugin_detection():

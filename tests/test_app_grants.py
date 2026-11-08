@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from dobby import handoff
-from dobby.overlay import protocol as p
-from dobby.overlay import style
-from dobby.overlay.client import NullOverlay, OverlayBlocked, OverlayDenied
-from dobby.overlay.grants import (
+from pinlet import handoff
+from pinlet.overlay import protocol as p
+from pinlet.overlay import style
+from pinlet.overlay.client import NullOverlay, OverlayBlocked, OverlayDenied
+from pinlet.overlay.grants import (
     CLICK,
     FULL,
     READ,
@@ -19,7 +19,7 @@ from dobby.overlay.grants import (
     allows,
     normalize,
 )
-from dobby.overlay.hal import OverlayHAL, consequential_label
+from pinlet.overlay.hal import OverlayHAL, consequential_label
 
 
 # ------------------------------------------------------------------ grants
@@ -94,7 +94,7 @@ def test_file_changes_are_picked_up(tmp_path):
 
 
 def test_off_switch_and_unknown_apps(tmp_path):
-    AppGrants(path=tmp_path / "x", env={"DOBBY_APP_GRANTS": "off"}).check(
+    AppGrants(path=tmp_path / "x", env={"PINLET_APP_GRANTS": "off"}).check(
         "Mail", "type", lambda a, d: False
     )
     AppGrants(path=tmp_path / "x", env={}).check(None, "type", lambda a, d: False)
@@ -138,7 +138,7 @@ def test_confirm_carries_detail_labels_and_kind():
     p.validate(
         {
             "op": "confirm",
-            "text": "Let Dobby use Vivado?",
+            "text": "Let Pinlet use Vivado?",
             "detail": "…",
             "allow": "Allow",
             "deny": "Don’t Allow",
@@ -154,7 +154,7 @@ def test_confirm_carries_detail_labels_and_kind():
 
 def test_access_prompt_is_calm_not_red():
     spec = style.confirm_spec(
-        "Let Dobby use Vivado?", allow="Allow", deny="Don’t Allow", kind="access", detail="why"
+        "Let Pinlet use Vivado?", allow="Allow", deny="Don’t Allow", kind="access", detail="why"
     )
     assert spec.color == "ok" and spec.tip == "why"
     assert [b.title for b in spec.buttons] == ["Allow", "Don’t Allow"]
@@ -220,7 +220,7 @@ def test_first_click_in_an_app_asks_then_acts(tmp_path):
     hal.mouse_click(10, 10)
     hal.mouse_click(20, 20)
     asks = [c for c in ov.calls if c[0] == "confirm"]
-    assert asks == [("confirm", "Let Dobby use Vivado?", "access")]
+    assert asks == [("confirm", "Let Pinlet use Vivado?", "access")]
     assert desk.done == [("click", 10, 10), ("click", 20, 20)]
     assert ("move", "Click", "vivado") in ov.calls
 
@@ -251,7 +251,7 @@ def test_send_button_asks_allow_deny(tmp_path):
     hal, ov, desk = _hal(tmp_path, answers=[False], hit=hit)
     with pytest.raises(OverlayDenied):
         hal.mouse_click(10, 10)
-    assert ("confirm", "Allow Dobby to click ‘Send’ in Vivado?", "danger") in ov.calls
+    assert ("confirm", "Allow Pinlet to click ‘Send’ in Vivado?", "danger") in ov.calls
     assert desk.done == []
 
 
@@ -292,7 +292,7 @@ def test_no_grants_means_no_prompts(tmp_path):
 
 
 def test_server_sends_instructions_with_every_handoff_kind():
-    from dobby.server import mcp_server
+    from pinlet.server import mcp_server
 
     text = mcp_server.instructions or ""
     for kind in ("stopped", "denied", "blocked", "interrupted", "paused", "wait_for_wake"):
@@ -301,20 +301,20 @@ def test_server_sends_instructions_with_every_handoff_kind():
 
 # ------------------------------------------------------------------ mode
 def test_turbo_is_the_default_and_secure_is_opt_in():
-    from dobby.mode import security_mode
+    from pinlet.mode import security_mode
 
-    assert security_mode(env={}, argv=["dobby"]) == "turbo"
-    assert security_mode(env={}, argv=["dobby", "--secure"]) == "secure"
-    assert security_mode(env={"DOBBY_MODE": "secure"}, argv=["dobby"]) == "secure"
-    assert security_mode(env={"DOBBY_SECURE": "1"}, argv=["dobby"]) == "secure"
+    assert security_mode(env={}, argv=["pinlet"]) == "turbo"
+    assert security_mode(env={}, argv=["pinlet", "--secure"]) == "secure"
+    assert security_mode(env={"PINLET_MODE": "secure"}, argv=["pinlet"]) == "secure"
+    assert security_mode(env={"PINLET_SECURE": "1"}, argv=["pinlet"]) == "secure"
 
 
 def test_overlay_config_follows_the_mode():
-    from dobby.overlay import overlay_config
+    from pinlet.overlay import overlay_config
 
     assert overlay_config({}).get("turbo") is True
-    assert "turbo" not in overlay_config({"DOBBY_MODE": "secure"})
-    assert "turbo" not in overlay_config({"DOBBY_OVERLAY_TURBO": "0"})
+    assert "turbo" not in overlay_config({"PINLET_MODE": "secure"})
+    assert "turbo" not in overlay_config({"PINLET_OVERLAY_TURBO": "0"})
 
 
 def test_turbo_hal_never_prompts(tmp_path):
@@ -326,22 +326,22 @@ def test_turbo_hal_never_prompts(tmp_path):
 
 
 def test_wrap_hal_turns_prompts_on_only_in_secure(monkeypatch):
-    import dobby.overlay as overlay_pkg
+    import pinlet.overlay as overlay_pkg
 
     class Live(Overlay):
         pass
 
-    monkeypatch.setattr("sys.argv", ["dobby"])
-    monkeypatch.delenv("DOBBY_MODE", raising=False)
-    monkeypatch.delenv("DOBBY_SECURE", raising=False)
+    monkeypatch.setattr("sys.argv", ["pinlet"])
+    monkeypatch.delenv("PINLET_MODE", raising=False)
+    monkeypatch.delenv("PINLET_SECURE", raising=False)
     hal = overlay_pkg.wrap_hal(Desk(), Live())
     assert not hal.secure and not hal._danger_prompts()
-    monkeypatch.setenv("DOBBY_MODE", "secure")
+    monkeypatch.setenv("PINLET_MODE", "secure")
     assert hal.secure and hal._danger_prompts()  # read per call, not fixed at start
 
 
-def test_one_shared_dobby_serves_turbo_and_secure_clients(tmp_path):
-    from dobby.mode import is_secure, session_mode
+def test_one_shared_pinlet_serves_turbo_and_secure_clients(tmp_path):
+    from pinlet.mode import is_secure, session_mode
 
     hit = lambda x, y: {"role": "button", "name": "Send", "secure": False}
 
@@ -358,6 +358,6 @@ def test_one_shared_dobby_serves_turbo_and_secure_clients(tmp_path):
         hal.mouse_click(10, 10)  # no questions
     assert desk.done == [("click", 10, 10)]
     with session_mode("secure"):
-        with pytest.raises(OverlayBlocked):  # "Let Dobby use Vivado?" -> Don't Allow
+        with pytest.raises(OverlayBlocked):  # "Let Pinlet use Vivado?" -> Don't Allow
             hal.mouse_click(10, 10)
     assert [c for c in ov.calls if c[0] == "turbo"] == [("turbo", True), ("turbo", False)]

@@ -5,14 +5,14 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from dobby.gemma.client import GemmaClient
-from dobby.gemma.decide import GemmaDecider
-from dobby.screen_state import StateTracker, build_state
-from dobby.screen_state.observe import act_on_element, decide_next_element, observe
-from dobby.screen_state.occlusion import check_occlusion
-from dobby.screen_state.settle import wait_until_settled
-from dobby.screen_state.visual import decide_visual_element
-from dobby.types import BoundingBox, WindowInfo
+from pinlet.gemma.client import GemmaClient
+from pinlet.gemma.decide import GemmaDecider
+from pinlet.screen_state import StateTracker, build_state
+from pinlet.screen_state.observe import act_on_element, decide_next_element, observe
+from pinlet.screen_state.occlusion import check_occlusion
+from pinlet.screen_state.settle import wait_until_settled
+from pinlet.screen_state.visual import decide_visual_element
+from pinlet.types import BoundingBox, WindowInfo
 
 WIN = WindowInfo(
     window_id="7",
@@ -344,7 +344,7 @@ def test_visual_choice_skips_menu_bar_and_off_window_elements():
 
 
 def test_degenerate_detector_falls_back_to_contours_and_scales_retina():
-    from dobby.screen_state.observe import detect_icon_boxes, looks_degenerate
+    from pinlet.screen_state.observe import detect_icon_boxes, looks_degenerate
 
     class Grounder:
         def generate_proposals(self, image, offset=(0, 0)):
@@ -371,7 +371,7 @@ def test_settle_auto_only_right_after_an_action():
 
 
 def test_visual_lane_never_offers_window_controls_or_frame_corners():
-    from dobby.screen_state.observe import detect_icon_boxes
+    from pinlet.screen_state.observe import detect_icon_boxes
 
     hal = FakeHAL()
     ctl = FakeController(

@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Dobby"
+name = "Pinlet"
 version = "0.1.0"
 description = "Model Context Protocol (MCP) server for desktop GUI automation, screen perception, and window management on macOS and Linux"
 readme = "README.md"
@@ -43,7 +43,7 @@ macos = [
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
     "onnxruntime>=1.17; sys_platform == 'darwin'",
 ]
-# ADK agent pipeline (python -m dobby.adk): Gemma judges via LiteLLM -> Ollama
+# ADK agent pipeline (python -m pinlet.adk): Gemma judges via LiteLLM -> Ollama
 adk = [
     "google-adk>=2.13",
     "litellm>=1.80",
@@ -57,10 +57,12 @@ dev = [
 ]
 
 [project.scripts]
-dobby = "dobby.cli:main"
+pinlet = "pinlet.cli:main"
+# Old name, kept for one release so existing MCP entries keep working.
+dobby = "pinlet.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["dobby*"]
+include = ["pinlet*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -116,8 +118,8 @@ convention = "google"
 "examples/**" = ["D"]
 "apps/**" = ["D"]
 # Lambdas here are called on the spot inside the loop, so late binding is safe.
-"dobby/perception/atspi.py" = ["B023"]
-"dobby/hub/daemon.py" = ["B023"]
+"pinlet/perception/atspi.py" = ["B023"]
+"pinlet/hub/daemon.py" = ["B023"]
 # Tool docstrings here are the MCP tool descriptions the model reads; keep
 # their wording and layout as tuned rather than reshaping them for pydocstyle.
-"dobby/server.py" = ["D205", "D417"]
+"pinlet/server.py" = ["D205", "D417"]

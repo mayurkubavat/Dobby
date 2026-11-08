@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "Dobby": {
-      "command": "dobby",
+    "Pinlet": {
+      "command": "pinlet",
       "env": {
         "PYTHONUNBUFFERED": "1"
       }

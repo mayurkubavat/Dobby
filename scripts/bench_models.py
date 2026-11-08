@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compare local models on Dobby's decision jobs before switching a role.
+Compare local models on Pinlet's decision jobs before switching a role.
 
     python scripts/bench_models.py                              # the models the roles use now
     python scripts/bench_models.py --models gemma3:4b,qwen2.5vl:7b,qwen3-vl:8b
@@ -11,8 +11,8 @@ Tasks: check (yes/no on crops), pick_text (pick an element or "none" from a text
 screen state), pick_visual (pick a lettered box or "none" on a drawn window).
 Columns that matter most: "confident wrong" (wrong answers at p >= 0.9) and
 "says none when absent". Never downloads: missing models show as not installed.
-Then point a role at the winner: set_model_role, ~/.dobby/models.json or
-DOBBY_MODEL_<ROLE>.
+Then point a role at the winner: set_model_role, ~/.pinlet/models.json or
+PINLET_MODEL_<ROLE>.
 """
 
 from __future__ import annotations
@@ -24,10 +24,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dobby.config import CONFIG
-from dobby.gemma.client import GemmaClient
-from dobby.local_models import KNOWN_MODELS, ROLES, model_for, profile
-from dobby.model_bench import bench_model, markdown
+from pinlet.config import CONFIG
+from pinlet.gemma.client import GemmaClient
+from pinlet.local_models import KNOWN_MODELS, ROLES, model_for, profile
+from pinlet.model_bench import bench_model, markdown
 
 
 def main() -> int:

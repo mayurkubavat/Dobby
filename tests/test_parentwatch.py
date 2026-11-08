@@ -1,6 +1,6 @@
 import threading
 
-from dobby import parentwatch
+from pinlet import parentwatch
 
 
 def test_parent_gone_when_reparented_or_dead():

@@ -122,7 +122,7 @@ Vivado 2025.1 persists user custom layouts to the user configuration tree:
 
 ## 5. Vision MCP Automation Hook
 
-In `dobby/plugins/vivado.py`, the layout toggle capability is now exposed as a first-class feature:
+In `pinlet/plugins/vivado.py`, the layout toggle capability is now exposed as a first-class feature:
 
 ```python
 # Dispatched via Vision Control MCP

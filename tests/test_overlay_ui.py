@@ -1,13 +1,13 @@
 """UI behaviour of the overlay that does not need a Mac: control bar states
-and clicks, the shared Dobby menu (menu bar icon and the tag's ▾), the
+and clicks, the shared Pinlet menu (menu bar icon and the tag's ▾), the
 clickable tag area, and how replays draw the capsule."""
 
 from __future__ import annotations
 
 import pytest
 
-from dobby.overlay import geometry
-from dobby.overlay.menu import bar_click, bar_tip, bar_view, label_click, menu_entries, status_of
+from pinlet.overlay import geometry
+from pinlet.overlay.menu import bar_click, bar_tip, bar_view, label_click, menu_entries, status_of
 
 ARROW_W, ARROW_H, CHIP_H = 13 * 1.25, 21.5 * 1.25, 20.0
 
@@ -31,7 +31,7 @@ def view(**kw):
 class TestBarStaysOn:
     def test_idle_bar_says_sleeping_and_stays(self):
         v = view()
-        assert v is not None and v[0] == "ready" and v[1] == "Dobby is sleeping"
+        assert v is not None and v[0] == "ready" and v[1] == "Pinlet is sleeping"
         assert (v[2], v[3]) == ("Pause", "Stop")
 
     def test_idle_dot_is_dimmed(self):
@@ -55,7 +55,7 @@ class TestBarStaysOn:
 class TestBarStates:
     def test_paused_beats_everything(self):
         v = view(paused=True, takeover=True, working=True, current_mode="stopped")
-        assert v[:4] == ("paused", "Dobby is paused", "Resume", "Stop") and v[4] == "caution"
+        assert v[:4] == ("paused", "Pinlet is paused", "Resume", "Stop") and v[4] == "caution"
 
     @pytest.mark.parametrize(
         "resume,text", [("auto", "waits until you stop"), ("manual", "You're in control")]
@@ -66,10 +66,10 @@ class TestBarStates:
 
     def test_stopped_shows_before_working(self):
         v = view(current_mode="stopped", working=True)
-        assert v[:4] == ("stopped", "Dobby stopped", "OK", "Hide") and v[4] == "danger"
+        assert v[:4] == ("stopped", "Pinlet stopped", "OK", "Hide") and v[4] == "danger"
 
     @pytest.mark.parametrize(
-        "working,text", [(True, "Dobby ⚡ Turbo"), (False, "Dobby ⚡ Turbo · sleeping")]
+        "working,text", [(True, "Pinlet ⚡ Turbo"), (False, "Pinlet ⚡ Turbo · sleeping")]
     )
     def test_turbo_labels(self, working, text):
         assert view(turbo=True, working=working)[1].startswith(text)
@@ -79,14 +79,15 @@ class TestBarAwake:
     def test_awake_without_a_waiting_ai_says_so(self):
         v = view(awake=True)
         assert (
-            v[0] == "awake" and v[1] == "Dobby is awake · no AI is waiting — ask your AI for a task"
+            v[0] == "awake"
+            and v[1] == "Pinlet is awake · no AI is waiting — ask your AI for a task"
         )
         assert v[2:] == ("Pause", "Stop", "ok", 1.0)
 
     def test_awake_hands_back_to_a_waiting_ai(self):
         assert view(awake=True, handoff=True)[:2] == (
             "awake",
-            "Dobby is awake · handing back to the AI",
+            "Pinlet is awake · handing back to the AI",
         )
         assert "handing back" in view(awake=True, handoff=True, turbo=True)[1]
 
@@ -115,7 +116,7 @@ class TestBarAiWaiting:
     def test_waiting_ai_bar_invites_a_click(self):
         v = view(ai_waiting=True)
         assert (
-            v[:2] == ("ready", "Dobby is sleeping · click to wake") and label_click(v[0]) == "wake"
+            v[:2] == ("ready", "Pinlet is sleeping · click to wake") and label_click(v[0]) == "wake"
         )
         assert "click to wake" in view(ai_waiting=True, turbo=True)[1]
 
@@ -140,13 +141,13 @@ class TestBarAiWaiting:
         assert view(ai_waiting=True, working=True)[0] == "working"
 
     def test_tooltips(self):
-        assert bar_tip("ready") == "Click to wake Dobby"
-        assert bar_tip("ready", True) == "Click to wake Dobby: your AI is waiting for you"
+        assert bar_tip("ready") == "Click to wake Pinlet"
+        assert bar_tip("ready", True) == "Click to wake Pinlet: your AI is waiting for you"
         assert (
             bar_tip("ready", True, "report done")
-            == "Click to wake Dobby: your AI is waiting for you (report done)"
+            == "Click to wake Pinlet: your AI is waiting for you (report done)"
         )
-        assert bar_tip("awake") == "Click to put Dobby to sleep"
+        assert bar_tip("awake") == "Click to put Pinlet to sleep"
         assert bar_tip("working", True) is None
 
 
@@ -263,14 +264,14 @@ def test_menu_recent_steps_newest_first_and_short():
     assert titles[i + 1].strip().startswith("Click x") and titles[i + 1].endswith("…")
     assert len(titles[i + 1].strip()) <= 60
     assert titles[i + 2].strip() == "second" and titles[i + 3].strip() == "first"
-    assert titles[0] == "Dobby: Idle"
+    assert titles[0] == "Pinlet: Idle"
 
 
 @pytest.mark.parametrize(
     "awake,title,action",
     [
-        (False, "Wake Dobby", "menuWake:"),
-        (True, "Put Dobby to sleep", "menuSleep:"),
+        (False, "Wake Pinlet", "menuWake:"),
+        (True, "Put Pinlet to sleep", "menuSleep:"),
     ],
 )
 def test_menu_wake_and_sleep_entry(awake, title, action):
@@ -280,7 +281,7 @@ def test_menu_wake_and_sleep_entry(awake, title, action):
 
 def test_menu_has_no_wake_entry_while_working():
     titles = [t for t, _, _ in _entries(awake=None)]
-    assert "Wake Dobby" not in titles and "Put Dobby to sleep" not in titles
+    assert "Wake Pinlet" not in titles and "Put Pinlet to sleep" not in titles
 
 
 def test_menu_with_no_steps_says_so():
@@ -291,7 +292,7 @@ def test_menu_with_no_steps_says_so():
 @pytest.mark.parametrize("tip", [(0, 0), (500, 300), (1500.5, 980.25)])
 @pytest.mark.parametrize("width", [60, 140, 400])
 def test_tag_click_area_never_covers_the_pointer_tip(tip, width):
-    """Dobby clicks at the tip, so the clickable tag must not cover it."""
+    """Pinlet clicks at the tip, so the clickable tag must not cover it."""
     rect = geometry.chip_rect(tip, width, ARROW_W, ARROW_H, CHIP_H)
     assert not geometry.contains(rect, tip)
     x, y, w, h = rect
@@ -310,7 +311,7 @@ def draw():
     PIL = pytest.importorskip("PIL")
     from PIL import Image
 
-    from dobby.overlay.annotate import TrackState, annotate
+    from pinlet.overlay.annotate import TrackState, annotate
 
     def _draw(**state):
         img = Image.new("RGB", (420, 90), (255, 255, 255))
@@ -337,10 +338,10 @@ def test_capsule_thinking_icon_widens_tag(draw):
     assert max(_nonwhite_columns(draw(state="thinking"), 33)) > max(_nonwhite_columns(draw(), 33))
 
 
-def _label_only_width(text="Dobby"):
+def _label_only_width(text="Pinlet"):
     from PIL import Image, ImageDraw
 
-    from dobby.overlay.annotate import _font
+    from pinlet.overlay.annotate import _font
 
     return 9 + ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(text, font=_font(12)) + 9
 

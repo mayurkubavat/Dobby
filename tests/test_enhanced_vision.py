@@ -2,18 +2,18 @@
 
 from PIL import Image, ImageDraw
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.perception.grounding.engine import GroundingEngine
-from dobby.perception.grounding.ensemble import compute_iou
-from dobby.perception.grounding.template import TemplateGroundingProvider
-from dobby.perception.token_optimizer import TokenOptimizer
-from dobby.server import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.perception.grounding.engine import GroundingEngine
+from pinlet.perception.grounding.ensemble import compute_iou
+from pinlet.perception.grounding.template import TemplateGroundingProvider
+from pinlet.perception.token_optimizer import TokenOptimizer
+from pinlet.server import (
     click_and_type,
     configure_vision,
     get_active_window,
     get_vision_diagnostics,
 )
-from dobby.types import BoundingBox
+from pinlet.types import BoundingBox
 
 
 def test_iou_computation():
@@ -119,7 +119,7 @@ def test_controller_click_and_type(mock_hal):
 
 def test_mcp_new_server_tools(mock_hal, monkeypatch):
     """Verifies all new enhanced MCP tools execute successfully."""
-    import dobby.server as server
+    import pinlet.server as server
 
     # Never drive the real desktop: point the server at the mock HAL.
     monkeypatch.setattr(server, "hal", mock_hal)

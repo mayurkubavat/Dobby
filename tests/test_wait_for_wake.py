@@ -13,8 +13,8 @@ import threading
 
 import pytest
 
-from dobby.overlay import NullOverlay, OverlayHAL
-from dobby.overlay.barlock import mark_waiting, others_waiting, waiting_dir
+from pinlet.overlay import NullOverlay, OverlayHAL
+from pinlet.overlay.barlock import mark_waiting, others_waiting, waiting_dir
 
 
 # ------------------------------------------------------- waiting markers
@@ -84,7 +84,7 @@ class FakeControl:
 
 @pytest.fixture
 def server(monkeypatch):
-    srv = pytest.importorskip("dobby.server")
+    srv = pytest.importorskip("pinlet.server")
     ctl = FakeControl()
     monkeypatch.setattr(srv, "_control_or_none", lambda: ctl)
 

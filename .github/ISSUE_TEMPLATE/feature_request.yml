@@ -1,12 +1,12 @@
 name: Feature request
-description: An idea for something Dobby should do.
+description: An idea for something Pinlet should do.
 labels: [enhancement]
 body:
   - type: textarea
     id: problem
     attributes:
       label: What are you trying to do?
-      description: The task or workflow, and where Dobby gets in the way today.
+      description: The task or workflow, and where Pinlet gets in the way today.
     validations:
       required: true
   - type: textarea
@@ -18,4 +18,4 @@ body:
     id: safety
     attributes:
       label: Anything risky?
-      description: Would this let Dobby send, delete, pay or run commands? How should it ask first?
+      description: Would this let Pinlet send, delete, pay or run commands? How should it ask first?

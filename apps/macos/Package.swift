@@ -1,19 +1,19 @@
 // swift-tools-version:5.9
-// Dobby.app: the native macOS shell around the shared Dobby (`dobby serve`).
+// Pinlet.app: the native macOS shell around the shared Pinlet (`pinlet serve`).
 // Build the app bundle with ./build.sh (needs the Xcode command line tools).
 import PackageDescription
 
 let package = Package(
-    name: "Dobby",
+    name: "Pinlet",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "Dobby",
-            path: "Sources/Dobby",
+            name: "Pinlet",
+            path: "Sources/Pinlet",
             linkerSettings: [.linkedFramework("AppKit"), .linkedFramework("ServiceManagement"),
                              .linkedFramework("SwiftUI"), .linkedFramework("UserNotifications"),
                              .linkedFramework("AppIntents")]
         ),
-        .testTarget(name: "DobbyTests", dependencies: ["Dobby"], path: "Tests/DobbyTests"),
+        .testTarget(name: "PinletTests", dependencies: ["Pinlet"], path: "Tests/PinletTests"),
     ]
 )

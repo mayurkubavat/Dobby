@@ -5,7 +5,7 @@ import logging
 
 import pytest
 
-import dobby.server as srv
+import pinlet.server as srv
 
 
 @pytest.fixture
@@ -13,12 +13,12 @@ def server_log(tmp_path):
     path = tmp_path / "logs" / "server.log"
     handler = srv.setup_server_log(str(path), max_bytes=10_000, backups=1)
     yield path
-    logging.getLogger("dobby").removeHandler(handler)
+    logging.getLogger("pinlet").removeHandler(handler)
     handler.close()
 
 
 def _flush():
-    for h in logging.getLogger("dobby").handlers:
+    for h in logging.getLogger("pinlet").handlers:
         h.flush()
 
 
@@ -26,7 +26,7 @@ def test_setup_is_idempotent_and_rotates_small(server_log):
     again = srv.setup_server_log(str(server_log), max_bytes=10_000, backups=1)
     handlers = [
         h
-        for h in logging.getLogger("dobby").handlers
+        for h in logging.getLogger("pinlet").handlers
         if getattr(h, "baseFilename", "") == str(server_log)
     ]
     assert handlers == [again] and again.maxBytes == 10_000
@@ -49,7 +49,7 @@ def test_tool_calls_are_logged_with_duration_and_traceback(server_log, monkeypat
         srv.mcp_server.remove_tool("_test_boom")
     _flush()
     text = server_log.read_text()
-    assert "dobby.tools: manage_toolsets ok " in text
+    assert "pinlet.tools: manage_toolsets ok " in text
     assert "_test_boom raised ValueError: kaput" in text and "Traceback" in text
     assert "_test_boom" in text.split("raised ValueError")[1]  # the call line follows the traceback
     assert capsys.readouterr().out == ""

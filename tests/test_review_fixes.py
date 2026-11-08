@@ -1,8 +1,8 @@
 """Regression tests for the review fixes on the session facade, bicameral Tier 0 and toolsets."""
 
-from dobby.agent_loop.bicameral import BicameralStepController
-from dobby.hal.session import DesktopSession
-from dobby.types import DisplayMetrics, DisplayTopology
+from pinlet.agent_loop.bicameral import BicameralStepController
+from pinlet.hal.session import DesktopSession
+from pinlet.types import DisplayMetrics, DisplayTopology
 
 
 class _Backend:
@@ -51,7 +51,7 @@ def test_unavailable_ocr_never_proves_text_absent():
 
 
 def test_cheap_perception_tools_are_core():
-    from dobby.server import _TOOL_DOMAINS
+    from pinlet.server import _TOOL_DOMAINS
 
     for name in (
         "get_accessibility_tree",
@@ -65,6 +65,6 @@ def test_cheap_perception_tools_are_core():
 
 
 def test_controller_without_session_has_no_x11_monitor(mock_hal):
-    from dobby.agent_loop.controller import FeedbackLoopController
+    from pinlet.agent_loop.controller import FeedbackLoopController
 
     assert FeedbackLoopController(mock_hal).quiescence_monitor is None

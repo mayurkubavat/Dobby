@@ -3,13 +3,13 @@
 import math
 from types import SimpleNamespace
 
-from dobby.gemma.client import GemmaClient
-from dobby.gemma.decide import GemmaDecider
-from dobby.perception.ocr import OCRLine
-from dobby.screen_state import StateTracker, build_state, rebind
-from dobby.screen_state.observe import act_on_element, decide_next_element, observe
-from dobby.screen_state.state import coarse_position
-from dobby.types import BoundingBox, WindowInfo
+from pinlet.gemma.client import GemmaClient
+from pinlet.gemma.decide import GemmaDecider
+from pinlet.perception.ocr import OCRLine
+from pinlet.screen_state import StateTracker, build_state, rebind
+from pinlet.screen_state.observe import act_on_element, decide_next_element, observe
+from pinlet.screen_state.state import coarse_position
+from pinlet.types import BoundingBox, WindowInfo
 
 WIN = WindowInfo(
     window_id="1",
@@ -321,8 +321,8 @@ def test_confirmation_no_downgrades_act_to_escalate():
 
 
 def test_menu_bar_items_survive_window_clipping(monkeypatch):
-    import dobby.screen_state.observe as obs_mod
-    import dobby.screen_state.state as state_mod
+    import pinlet.screen_state.observe as obs_mod
+    import pinlet.screen_state.state as state_mod
 
     # macOS behaviour: the app's menu bar sits at the top of the screen, outside its window.
     monkeypatch.setattr(obs_mod, "MENU_BAR_HEIGHT", 40)
@@ -351,8 +351,8 @@ def test_menu_bar_items_survive_window_clipping(monkeypatch):
 
 
 def test_no_screen_top_menu_band_off_macos(monkeypatch):
-    import dobby.screen_state.observe as obs_mod
-    import dobby.screen_state.state as state_mod
+    import pinlet.screen_state.observe as obs_mod
+    import pinlet.screen_state.state as state_mod
 
     # Linux/Windows: menus live inside the window, so nothing above it is kept.
     monkeypatch.setattr(obs_mod, "MENU_BAR_HEIGHT", 0)

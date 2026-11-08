@@ -5,9 +5,9 @@ import math
 import pytest
 from PIL import Image, ImageDraw
 
-from dobby.config import CONFIG
-from dobby.gemma.client import GemmaClient, first_token_logprobs
-from dobby.gemma.decide import (
+from pinlet.config import CONFIG
+from pinlet.gemma.client import GemmaClient, first_token_logprobs
+from pinlet.gemma.decide import (
     NONE_OPTION,
     Decision,
     GemmaDecider,
@@ -17,8 +17,8 @@ from dobby.gemma.decide import (
     option_labels,
     shortlist,
 )
-from dobby.gemma.gate import GatePolicy, RunBudget, Verdict, gate
-from dobby.vdom.gemma3_sidecar import Gemma3Grounder
+from pinlet.gemma.gate import GatePolicy, RunBudget, Verdict, gate
+from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
 
 
 class FakeLogprobOllama:

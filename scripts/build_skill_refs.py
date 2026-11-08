@@ -1,9 +1,9 @@
 """
-Builds the generated references of the Dobby skills plugin.
+Builds the generated references of the Pinlet skills plugin.
 
-Two kinds of files under plugins/dobby/skills/*/references/:
+Two kinds of files under plugins/pinlet/skills/*/references/:
 
-* Generated from code: the MCP tool reference (from dobby/server.py, read
+* Generated from code: the MCP tool reference (from pinlet/server.py, read
   with ast so no desktop backend starts) and each app plugin's feature catalog.
 * Copied from the repo's own notes (learnings/, docs/) so the plugin is
   self-contained when Claude Code copies it into its plugin cache.
@@ -22,30 +22,30 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS = ROOT / "plugins" / "dobby" / "skills"
+SKILLS = ROOT / "plugins" / "pinlet" / "skills"
 
 # skill -> [(reference file name, source path relative to ROOT)]
 COPIED: dict[str, list[tuple]] = {
-    "dobby-perception": [
+    "pinlet-perception": [
         ("zero-token-element-discovery.md", "learnings/zero_token_element_discovery.md"),
         ("visual-delta-verification.md", "learnings/visual_delta_verification.md"),
         ("architecture.md", "docs/architecture.md"),
     ],
-    "dobby-app-chrome": [
+    "pinlet-app-chrome": [
         ("browser-recipes.md", "learnings/browser_interaction_recipes.md"),
         ("gemini-web-clipboard.md", "learnings/gemini_web_clipboard_extraction_recipe.md"),
     ],
-    "dobby-app-vivado": [
+    "pinlet-app-vivado": [
         ("waveform-automation.md", "learnings/vivado_gui_waveform_automation.md"),
         ("layout-for-dv.md", "learnings/vivado_ui_layout_customization_for_dv.md"),
         ("plugin.md", "docs/plugins/vivado.md"),
         ("tool-features-research.md", "research/vivado_tool_features_and_ai_automation.md"),
     ],
-    "dobby-app-verdi": [
+    "pinlet-app-verdi": [
         ("eda-ui-automation.md", "learnings/verdi_and_complex_eda_ui_automation.md"),
         ("tool-features-research.md", "research/verdi_tool_features_and_ai_automation.md"),
     ],
-    "dobby-troubleshoot": [
+    "pinlet-troubleshoot": [
         ("setup.md", "docs/setup.md"),
         ("linux-window-management.md", "learnings/linux_desktop_window_management.md"),
     ],
@@ -100,7 +100,7 @@ def _params(fn: ast.FunctionDef) -> str:
 
 
 def tools_reference() -> str:
-    src = ROOT / "dobby" / "server.py"
+    src = ROOT / "pinlet" / "server.py"
     tree = ast.parse(src.read_text(encoding="utf-8"))
     domains = _literal_dict(tree, "_TOOL_DOMAINS")
     tools = [
@@ -123,8 +123,8 @@ def tools_reference() -> str:
         "unregistered",
     ]
     out = [
-        HEADER.format(src="dobby/server.py"),
-        "# Dobby MCP tools\n\n",
+        HEADER.format(src="pinlet/server.py"),
+        "# Pinlet MCP tools\n\n",
         f"{len(tools)} tools. Only `core` is on by default; enable others with "
         '`manage_toolsets(action="enable", domains=[...])`.\n',
     ]
@@ -138,11 +138,11 @@ def tools_reference() -> str:
 
 def features_reference(app_id: str) -> str:
     sys.path.insert(0, str(ROOT))
-    from dobby.plugins.registry import PluginRegistry
+    from pinlet.plugins.registry import PluginRegistry
 
     plugin = PluginRegistry().get(app_id)
     out = [
-        HEADER.format(src=f"dobby/plugins/{app_id}.py"),
+        HEADER.format(src=f"pinlet/plugins/{app_id}.py"),
         f"# {plugin.name}: features\n\n",
         f'Run with `invoke_plugin_feature(feature_id, plugin_id="{app_id}", args={{...}})`. '
         "Prefer these over clicking: they use hotkeys and menus the plugin already knows.\n\n",
@@ -167,9 +167,9 @@ def features_reference(app_id: str) -> str:
 
 def expected_files() -> dict[Path, str]:
     files: dict[Path, str] = {
-        SKILLS / "dobby-perception" / "references" / "tools.md": tools_reference(),
-        SKILLS / "dobby-app-chrome" / "references" / "features.md": features_reference("chrome"),
-        SKILLS / "dobby-app-vivado" / "references" / "features.md": features_reference("vivado"),
+        SKILLS / "pinlet-perception" / "references" / "tools.md": tools_reference(),
+        SKILLS / "pinlet-app-chrome" / "references" / "features.md": features_reference("chrome"),
+        SKILLS / "pinlet-app-vivado" / "references" / "features.md": features_reference("vivado"),
     }
     for skill, pairs in COPIED.items():
         for name, rel in pairs:

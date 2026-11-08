@@ -4,11 +4,11 @@ from unittest.mock import MagicMock
 
 from PIL import Image
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.plugins.chrome import ChromeBrowserPlugin
-from dobby.plugins.registry import PluginRegistry
-from dobby.server import mcp_server
-from dobby.types import BoundingBox, SubPaneROI, WindowInfo
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.plugins.chrome import ChromeBrowserPlugin
+from pinlet.plugins.registry import PluginRegistry
+from pinlet.server import mcp_server
+from pinlet.types import BoundingBox, SubPaneROI, WindowInfo
 
 
 def test_sub_pane_roi_computation():

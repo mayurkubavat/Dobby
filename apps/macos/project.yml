@@ -1,8 +1,8 @@
-# XcodeGen spec for Dobby.app. build.sh uses it when `xcodegen` is installed
+# XcodeGen spec for Pinlet.app. build.sh uses it when `xcodegen` is installed
 # (brew install xcodegen): an Xcode app target runs the App Intents metadata
-# step, so Spotlight, Shortcuts and Siri see Dobby's actions. Without it,
+# step, so Spotlight, Shortcuts and Siri see Pinlet's actions. Without it,
 # build.sh falls back to the SwiftPM build (no App Intents registered).
-name: Dobby
+name: Pinlet
 options:
   deploymentTarget:
     macOS: "13.0"
@@ -12,18 +12,18 @@ settings:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
 targets:
-  Dobby:
+  Pinlet:
     type: application
     platform: macOS
     sources:
-      - path: Sources/Dobby
+      - path: Sources/Pinlet
     settings:
       base:
-        PRODUCT_NAME: Dobby
-        PRODUCT_BUNDLE_IDENTIFIER: dev.dobby.app
+        PRODUCT_NAME: Pinlet
+        PRODUCT_BUNDLE_IDENTIFIER: dev.pinlet.app
         INFOPLIST_FILE: Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
-        CODE_SIGNING_ALLOWED: NO   # build.sh signs with "Dobby Local Signing"
+        CODE_SIGNING_ALLOWED: NO   # build.sh signs with "Pinlet Local Signing"
         ENABLE_HARDENED_RUNTIME: NO
         COMBINE_HIDPI_IMAGES: YES
     dependencies:

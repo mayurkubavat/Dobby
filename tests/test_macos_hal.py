@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from dobby.hal.macos import KEYCODES, MacHAL
-from dobby.perception.ax import AXInspector
+from pinlet.hal.macos import KEYCODES, MacHAL
+from pinlet.perception.ax import AXInspector
 
 
 class FakeQuartz:
@@ -106,10 +106,10 @@ class FakeAppKit:
 
 @pytest.fixture(autouse=True)
 def _no_cooldown(monkeypatch):
-    from dobby.config import CONFIG
+    from pinlet.config import CONFIG
 
     monkeypatch.setattr(CONFIG, "action_cooldown_ms", 0)
-    monkeypatch.setattr("dobby.hal.macos.time.sleep", lambda s: None)
+    monkeypatch.setattr("pinlet.hal.macos.time.sleep", lambda s: None)
 
 
 def _hal(**kw):
@@ -179,14 +179,14 @@ def test_hotkey_releases_modifiers_on_error():
     assert (last["code"], last["down"], last["flags"]) == (55, False, 0)
 
 
-def test_every_event_is_tagged_as_dobby():
-    from dobby.hal.macos import DOBBY_EVENT_TAG
+def test_every_event_is_tagged_as_pinlet():
+    from pinlet.hal.macos import PINLET_EVENT_TAG
 
     hal, q = _hal()
     hal.keyboard_type("a")
     hal.keyboard_hotkey(["cmd", "c"])
     hal.mouse_click(300, 200)
-    assert q.posted and all(e.get("field_42") == DOBBY_EVENT_TAG for e in q.posted)
+    assert q.posted and all(e.get("field_42") == PINLET_EVENT_TAG for e in q.posted)
 
 
 def test_press_key_and_unknown_key():
@@ -331,7 +331,7 @@ def test_frontmost_is_read_fresh_not_from_nsworkspace_cache():
 
 
 def test_lsappinfo_front_pid_parses_both_output_styles(monkeypatch):
-    import dobby.hal.macos as macos
+    import pinlet.hal.macos as macos
 
     for info in ("    pid = 85435 !cgsConnection", '"pid"=85435'):
 
@@ -450,8 +450,8 @@ def test_ax_inspector_node_budget():
 
 
 def test_factory_picks_mac_hal(monkeypatch):
-    import dobby.hal.factory as factory
-    import dobby.hal.macos as macos
+    import pinlet.hal.factory as factory
+    import pinlet.hal.macos as macos
 
     monkeypatch.setattr(factory, "_HAL_INSTANCE", None)
     monkeypatch.setattr(factory.sys, "platform", "darwin")
@@ -463,7 +463,7 @@ def test_factory_picks_mac_hal(monkeypatch):
 
 
 def test_ax_inspector_enables_electron_web_content(monkeypatch):
-    from dobby.config import CONFIG
+    from pinlet.config import CONFIG
 
     monkeypatch.setattr(CONFIG, "ax_web_content_settle_seconds", 0)
     monkeypatch.setattr(CONFIG, "ax_web_content_retry_seconds", 0)
@@ -479,7 +479,7 @@ def test_ax_inspector_enables_electron_web_content(monkeypatch):
 
 
 def test_ax_inspector_rereads_while_chromium_builds_its_tree(monkeypatch):
-    from dobby.config import CONFIG
+    from pinlet.config import CONFIG
 
     monkeypatch.setattr(CONFIG, "ax_web_content_settle_seconds", 0)
     monkeypatch.setattr(CONFIG, "ax_web_content_retry_seconds", 5)
@@ -527,7 +527,7 @@ def test_ax_inspector_native_app_rejects_flag_harmlessly():
 
 
 def test_ax_inspector_web_content_can_be_disabled(monkeypatch):
-    from dobby.config import CONFIG
+    from pinlet.config import CONFIG
 
     monkeypatch.setattr(CONFIG, "ax_enable_web_content", False)
     insp = _inspector()
@@ -550,7 +550,7 @@ def test_ax_inspector_wrapper_groups_do_not_use_depth():
 
 
 def test_ax_inspector_includes_top_level_menu_bar(monkeypatch):
-    from dobby.config import CONFIG
+    from pinlet.config import CONFIG
 
     item_in_menu = _el("AXMenuItem", (60, 30, 120, 20), AXTitle="New Note")
     menu = _el("AXMenu", (60, 25, 200, 300), children=[item_in_menu])

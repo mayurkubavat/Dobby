@@ -63,7 +63,7 @@ flowchart TD
 ## 2. Phase-by-Phase Deliverables
 
 ### Phase 1 (P0): Event-Driven Quiescence & Semantic Verification Engine
-* **Source**: [`dobby/hal/quiescence.py`](../dobby/hal/quiescence.py)
+* **Source**: [`pinlet/hal/quiescence.py`](../pinlet/hal/quiescence.py)
 * **Tests**: [`tests/test_quiescence.py`](../tests/test_quiescence.py)
 * **Git Commit**: `dabb67d`
 * **Capabilities**:
@@ -73,7 +73,7 @@ flowchart TD
   * Evaluates declarative `PostConditionContract` (e.g. `TEXT_APPEARED`, `WINDOW_SPAWNED`, `AT_SPI_STATE_PRESENT`, `CURSOR_CHANGED`) instead of relying solely on image pixel differences.
 
 ### Phase 2 (P3): Semantic Modal Triage & Policy Router
-* **Source**: [`dobby/agent_loop/obstruction.py`](../dobby/agent_loop/obstruction.py)
+* **Source**: [`pinlet/agent_loop/obstruction.py`](../pinlet/agent_loop/obstruction.py)
 * **Tests**: [`tests/test_modal_triage.py`](../tests/test_modal_triage.py)
 * **Git Commit**: `aa6f96c`
 * **Capabilities**:
@@ -85,7 +85,7 @@ flowchart TD
   * MCP tools: `dismiss_obstructions()` and zero-token `resolve_modal_dialog(button_id, button_label)`.
 
 ### Phase 3 (P2): GUI-to-Script Skill Crystallization Engine
-* **Source**: [`dobby/crystallization/`](../dobby/crystallization/)
+* **Source**: [`pinlet/crystallization/`](../pinlet/crystallization/)
 * **Tests**: [`tests/test_crystallization.py`](../tests/test_crystallization.py)
 * **Git Commit**: `bd0835d`
 * **Capabilities**:
@@ -95,7 +95,7 @@ flowchart TD
   * MCP tools: `start_skill_recording()`, `stop_skill_recording()`, `crystallize_skill()`, `execute_crystallized_skill()`, `list_crystallized_skills()`.
 
 ### Phase 4 (P1): Local Neural Grounding Sidecar & Unified Virtual DOM (vDOM)
-* **Source**: [`dobby/vdom/fusion.py`](../dobby/vdom/fusion.py), [`dobby/vdom/query.py`](../dobby/vdom/query.py), [`dobby/vdom/sidecar.py`](../dobby/vdom/sidecar.py)
+* **Source**: [`pinlet/vdom/fusion.py`](../pinlet/vdom/fusion.py), [`pinlet/vdom/query.py`](../pinlet/vdom/query.py), [`pinlet/vdom/sidecar.py`](../pinlet/vdom/sidecar.py)
 * **Tests**: [`tests/test_vdom_and_layout.py`](../tests/test_vdom_and_layout.py)
 * **Git Commit**: `d5b97c9`
 * **Capabilities**:
@@ -105,7 +105,7 @@ flowchart TD
   * MCP tools: `capture_vdom()`, `query_vdom()`.
 
 ### Phase 5 (P4): Dynamic Anchor-Relative Sub-Pane Resolution
-* **Source**: [`dobby/vdom/layout.py`](../dobby/vdom/layout.py), [`dobby/plugins/vivado.py`](../dobby/plugins/vivado.py)
+* **Source**: [`pinlet/vdom/layout.py`](../pinlet/vdom/layout.py), [`pinlet/plugins/vivado.py`](../pinlet/plugins/vivado.py)
 * **Tests**: [`tests/test_vdom_and_layout.py`](../tests/test_vdom_and_layout.py)
 * **Git Commit**: `d5b97c9`
 * **Capabilities**:
@@ -122,7 +122,7 @@ Full test suite execution using `.venv/bin/python3 -m pytest tests/`:
 ```text
 ============================= test session starts ==============================
 platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.7.0
-rootdir: /path/to/Dobby
+rootdir: /path/to/Pinlet
 configfile: pyproject.toml
 plugins: anyio-4.15.1, typeguard-4.4.4
 collected 62 items
@@ -207,12 +207,12 @@ tests/test_vivado_plugin.py .....                                        [100%]
 
 ### 8.2 Standard UI Semantic Classes
 The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
-1. `push_button` $\rightarrow$ [`UIRole.PUSH_BUTTON`](../dobby/types.py#L334)
-2. `icon_button` $\rightarrow$ [`UIRole.ICON_BUTTON`](../dobby/types.py#L346)
-3. `text_input` $\rightarrow$ [`UIRole.TEXT_INPUT`](../dobby/types.py#L338)
-4. `checkbox` $\rightarrow$ [`UIRole.CHECK_BOX`](../dobby/types.py#L336)
-5. `tab_item` $\rightarrow$ [`UIRole.TAB_ITEM`](../dobby/types.py#L333)
-6. `container_viewport` $\rightarrow$ [`UIRole.PANEL`](../dobby/types.py#L331)
+1. `push_button` $\rightarrow$ [`UIRole.PUSH_BUTTON`](../pinlet/types.py#L334)
+2. `icon_button` $\rightarrow$ [`UIRole.ICON_BUTTON`](../pinlet/types.py#L346)
+3. `text_input` $\rightarrow$ [`UIRole.TEXT_INPUT`](../pinlet/types.py#L338)
+4. `checkbox` $\rightarrow$ [`UIRole.CHECK_BOX`](../pinlet/types.py#L336)
+5. `tab_item` $\rightarrow$ [`UIRole.TAB_ITEM`](../pinlet/types.py#L333)
+6. `container_viewport` $\rightarrow$ [`UIRole.PANEL`](../pinlet/types.py#L331)
 
 ### 8.3 Vectorized Transformation & Inversion Pipeline
 1. **Letterbox Transformation**:
@@ -227,7 +227,7 @@ The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
 - Generated via `build_default_ui_detector_model()`:
   - ONNX IR version: `ir_version = 10` (compatible with ONNX Runtime 1.31.0).
   - Opset version: `opset 17`.
-  - Stored at [`dobby/models/ui_detector_fast.onnx`](../dobby/models/ui_detector_fast.onnx) (159 KB).
+  - Stored at [`pinlet/models/ui_detector_fast.onnx`](../pinlet/models/ui_detector_fast.onnx) (159 KB).
 - Graceful Fallback: Seamless fallback to OpenCV contouring if ONNX Runtime is unavailable or model loading fails.
 
 ### 8.5 Verification & Test Coverage
@@ -246,13 +246,13 @@ The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
   3. **Localized Neighborhood Drift Recovery**: If visual verification detects drift, searches within a localized bounding radius ($\pm 60\text{ px}$) using normalized cross-correlation (`cv2.matchTemplate`). If matched ($\ge 0.78$ score), the locator is **auto-reanchored** with $(\Delta x, \Delta y)$ drift compensation, avoiding expensive full-screen re-grounding.
 
 ### 9.2 Telemetry & Proactive Health Checks
-- Extended [`CachedLocator`](../dobby/agent_loop/cache.py#L123-L151) schema:
+- Extended [`CachedLocator`](../pinlet/agent_loop/cache.py#L123-L151) schema:
   - `heal_count`: Number of successful localized auto-reanchoring recoveries.
   - `window_offset`: `(offset_x, offset_y)` relative to host window top-left.
   - `visual_dhash`: 64-bit gradient hash for sub-millisecond pre-flight verification.
   - `template_b64`: Compact base64-encoded thumbnail for micro-template matching.
   - `last_drift`: `(dx, dy)` drift vector recorded during healing.
-- Extended [`manage_cache`](../dobby/server.py#L133-L167) tool:
+- Extended [`manage_cache`](../pinlet/server.py#L133-L167) tool:
   - `action='verify'`: Proactively evaluates all cached locators for an active application against the live screen.
   - `action='heal'`: Proactively re-anchors drifting locators in place and persists updated coordinates.
   - `action='stats'`: Emits `entries_count`, `total_hits`, `total_heals`, `healed_ratio`, and per-entry drift telemetry.
@@ -267,7 +267,7 @@ The fast detector outputs standard UI roles for direct vDOM proposal synthesis:
 
 ### 10.1 Motivation & Architecture
 - **Problem**: Multi-step autonomous GUI interactions (e.g., focusing applications, adjusting waveform zoom, triggering simulation runs, capturing sub-panes, querying vDOM hierarchies, and asserting logs) previously required round-trips to multimodal LLMs for every single action. Each turn consumed 1,600+ visual/prompt tokens and added 3–5 seconds of network and model decoding latency. A routine 9-step simulation workflow incurred 14,000+ tokens and took 30–50 seconds.
-- **Solution**: A high-speed, declarative Local Macro & Trajectory Dispatcher ([`TrajectoryEngine`](../dobby/agent_loop/trajectory.py#L35)) that batches and executes entire multi-step action sequences locally at native OS speeds:
+- **Solution**: A high-speed, declarative Local Macro & Trajectory Dispatcher ([`TrajectoryEngine`](../pinlet/agent_loop/trajectory.py#L35)) that batches and executes entire multi-step action sequences locally at native OS speeds:
   1. **Sub-second Execution**: Dispatches atomic OS actions (`click`, `hotkey`, `scroll`, `type_text`, `focus_window`) with 0.1ms to 100ms latency.
   2. **Zero Multimodal Token Consumption**: Runs completely offline without LLM round-trips between steps, saving 1,600 tokens per executed step.
   3. **Jinja2 Dynamic Context Interpolation**: Lifts parameters into declarative variables (`{{target_app}}`, `{{sim_time}}`) and enables data chaining across step outputs (`{{steps.step_id.output.var}}`).
@@ -348,13 +348,13 @@ The following 5 engineering frontiers are prioritized for future implementation,
 
 ```mermaid
 flowchart LR
-    A["Frontier 1:<br/>Synopsys Verdi Plugin<br/>(dobby/plugins/verdi.py)"] --> B["Frontier 2:<br/>Interactive SoM Debugger<br/>(debug_vdom_overlay)"]
+    A["Frontier 1:<br/>Synopsys Verdi Plugin<br/>(pinlet/plugins/verdi.py)"] --> B["Frontier 2:<br/>Interactive SoM Debugger<br/>(debug_vdom_overlay)"]
     B --> C["Frontier 3:<br/>State Checkpointing & Rollback<br/>(TransactionManager)"]
     C --> D["Frontier 4:<br/>C-Native /dev/shm Daemon<br/>(Lock-free 60 FPS seqlock)"]
     D --> E["Frontier 5:<br/>Antigravity MCP Package<br/>(/vision command + auto-launch)"]
 ```
 
-### 11.1 Frontier 1: Synopsys Verdi Automation Plugin (`dobby/plugins/verdi.py`)
+### 11.1 Frontier 1: Synopsys Verdi Automation Plugin (`pinlet/plugins/verdi.py`)
 - **Motivation**: Verdi is the industry standard for gate-level/RTL debug, FSDB waveform inspection, and causality tracing in enterprise semiconductor verification.
 - **Key Deliverables**:
   1. Sub-Panes:
@@ -369,7 +369,7 @@ flowchart LR
      - `verdi.add_signal`: Tcl command / drag-and-drop signal addition.
      - `verdi.command_exec`: Sourcing Tcl commands to Verdi CLI.
   3. Skill Crystallization:
-     - Track `novas.cmd` / `verdi.cmd` byte offsets using [`JournalCorrelator`](../dobby/crystallization/correlator.py#L25) to compile Verdi GUI workflows into reusable zero-token Tcl scripts.
+     - Track `novas.cmd` / `verdi.cmd` byte offsets using [`JournalCorrelator`](../pinlet/crystallization/correlator.py#L25) to compile Verdi GUI workflows into reusable zero-token Tcl scripts.
 
 ### 11.2 Frontier 2: Interactive SoM Visual Debugger (`debug_vdom_overlay`)
 - **Motivation**: Debugging complex spatial layouts, OCR misalignments, or AT-SPI2 hierarchy issues currently requires inspecting raw logs or text trees.
@@ -384,18 +384,18 @@ flowchart LR
 ### 11.3 Frontier 3: State Checkpointing & Rollback Engine (`StateManager`)
 - **Motivation**: Prevent unrecoverable dead-ends during multi-step autonomous exploration (e.g., closing wrong tabs, corrupting simulation state, entering modal deadlocks).
 - **Key Deliverables**:
-  1. Class `TransactionManager` in `dobby/agent_loop/transactions.py`.
+  1. Class `TransactionManager` in `pinlet/agent_loop/transactions.py`.
   2. Pre-Action Snapshots: Light metadata capture of active window IDs, document tab paths, and undo stack depth.
   3. Rollback Strategies:
      - OS-level undo (`Ctrl+Z`, `u` in vim, `undo` in EDA consoles).
      - Navigational recovery (`Alt+Left`, browser back, window reopen).
      - File system rollback via Git stash or copy-on-write temp trees.
-  4. Declarative Integration: Flag `rollback_on_failure: bool = True` in [`TrajectoryStep`](../dobby/types.py#L425) to automatically restore pre-trajectory state if assertions fail.
+  4. Declarative Integration: Flag `rollback_on_failure: bool = True` in [`TrajectoryStep`](../pinlet/types.py#L425) to automatically restore pre-trajectory state if assertions fail.
 
 ### 11.4 Frontier 4: C-Native `/dev/shm` Zero-Copy Frame Streaming Daemon (`shm_streamer`)
 - **Motivation**: Python `mss`/`Xlib` frame extraction incurs 10–18ms per capture. Continuous visual tracking (e.g., watching a running waveform or real-time simulation progress) requires 60+ FPS capture with sub-millisecond overhead.
 - **Key Deliverables**:
-  1. C/Rust Daemon: `dobby/bin/shm_streamer` using X11 `XShmCreateImage` (MIT-SHM extension).
+  1. C/Rust Daemon: `pinlet/bin/shm_streamer` using X11 `XShmCreateImage` (MIT-SHM extension).
   2. Lock-Free IPC: Dual-buffer ring buffer in `/dev/shm/vision_mcp_fb` with atomic seqlock read/write barriers.
   3. Zero-Copy Python Reads: Python NumPy buffer mapping (`np.frombuffer`) directly accessing `/dev/shm/vision_mcp_fb` in **< 0.2 ms** latency, enabling true 60 FPS visual feedback loops.
 

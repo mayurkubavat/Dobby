@@ -9,16 +9,16 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from dobby.types import BoundingBox, GroundingSource, UIRole, VDOMNode
-from dobby.vdom.fast_detector import (
+from pinlet.types import BoundingBox, GroundingSource, UIRole, VDOMNode
+from pinlet.vdom.fast_detector import (
     FastONNXUIDetector,
     build_default_ui_detector_model,
     letterbox,
     nms_vectorized,
     unletterbox_boxes,
 )
-from dobby.vdom.fusion import VDOMFusionEngine
-from dobby.vdom.sidecar import LocalNeuralGrounder
+from pinlet.vdom.fusion import VDOMFusionEngine
+from pinlet.vdom.sidecar import LocalNeuralGrounder
 
 # Building and running the bundled detector needs both onnx and onnxruntime.
 needs_onnx = pytest.mark.skipif(
@@ -154,9 +154,9 @@ def test_fast_onnx_latency_benchmark():
     assert "fps" in metrics
 
     # Must satisfy sub-20ms latency requirement on Zen 4 CPU. Shared CI runners
-    # (3 vCPUs, noisy neighbours) set DOBBY_PERF_SCALE to widen the budget
+    # (3 vCPUs, noisy neighbours) set PINLET_PERF_SCALE to widen the budget
     # while still catching a large regression.
-    scale = max(1.0, float(os.environ.get("DOBBY_PERF_SCALE", "1") or 1))
+    scale = max(1.0, float(os.environ.get("PINLET_PERF_SCALE", "1") or 1))
     budget = 20.0 * scale
     assert metrics["total_latency_ms"] < budget, (
         f"Latency {metrics['total_latency_ms']}ms exceeded {budget:g}ms threshold"

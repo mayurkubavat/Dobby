@@ -1,16 +1,16 @@
 # Security policy
 
-Dobby controls a real mouse and keyboard and reads the screen, so we treat
+Pinlet controls a real mouse and keyboard and reads the screen, so we treat
 security reports with priority.
 
 ## Reporting a vulnerability
 
 Please **do not open a public issue**. Report it privately through GitHub:
 go to the repository's **Security** tab and choose **Report a vulnerability**
-([direct link](https://github.com/mayurkubavat/Dobby/security/advisories/new)).
+([direct link](https://github.com/mayurkubavat/Pinlet/security/advisories/new)).
 
-Include what you did, what Dobby did, the platform (macOS or Linux, version),
-how Dobby was started (`dobby`, `dobby --secure`, `dobby stdio`) and any admin
+Include what you did, what Pinlet did, the platform (macOS or Linux, version),
+how Pinlet was started (`pinlet`, `pinlet --secure`, `pinlet stdio`) and any admin
 policy in force. A short reproduction helps most.
 
 We aim to acknowledge a report within 5 working days and to agree a fix and
@@ -20,14 +20,14 @@ disclosure date with you. We credit reporters who want to be credited.
 
 Examples of issues we want to hear about:
 
-- Dobby acting without the consent it should ask for: an action that skips
+- Pinlet acting without the consent it should ask for: an action that skips
   the Allow/Deny prompt in secure mode, or an app used without a grant.
-- A way around the admin policy file (`/Library/Application Support/Dobby/policy.json`,
-  `/etc/dobby/policy.json`), such as running a denied tool or a shell command
+- A way around the admin policy file (`/Library/Application Support/Pinlet/policy.json`,
+  `/etc/pinlet/policy.json`), such as running a denied tool or a shell command
   outside the allow list.
 - Typed secrets (password fields) logged, returned to the model or kept on disk.
-- Another local user or process reaching the shared Dobby's socket or control
-  files under `~/.dobby`.
+- Another local user or process reaching the shared Pinlet's socket or control
+  files under `~/.pinlet`.
 - Screen content sent off the machine without an opt-in.
 - Tampering with the bundled ONNX model going unnoticed.
 
@@ -38,4 +38,4 @@ at all in turbo mode are not.
 
 ## Supported versions
 
-Dobby is pre-1.0. Fixes go into the latest release and `master` only.
+Pinlet is pre-1.0. Fixes go into the latest release and `master` only.

@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="needs macOS Ap
 def make(tmp_path):
     AppKit = pytest.importorskip("AppKit")
     AppKit.NSApplication.sharedApplication()
-    from dobby.overlay import mac_helper
+    from pinlet.overlay import mac_helper
 
     made = []
 
@@ -78,7 +78,7 @@ def test_bar_hidden_from_captures_by_default(make):
 
     c, _ = make()
     assert c.pill.window.sharingType() == NSWindowSharingNone
-    # Dobby's own capture handshake no longer blinks the bar
+    # Pinlet's own capture handshake no longer blinks the bar
     c.capture_hidden = True
     c._apply_alpha()
     assert c.pill.window.alphaValue() == 1.0
@@ -86,18 +86,18 @@ def test_bar_hidden_from_captures_by_default(make):
 
 def test_bar_hide_and_show_again(make):
     c, _ = make()
-    assert c.pill.label.stringValue() == "Dobby is sleeping"
+    assert c.pill.label.stringValue() == "Pinlet is sleeping"
     c.set_pill_hidden(True)
     assert not c.pill.window.isVisible()
     c.set_pill_hidden(False)
     assert c.pill.window.isVisible()
 
 
-def test_hidden_bar_comes_back_when_dobby_wakes_up(make):
+def test_hidden_bar_comes_back_when_pinlet_wakes_up(make):
     c, _ = make()
     c.last_action = time.monotonic() - 3600  # sleeping
     c.set_pill_hidden(True)
-    c._mark_active()  # Dobby starts working
+    c._mark_active()  # Pinlet starts working
     assert c.pill.window.isVisible() and c.pill.mode == "working"
 
 
@@ -117,7 +117,7 @@ def test_bar_hidden_while_working_stays_hidden_until_next_wake(make):
 def test_allow_deny_shows_even_when_bar_hidden(make):
     c, out = make()
     c.set_pill_hidden(True)
-    c._start_confirm(7, "Allow Dobby to quit?", 5)
+    c._start_confirm(7, "Allow Pinlet to quit?", 5)
     assert c.pill.mode == "confirm" and c.pill.window.isVisible()
     assert c.pill.hide_btn.isHidden()  # can't hide a pending question
     c.on_pill("secondary")
@@ -138,7 +138,7 @@ def test_second_helper_does_not_stack_an_idle_bar(make):
     assert b.bar_owner.owned
 
 
-def test_bar_fades_instead_of_vanishing_near_dobbys_pointer(make):
+def test_bar_fades_instead_of_vanishing_near_pinlets_pointer(make):
     c, _ = make()
     c.pill.duck(True)
     assert c.pill.window.isVisible()
@@ -165,7 +165,7 @@ def test_pause_resume_and_stop_from_bar(make):
 
 def test_turbo_auto_allows_and_labels_bar(make):
     c, out = make(turbo=True)
-    c._start_confirm(3, "Allow Dobby to quit?", 5)
+    c._start_confirm(3, "Allow Pinlet to quit?", 5)
     assert {"ack": 3, "ok": True} in _lines(out)
     assert c.pill.mode != "confirm"
     assert "Turbo" in c.pill.label.stringValue()
@@ -178,21 +178,21 @@ def test_bar_off_and_auto_modes(make):
     assert not auto.pill.window.isVisible()
 
 
-# ----------------------------------------------------- waking Dobby up
+# ----------------------------------------------------- waking Pinlet up
 def _asleep(c):
     c.last_action = time.monotonic() - 3600
     c._refresh_pill()
     assert c.pill.mode == "ready"
 
 
-def test_click_sleeping_bar_wakes_dobby(make):
+def test_click_sleeping_bar_wakes_pinlet(make):
     c, out = make()
     _asleep(c)
-    assert c.pill.view.toolTip() == "Click to wake Dobby"
+    assert c.pill.view.toolTip() == "Click to wake Pinlet"
     w0 = c.pill.window.frame().size.width
     c.on_pill_label()
-    assert c.pill.mode == "awake" and c.pill.label.stringValue().startswith("Dobby is awake")
-    assert c.pill.view.toolTip() == "Click to put Dobby to sleep"
+    assert c.pill.mode == "awake" and c.pill.label.stringValue().startswith("Pinlet is awake")
+    assert c.pill.view.toolTip() == "Click to put Pinlet to sleep"
     assert c.pill.window.frame().size.width > w0
     assert _events(out) == ["wake"]
     assert c.pointer_visible and c.cursor is not None
@@ -226,7 +226,7 @@ def test_awake_falls_back_asleep(make):
     assert not c.pointer_visible and c.cursor is None  # the wake pointer fades out
 
 
-def test_click_awake_bar_puts_dobby_to_sleep(make):
+def test_click_awake_bar_puts_pinlet_to_sleep(make):
     c, out = make()
     _asleep(c)
     c.on_pill_label()
@@ -234,7 +234,7 @@ def test_click_awake_bar_puts_dobby_to_sleep(make):
     assert c.pill.mode == "ready" and _events(out) == ["wake", "sleep"]
 
 
-def test_work_ends_awake_and_then_dobby_sleeps(make):
+def test_work_ends_awake_and_then_pinlet_sleeps(make):
     c, out = make()
     _asleep(c)
     c.wake()
@@ -264,11 +264,11 @@ def test_menu_offers_wake_and_sleep(make):
         menu = c._build_menu("Idle")
         return [menu.itemAtIndex_(i) for i in range(menu.numberOfItems())]
 
-    wake = next(i for i in titles() if i.title() == "Wake Dobby")
+    wake = next(i for i in titles() if i.title() == "Wake Pinlet")
     assert wake.target() is c.target and wake.action() == "menuWake:"
     c.target.menuWake_(None)
     assert c.pill.mode == "awake"
-    sleep = next(i for i in titles() if i.title() == "Put Dobby to sleep")
+    sleep = next(i for i in titles() if i.title() == "Put Pinlet to sleep")
     assert sleep.action() == "menuSleep:"
     c.target.menuSleep_(None)
     assert c.pill.mode == "ready"
@@ -288,12 +288,13 @@ def test_ai_waiting_bar_invites_a_click(make):
     _asleep(c)
     c.handle({"op": "sleep.wait", "reason": "finished the report"})
     assert (
-        c.pill.mode == "ready" and c.pill.label.stringValue() == "Dobby is sleeping · click to wake"
+        c.pill.mode == "ready"
+        and c.pill.label.stringValue() == "Pinlet is sleeping · click to wake"
     )
     assert "finished the report" in c.pill.view.toolTip()
     c.handle({"op": "sleep.done"})
-    assert c.pill.label.stringValue() == "Dobby is sleeping"
-    assert c.pill.view.toolTip() == "Click to wake Dobby"
+    assert c.pill.label.stringValue() == "Pinlet is sleeping"
+    assert c.pill.view.toolTip() == "Click to wake Pinlet"
 
 
 def test_label_click_without_waiting_ai_says_so_then_sleeps(make):
@@ -316,11 +317,11 @@ def test_label_click_with_waiting_ai_hands_back(make):
     assert _events(out) == ["wake"]
     assert (
         c.pill.mode == "awake"
-        and c.pill.label.stringValue() == "Dobby is awake · handing back to the AI"
+        and c.pill.label.stringValue() == "Pinlet is awake · handing back to the AI"
     )
     assert c.awake_until - time.monotonic() > 60  # stays until the AI acts
     c.handle({"op": "sleep.done"})  # wait_for_wake returned
-    assert c.pill.label.stringValue() == "Dobby is awake · handing back to the AI"
+    assert c.pill.label.stringValue() == "Pinlet is awake · handing back to the AI"
     c._mark_active()  # the AI's next action
     assert c.pill.mode == "working" and not c.handoff
 
@@ -344,7 +345,7 @@ def test_wake_from_menu_while_paused_resumes_for_a_waiting_ai(make):
     wake = next(
         menu.itemAtIndex_(i)
         for i in range(menu.numberOfItems())
-        if menu.itemAtIndex_(i).title() == "Wake Dobby"
+        if menu.itemAtIndex_(i).title() == "Wake Pinlet"
     )
     c.target.menuWake_(wake)
     assert not c.paused and _events(out) == ["pause", "resume", "wake"]
@@ -369,7 +370,7 @@ def test_non_owner_helper_shows_its_waiting_ai(make):
 def test_owner_hides_its_idle_bar_while_another_ai_waits(make):
     import os
 
-    from dobby.overlay.barlock import mark_waiting
+    from pinlet.overlay.barlock import mark_waiting
 
     a, _ = make()
     _asleep(a)
@@ -386,15 +387,15 @@ def test_owner_hides_its_idle_bar_while_another_ai_waits(make):
     assert a.pill.window.isVisible() and a.pill.mode == "ready"
 
 
-def test_owner_hides_its_idle_bar_while_another_dobby_shows_a_bar(make):
+def test_owner_hides_its_idle_bar_while_another_pinlet_shows_a_bar(make):
     import os
 
-    from dobby.overlay.barlock import mark_waiting
+    from pinlet.overlay.barlock import mark_waiting
 
     a, _ = make()
     _asleep(a)
     assert a.pill.window.isVisible()
-    mark_waiting(a.pill_show_dir, os.getppid(), True)  # another (live) Dobby is working
+    mark_waiting(a.pill_show_dir, os.getppid(), True)  # another (live) Pinlet is working
     try:
         a.others_checked = 0
         a.on_tick()
@@ -423,7 +424,7 @@ def test_two_working_bars_stack_instead_of_overlapping(make):
 # ------------------------------------------------- menu on the bar's ▾
 def test_menu_bar_item_on_by_default():
     pytest.importorskip("AppKit")
-    from dobby.overlay import mac_helper
+    from pinlet.overlay import mac_helper
 
     assert mac_helper.DEFAULT_CONFIG["menu_bar"] is True
 
@@ -434,13 +435,13 @@ def test_no_menu_bar_item_when_off(make):
 
 
 def test_menu_bar_item_focus_style_menu(make, tmp_path, monkeypatch):
-    from dobby.overlay import topbar
+    from pinlet.overlay import topbar
 
     monkeypatch.setattr(topbar, "ICON_DIR", str(tmp_path / "icons"))
     monkeypatch.setattr(topbar, "STATUS_DIR", str(tmp_path / "status"))
     agents = [
-        {"pid": 11, "name": "Mail Dobby", "paused": False, "holding": True, "waiting": False},
-        {"pid": 22, "name": "Xcode Dobby", "paused": True, "holding": False, "waiting": False},
+        {"pid": 11, "name": "Mail Pinlet", "paused": False, "holding": True, "waiting": False},
+        {"pid": 22, "name": "Xcode Pinlet", "paused": True, "holding": False, "waiting": False},
     ]
     c, _ = make(menu_bar=True)
     monkeypatch.setattr(c, "_agents", lambda: agents)
@@ -457,16 +458,16 @@ def test_menu_bar_item_focus_style_menu(make, tmp_path, monkeypatch):
     # Newer AppKit returns the attributed string from title(), second line
     # included; compare the first line only.
     titles = [str(menu.itemAtIndex_(i).title()).split("\n")[0] for i in range(menu.numberOfItems())]
-    assert titles[0] == "Dobby"
+    assert titles[0] == "Pinlet"
     assert "2 running · 1 working · 1 paused" in menu.itemAtIndex_(0).attributedTitle().string()
-    mail = next(menu.itemAtIndex_(i) for i, t in enumerate(titles) if t == "Mail Dobby")
+    mail = next(menu.itemAtIndex_(i) for i, t in enumerate(titles) if t == "Mail Pinlet")
     assert "Working" in mail.attributedTitle().string() and mail.image() is not None
     sub = mail.submenu()
     assert [sub.itemAtIndex_(i).title() for i in range(sub.numberOfItems())] == ["Pause", "Stop"]
     assert sub.itemAtIndex_(0).representedObject() == 11
-    xcode = next(menu.itemAtIndex_(i) for i, t in enumerate(titles) if t == "Xcode Dobby")
+    xcode = next(menu.itemAtIndex_(i) for i, t in enumerate(titles) if t == "Xcode Pinlet")
     assert xcode.submenu().itemAtIndex_(0).title() == "Resume"
-    assert {"Pause all", "Resume all", "Stop all", "Dobby Settings"} <= set(titles)
+    assert {"Pause all", "Resume all", "Stop all", "Pinlet Settings"} <= set(titles)
 
 
 def _bar_in(c, mode):
@@ -478,7 +479,7 @@ def _bar_in(c, mode):
     elif mode == "working":
         c._mark_active()
     else:
-        c._start_confirm(3, "Allow Dobby to quit?", 5)
+        c._start_confirm(3, "Allow Pinlet to quit?", 5)
     assert c.pill.mode == mode
 
 
@@ -488,7 +489,7 @@ def test_bar_has_menu_button(make, mode):
     _bar_in(c, mode)
     b = c.pill.menu_btn
     assert not b.isHidden() and b.superview() is c.pill.view
-    assert b.toolTip() == "Dobby menu"
+    assert b.toolTip() == "Pinlet menu"
     f, hide = b.frame(), c.pill.hide_btn.frame()
     # right end of the bar, after "–", and inside the (centred) bar
     assert f.origin.x >= hide.origin.x + hide.size.width
@@ -516,7 +517,7 @@ def test_bar_is_centred_with_menu_button(make):
     assert f.origin.x + f.size.width / 2 == pytest.approx(vf.origin.x + vf.size.width / 2, abs=1.0)
 
 
-def test_bar_menu_button_opens_dobbys_menu(make):
+def test_bar_menu_button_opens_pinlets_menu(make):
     c, _ = make()
     opened = []
     c._pop_up = lambda menu, view, loc: opened.append((menu, view, loc))  # no modal tracking
@@ -526,8 +527,8 @@ def test_bar_menu_button_opens_dobbys_menu(make):
     assert view is c.pill.view
     titles = [menu.itemAtIndex_(i).title() for i in range(menu.numberOfItems())]
     for want in (
-        "Dobby: Idle",
-        "Wake Dobby",
+        "Pinlet: Idle",
+        "Wake Pinlet",
         "Recent steps",
         "Pause",
         "Stop",
@@ -575,8 +576,8 @@ def test_tag_is_clickable_where_it_is_drawn(make):
     f = hs.window.frame()
     assert (f.origin.x, f.size.width) == pytest.approx((x, w))
     assert f.origin.y == pytest.approx(c.primary_h - y - h)
-    # never over the tip, where Dobby clicks
-    from dobby.overlay import geometry
+    # never over the tip, where Pinlet clicks
+    from pinlet.overlay import geometry
 
     assert not geometry.contains(hs.rect, c.cursor)
 
@@ -607,21 +608,21 @@ def test_tag_menu_matches_menu_bar_menu(make):
     c, _ = make()
     menu = c._build_menu("Idle")
     titles = [menu.itemAtIndex_(i).title() for i in range(menu.numberOfItems())]
-    assert titles[0] == "Dobby: Idle"
+    assert titles[0] == "Pinlet: Idle"
     for want in ("Pause", "Stop", "Show control bar (⌃⌥H)", "Show overlay"):
         assert want in titles
     stop = menu.itemAtIndex_(titles.index("Stop"))
     assert stop.target() is c.target and stop.action() == "menuStop:"
 
 
-# ---------------------------------------------------------- Dobby picker
-def test_picker_lists_dobbys_and_pauses_the_other(make, tmp_path, monkeypatch):
+# ---------------------------------------------------------- Pinlet picker
+def test_picker_lists_pinlets_and_pauses_the_other(make, tmp_path, monkeypatch):
     import os
 
-    from dobby.control import commands
-    from dobby.control.registry import register
+    from pinlet.control import commands
+    from pinlet.control.registry import register
 
-    monkeypatch.setenv("DOBBY_CONTROL_DIR", str(tmp_path / "control"))
+    monkeypatch.setenv("PINLET_CONTROL_DIR", str(tmp_path / "control"))
     root = tmp_path / "control"
     c, _ = make()
     c.server_pid = os.getpid()
@@ -629,7 +630,7 @@ def test_picker_lists_dobbys_and_pauses_the_other(make, tmp_path, monkeypatch):
     register(root, "b", "Agy", os.getppid())
     menu = c._build_menu("Idle")
     titles = [menu.itemAtIndex_(i).title() for i in range(menu.numberOfItems())]
-    assert "Dobbys" in titles and "All Dobbys" in titles
+    assert "Pinlets" in titles and "All Pinlets" in titles
     agy = menu.itemAtIndex_(titles.index("Agy"))
     pause = agy.submenu().itemAtIndex_(0)
     assert pause.title() == "Pause" and pause.target() is c.target
@@ -652,7 +653,7 @@ def _modern(make, **cfg):
 def test_modern_sleeping_bar_is_compact_and_grows_on_hover(make):
     c, _ = _modern(make)
     assert c.pill.mode == "ready" and c.pill.spec.compact
-    assert c.pill.label.stringValue() == "Dobby is sleeping"
+    assert c.pill.label.stringValue() == "Pinlet is sleeping"
     assert c.pill.primary.isHidden() and c.pill.menu_btn.isHidden()
     w0 = c.pill.window.frame().size.width
     assert w0 < 180
@@ -683,7 +684,7 @@ def test_modern_working_bar_shows_step_and_timer_with_icons(make):
     c.handle({"op": "intent", "text": "Click ‘Send’"})
     text = c.pill.label.stringValue()
     assert c.pill.mode == "working" and text.startswith(
-        "Dobby is working · Click ‘Send’ · step 1 · 0:0"
+        "Pinlet is working · Click ‘Send’ · step 1 · 0:0"
     )
     assert c.pill.primary.image() is not None and c.pill.secondary.image() is not None
     assert c.pill.secondary.toolTip().startswith("Stop")
@@ -699,7 +700,7 @@ def test_modern_agent_colour_name_and_dots(make):
             {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
         ]
     )
-    assert c.ok_hex == "#14B8A6" and c.agent_label == "Dobby · claude-code"
+    assert c.ok_hex == "#14B8A6" and c.agent_label == "Pinlet · claude-code"
     assert not c.pill.dots_btn.isHidden() and c.pill.dots_btn.image() is not None
 
 
@@ -710,7 +711,7 @@ _IDLE_AGENTS = [
 ]
 
 
-def test_modern_idle_dobbys_add_no_dots(make):
+def test_modern_idle_pinlets_add_no_dots(make):
     c, _ = _modern(make)
     c.server_pid = 222
     c._apply_agents(_IDLE_AGENTS)
@@ -718,7 +719,7 @@ def test_modern_idle_dobbys_add_no_dots(make):
 
 
 # Its own test: two controllers in one test would share the bar lock.
-def test_modern_quiet_look_dots_every_running_dobby(make):
+def test_modern_quiet_look_dots_every_running_pinlet(make):
     c, _ = _modern(make, narrate=False)
     c.server_pid = 222
     c._apply_agents(_IDLE_AGENTS)
@@ -786,7 +787,7 @@ def test_modern_trail_keeps_three_dots(make):
 def test_modern_paused_turns_pointer_and_tag_amber(make):
     import Quartz
 
-    from dobby.overlay import mac_helper
+    from pinlet.overlay import mac_helper
 
     c, _ = _modern(make)
     c._mark_active()
@@ -810,7 +811,7 @@ def test_modern_dot_sits_above_glass(make):
     assert c.pill.dot.superlayer() is c.pill.tint.layer()
 
 
-# ------------------------------------------- handoff: person vs Dobby
+# ------------------------------------------- handoff: person vs Pinlet
 def test_reaching_for_pause_does_not_turn_it_into_resume(make):
     c, out = make()
     c.handle({"op": "intent", "text": "Click ‘Send’"})  # working
@@ -823,7 +824,7 @@ def test_reaching_for_pause_does_not_turn_it_into_resume(make):
 
 def test_moving_to_allow_deny_does_not_skip_the_next_step(make):
     c, out = make()
-    c.handle({"op": "confirm", "id": 7, "text": "Allow Dobby to quit?", "secs": 30})
+    c.handle({"op": "confirm", "id": 7, "text": "Allow Pinlet to quit?", "secs": 30})
     for kind in ("move", "click", "key"):
         c._on_user_input(kind)
     assert not c.takeover and "user_input" not in _events(out)

@@ -9,9 +9,9 @@ from unittest.mock import MagicMock
 from PIL import Image, ImageDraw
 from test_gemma3_sidecar import FakeOllama
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.gemma.client import GemmaClient
-from dobby.types import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.gemma.client import GemmaClient
+from pinlet.types import (
     BoundingBox,
     GroundingSource,
     UIRole,
@@ -19,8 +19,8 @@ from dobby.types import (
     VirtualDOMSnapshot,
     WindowInfo,
 )
-from dobby.vdom.gemma3_sidecar import Gemma3Grounder
-from dobby.vdom.gemma_marks import GemmaMarkLabeler, draw_marks
+from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
+from pinlet.vdom.gemma_marks import GemmaMarkLabeler, draw_marks
 
 
 def _toolbar(w=1200, h=400) -> Image.Image:
@@ -196,7 +196,7 @@ def test_capture_vdom_captures_window_region():
     ctrl.pipeline.capture.return_value = (_toolbar(), 1.0, (1200, 400), (0, 0))
     ctrl.atspi_inspector = MagicMock()
     ctrl.atspi_inspector.inspect_desktop.return_value = []
-    from dobby.vdom.fusion import VDOMFusionEngine
+    from pinlet.vdom.fusion import VDOMFusionEngine
 
     ctrl.vdom_fusion = VDOMFusionEngine()
     ctrl.capture_vdom(label_with_gemma=False)

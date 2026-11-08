@@ -1,6 +1,6 @@
 """Linux background clicks: press a button through AT-SPI, never a text field."""
 
-from dobby.perception.atspi import ATSPIInspector
+from pinlet.perception.atspi import ATSPIInspector
 
 
 class Action:

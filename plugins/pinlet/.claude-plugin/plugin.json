@@ -1,0 +1,6 @@
+{
+  "name": "pinlet",
+  "version": "0.1.0",
+  "description": "Skills for driving the desktop through the pinlet MCP server: cheapest-first perception with local OCR and Gemma, verified actions, app playbooks, skill crafting, evaluation and troubleshooting.",
+  "author": { "name": "Mayur Kubavat" }
+}

@@ -1,4 +1,4 @@
-"""The overlay's look, decided in pure code (dobby.overlay.style): per-Dobby
+"""The overlay's look, decided in pure code (pinlet.overlay.style): per-Pinlet
 colours, the top bar's layout per state, glow states and corners, the step
 trail and where the name tag goes near screen edges."""
 
@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-from dobby.control import commands, registry
-from dobby.overlay import geometry, overlay_config, style
-from dobby.overlay.menu import bar_view
+from pinlet.control import commands, registry
+from pinlet.overlay import geometry, overlay_config, style
+from pinlet.overlay.menu import bar_view
 
 ARROW_W, ARROW_H, CHIP_H = 13 * 1.25, 21.5 * 1.25, 20.0
 
@@ -34,15 +34,15 @@ def keys(spec):
 
 # ------------------------------------------------------------ config
 def test_style_from_env():
-    assert overlay_config({"DOBBY_OVERLAY_STYLE": "classic"})["style"] == "classic"
-    assert "style" not in overlay_config({"DOBBY_OVERLAY_STYLE": "fancy"})
-    assert overlay_config({"DOBBY_OVERLAY_AGENT_COLORS": "0"})["agent_colors"] is False
+    assert overlay_config({"PINLET_OVERLAY_STYLE": "classic"})["style"] == "classic"
+    assert "style" not in overlay_config({"PINLET_OVERLAY_STYLE": "fancy"})
+    assert overlay_config({"PINLET_OVERLAY_AGENT_COLORS": "0"})["agent_colors"] is False
     assert style.normalize_style(None) == "modern" and style.normalize_style("CLASSIC") == "classic"
 
 
 # ------------------------------------------------------- agent colours
 class TestAgentColors:
-    def test_first_dobby_is_violet(self):
+    def test_first_pinlet_is_violet(self):
         assert style.pick_agent_color([]) == "#7C5CFF"
 
     def test_next_free_colour(self):
@@ -66,7 +66,7 @@ class TestAgentColors:
         assert got[1] == "#14B8A6"
         assert got[2] == "#7C5CFF" and got[3] == style.AGENT_PALETTE[2]
 
-    def test_registry_gives_each_dobby_its_own_colour(self, tmp_path, monkeypatch):
+    def test_registry_gives_each_pinlet_its_own_colour(self, tmp_path, monkeypatch):
         monkeypatch.setattr(registry, "pid_alive", lambda pid: True)
         registry.register(tmp_path, "a", "claude-code", 101)
         registry.register(tmp_path, "b", "antigravity", 102)
@@ -79,12 +79,12 @@ class TestAgentColors:
         over = {a["pid"]: a for a in commands.overview(tmp_path)}
         assert over[102]["color"] == style.AGENT_PALETTE[1] and over[102]["started"] > 0
 
-    def test_tag_names_the_dobby_only_when_several_run(self):
-        assert style.tag_label("Dobby", "claude-code", 1) == "Dobby"
-        assert style.tag_label("Dobby", "claude-code", 2) == "Dobby · claude-code"
-        assert style.tag_label("Dobby", "Dobby-123", 2) == "Dobby"
+    def test_tag_names_the_pinlet_only_when_several_run(self):
+        assert style.tag_label("Pinlet", "claude-code", 1) == "Pinlet"
+        assert style.tag_label("Pinlet", "claude-code", 2) == "Pinlet · claude-code"
+        assert style.tag_label("Pinlet", "Pinlet-123", 2) == "Pinlet"
         assert style.tag_label("Builder", "claude-code", 2) == "Builder"  # a configured label wins
-        assert style.tag_label("Dobby", "a very long client name indeed", 2).endswith("…")
+        assert style.tag_label("Pinlet", "a very long client name indeed", 2).endswith("…")
 
     def test_dots_only_with_two_or_more(self):
         one = [{"pid": 1, "started": 1}]
@@ -93,16 +93,16 @@ class TestAgentColors:
         dots = style.agent_dots(two, {1: "#7C5CFF", 2: "#14B8A6"}, 1)
         assert dots == [(1, "#7C5CFF", False, True), (2, "#14B8A6", True, False)]
 
-    def test_narration_shows_dots_only_for_busy_dobbys(self):
+    def test_narration_shows_dots_only_for_busy_pinlets(self):
         colors = {1: "#7C5CFF", 2: "#14B8A6", 3: "#EC4899"}
-        # Three AI apps loaded Dobby, one holds control: no dots, no mystery.
+        # Three AI apps loaded Pinlet, one holds control: no dots, no mystery.
         idle = [
             {"pid": 1, "started": 1, "holding": True},
             {"pid": 2, "started": 2},
             {"pid": 3, "started": 3},
         ]
         assert style.agent_dots(idle, colors, 1, busy_only=True) == []
-        assert len(style.agent_dots(idle, colors, 1)) == 3  # quiet look: every running Dobby
+        assert len(style.agent_dots(idle, colors, 1)) == 3  # quiet look: every running Pinlet
         busy = [
             {"pid": 1, "started": 1, "holding": True},
             {"pid": 2, "started": 2, "waiting": True},
@@ -110,7 +110,7 @@ class TestAgentColors:
         ]
         dots = style.agent_dots(busy, colors, 1, busy_only=True)
         assert [d[0] for d in dots] == [1, 2]
-        assert style.dots_caption(dots) == "2 Dobbys" and style.dots_caption([]) == ""
+        assert style.dots_caption(dots) == "2 Pinlets" and style.dots_caption([]) == ""
         assert style.agent_busy({"paused": True}) and not style.agent_busy({"pid": 4})
 
 
@@ -118,13 +118,13 @@ class TestAgentColors:
 class TestBar:
     def test_sleeping_bar_is_compact_without_controls(self):
         spec = style.bar_spec(view())
-        assert spec.compact and spec.text == "Dobby is sleeping" and spec.buttons == ()
-        assert style.bar_spec(view(), narrate=False).text == "Dobby"
-        assert spec.dot_alpha < 1.0 and spec.tip == "Click to wake Dobby"
+        assert spec.compact and spec.text == "Pinlet is sleeping" and spec.buttons == ()
+        assert style.bar_spec(view(), narrate=False).text == "Pinlet"
+        assert spec.dot_alpha < 1.0 and spec.tip == "Click to wake Pinlet"
 
     def test_hover_grows_it_with_hide_and_menu_only(self):
         spec = style.bar_spec(view(), hovered=True)
-        assert not spec.compact and spec.text == "Dobby is sleeping · click to wake"
+        assert not spec.compact and spec.text == "Pinlet is sleeping · click to wake"
         assert keys(spec) == ["hide", "menu"]
 
     def test_ai_waiting_says_click_to_wake_even_compact(self):
@@ -132,10 +132,10 @@ class TestBar:
         spec = style.bar_spec(v)
         assert (
             spec.compact
-            and spec.text == "Dobby is sleeping · click to wake"
+            and spec.text == "Pinlet is sleeping · click to wake"
             and spec.dot_alpha == 1.0
         )
-        assert style.bar_spec(v, narrate=False).text == "Dobby · click to wake"
+        assert style.bar_spec(v, narrate=False).text == "Pinlet · click to wake"
         assert style.bar_spec(v, hovered=True).text.count("click to wake") == 1
 
     def test_awake_has_no_pause_or_stop(self):
@@ -144,7 +144,7 @@ class TestBar:
 
     def test_working_shows_live_step_count_and_timer(self):
         spec = style.bar_spec(view(working=True), step="Click ‘Send’", steps=7, elapsed=42)
-        assert spec.text == "Dobby is working · Click ‘Send’ · step 7 · 0:42"
+        assert spec.text == "Pinlet is working · Click ‘Send’ · step 7 · 0:42"
         quiet = style.bar_spec(
             view(working=True), step="Click ‘Send’", steps=7, elapsed=42, narrate=False
         )
@@ -159,7 +159,7 @@ class TestBar:
         spec = style.bar_spec(
             view(working=True, turbo=True), step="", steps=0, elapsed=5, turbo=True, thinking=True
         )
-        assert spec.text == "⚡ Turbo · Dobby is thinking… · 0:05" and spec.shimmer
+        assert spec.text == "⚡ Turbo · Pinlet is thinking… · 0:05" and spec.shimmer
         quiet = style.bar_spec(
             view(working=True, turbo=True),
             step="",
@@ -179,25 +179,25 @@ class TestBar:
 
     def test_paused_uses_play_icon(self):
         spec = style.bar_spec(view(paused=True))
-        assert spec.buttons[0].icon == "play.fill" and spec.text == "Dobby is paused"
+        assert spec.buttons[0].icon == "play.fill" and spec.text == "Pinlet is paused"
 
     def test_stopped_keeps_words(self):
-        spec = style.bar_spec(("stopped", "Dobby stopped", "OK", "Hide", "danger", 1.0))
+        spec = style.bar_spec(("stopped", "Pinlet stopped", "OK", "Hide", "danger", 1.0))
         assert [b.title for b in spec.buttons[:2]] == ["OK", "Hide"] and spec.buttons[
             0
         ].icon is None
 
     def test_confirm_is_words_and_cannot_hide(self):
-        spec = style.confirm_spec("Allow Dobby to quit?")
+        spec = style.confirm_spec("Allow Pinlet to quit?")
         assert [b.title for b in spec.buttons] == ["Allow", "Deny"] and "hide" not in keys(spec)
 
     def test_classic_is_the_old_bar(self):
         spec = style.bar_spec(view(), style="classic")
-        assert spec.text == "Dobby is sleeping" and not spec.compact
+        assert spec.text == "Pinlet is sleeping" and not spec.compact
         assert [b.title for b in spec.buttons[:3]] == ["Pause", "Stop", "–"]
         assert all(b.icon is None for b in spec.buttons[:3])
         assert style.bar_spec(view(working=True), style="classic").text.startswith(
-            "Dobby is working"
+            "Pinlet is working"
         )
 
     def test_bar_hidden_stays_hidden(self):

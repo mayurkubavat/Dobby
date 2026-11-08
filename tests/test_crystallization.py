@@ -2,15 +2,15 @@
 Unit tests for Phase 3 GUI-to-Script Skill Crystallization Engine.
 """
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.crystallization import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.crystallization import (
     CorrelatedStep,
     CrystallizedSkillSpec,
     DynamicSkillRegistry,
     JournalCorrelator,
     TclTrajectoryCompiler,
 )
-from dobby.types import BoundingBox, WindowInfo
+from pinlet.types import BoundingBox, WindowInfo
 
 
 class MockHAL:

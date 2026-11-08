@@ -13,14 +13,14 @@ import time
 # Run from a clone without installing: put the repo root on the path.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.agent_loop.trajectory import TrajectoryEngine
-from dobby.hal.factory import get_desktop_hal
-from dobby.types import TrajectorySpec, TrajectoryStep
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.agent_loop.trajectory import TrajectoryEngine
+from pinlet.hal.factory import get_desktop_hal
+from pinlet.types import TrajectorySpec, TrajectoryStep
 
 # The Vivado project folder (holding vivado.log and vivado.jou) and where to save results.
-VIVADO_DIR = os.path.expanduser(os.environ.get("DOBBY_VIVADO_DIR", "~/vivado_fifo"))
-ARTIFACT_DIR = os.path.expanduser(os.environ.get("DOBBY_ARTIFACT_DIR", "artifacts"))
+VIVADO_DIR = os.path.expanduser(os.environ.get("PINLET_VIVADO_DIR", "~/vivado_fifo"))
+ARTIFACT_DIR = os.path.expanduser(os.environ.get("PINLET_ARTIFACT_DIR", "artifacts"))
 
 
 def main():

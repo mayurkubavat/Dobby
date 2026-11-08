@@ -5,10 +5,10 @@ import math
 
 import pytest
 
-from dobby import local_models as lm
-from dobby.config import CONFIG
-from dobby.gemma.client import GemmaClient
-from dobby.model_bench import bench_model, markdown, pick_text_cases
+from pinlet import local_models as lm
+from pinlet.config import CONFIG
+from pinlet.gemma.client import GemmaClient
+from pinlet.model_bench import bench_model, markdown, pick_text_cases
 
 # conftest._isolate_model_roles gives each test clean roles and tmp_path/models.json.
 
@@ -28,7 +28,7 @@ def test_precedence_env_then_runtime_then_file_then_config(monkeypatch, tmp_path
     assert lm.model_for("vision") == "file:1" and lm.source_of("vision") == "models.json"
     lm.set_role("vision", "rt:1")
     assert lm.model_for("vision") == "rt:1" and lm.source_of("vision") == "runtime"
-    monkeypatch.setenv("DOBBY_MODEL_VISION", "env:1")
+    monkeypatch.setenv("PINLET_MODEL_VISION", "env:1")
     assert lm.model_for("vision") == "env:1" and lm.source_of("vision") == "env"
 
 
@@ -39,7 +39,7 @@ def test_roles_table_marks_installed():
 
 
 def test_grounder_decider_uses_role_models():
-    from dobby.vdom.gemma3_sidecar import Gemma3Grounder
+    from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
 
     g = Gemma3Grounder(client=GemmaClient(transport=lambda *a: {"models": []}))
     lm.set_role("text", "qwen3:4b")
@@ -107,9 +107,9 @@ def test_bench_check_task_runs_on_images():
 
 
 def test_tests_never_read_the_developers_own_model_file(monkeypatch):
-    """Guard for conftest._isolate_model_roles: your ~/.dobby/models.json must not leak in."""
+    """Guard for conftest._isolate_model_roles: your ~/.pinlet/models.json must not leak in."""
     import os
     from pathlib import Path
 
-    assert Path(os.path.expanduser("~/.dobby/models.json")) != lm.MODELS_FILE
+    assert Path(os.path.expanduser("~/.pinlet/models.json")) != lm.MODELS_FILE
     assert all(lm.source_of(r) == "default" for r in lm.ROLES)

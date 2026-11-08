@@ -9,7 +9,7 @@ pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="needs AppKit")
 
 def test_panel_sits_above_menus():
     AppKit = pytest.importorskip("AppKit")
-    from dobby.overlay import mac_helper
+    from pinlet.overlay import mac_helper
 
     screen = AppKit.NSScreen.mainScreen()
     if screen is None:
@@ -23,7 +23,7 @@ def test_panel_sits_above_menus():
 
 def test_liquid_glass_capsule_where_the_os_has_it():
     objc = pytest.importorskip("objc")
-    from dobby.overlay import mac_helper
+    from pinlet.overlay import mac_helper
 
     try:
         objc.lookUpClass("NSGlassEffectView")
@@ -39,6 +39,6 @@ def test_liquid_glass_capsule_where_the_os_has_it():
 
 
 def test_liquid_glass_can_be_turned_off():
-    from dobby.overlay import mac_helper
+    from pinlet.overlay import mac_helper
 
     assert mac_helper._liquid_glass({"liquid_glass": "off"}, 34.0) is None

@@ -9,7 +9,7 @@ build/
 .cache/
 references/
 # Skill references are part of the skills plugin
-!plugins/dobby/skills/*/references/
+!plugins/pinlet/skills/*/references/
 
 # Local model files (downloaded, not part of the repo)
 /models/

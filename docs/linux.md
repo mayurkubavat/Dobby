@@ -1,6 +1,6 @@
-# Dobby on Linux (X11)
+# Pinlet on Linux (X11)
 
-Dobby runs on Linux under an **X11 or XWayland** session. Native Wayland
+Pinlet runs on Linux under an **X11 or XWayland** session. Native Wayland
 (no `DISPLAY`) is not supported yet: the server starts with a fail-closed
 driver that explains what is missing instead of acting.
 
@@ -36,17 +36,17 @@ gsettings set org.gnome.desktop.interface toolkit-accessibility true
 ```
 
 Chromium and Electron apps (Chrome, VS Code, Slack) build their accessibility
-tree only when assistive technology is announced. Dobby sets
+tree only when assistive technology is announced. Pinlet sets
 `org.a11y.Status.IsEnabled` on the bus when it starts inspecting; apps that
 were already running before that need a restart, or start them with
 `--force-renderer-accessibility`. Java apps (including the Vivado GUI) need
-the Java ATK bridge (`libatk-wrapper-java`), otherwise Dobby falls back to OCR
+the Java ATK bridge (`libatk-wrapper-java`), otherwise Pinlet falls back to OCR
 and vision for them.
 
 ## XWayland sessions
 
 On a GNOME or KDE Wayland desktop, `DISPLAY` is still set for XWayland and
-Dobby uses it. Only X11 apps are visible and controllable there; native
+Pinlet uses it. Only X11 apps are visible and controllable there; native
 Wayland apps (most GNOME apps, Firefox by default) are not. Log in to an
 "on Xorg" session, or run apps with `GDK_BACKEND=x11` / `QT_QPA_PLATFORM=xcb`.
 
@@ -58,16 +58,16 @@ display topology reports scale 1.0 at any UI scale. `hal.ui_scale` (from
 
 ## Overlay
 
-On by default when `DISPLAY` is set (`DOBBY_OVERLAY=0` turns it off). Panels
+On by default when `DISPLAY` is set (`PINLET_OVERLAY=0` turns it off). Panels
 are click-through override-redirect windows; with a compositor they are
 translucent and clicks ripple, without one they are cut to shape. The overlay
 is unmapped for every capture, so screenshots, OCR and Gemma never see it.
-The control bar sits at the top centre while Dobby acts ("working", with Pause
-and Stop), is paused or stopped; while Dobby rests it stays out of sight and
-the tray icon has Wake. `DOBBY_OVERLAY_PILL=always` also keeps a "Dobby is
-sleeping" bar (click it to wake Dobby or put it back to sleep), `off` hides
+The control bar sits at the top centre while Pinlet acts ("working", with Pause
+and Stop), is paused or stopped; while Pinlet rests it stays out of sight and
+the tray icon has Wake. `PINLET_OVERLAY_PILL=always` also keeps a "Pinlet is
+sleeping" bar (click it to wake Pinlet or put it back to sleep), `off` hides
 the bar entirely.
-Ctrl+Alt+Esc stops Dobby, Ctrl+Alt+P pauses and resumes. GNOME and Metacity
+Ctrl+Alt+Esc stops Pinlet, Ctrl+Alt+P pauses and resumes. GNOME and Metacity
 use Ctrl+Alt+Esc for cycle-panels, so there Stop moves to Ctrl+Alt+End; the
 Stop button's tooltip shows the key that is live. Not yet on Linux:
 the numbered step trail, the scan sweep, the tag menu and user take-over

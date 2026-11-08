@@ -1,10 +1,10 @@
-"""Dobby -> person -> Dobby handoff, end to end, as an AI client sees it.
+"""Pinlet -> person -> Pinlet handoff, end to end, as an AI client sees it.
 
 These guard the flow an MCP client such as Claude goes through when the person
 steps in: Stop, Deny, Pause, take-over with the mouse or keyboard, then waking
-Dobby to hand control back. Each test drives the real ``OverlayClient`` against
+Pinlet to hand control back. Each test drives the real ``OverlayClient`` against
 a scripted helper process (no AppKit, no X11, no real input) and calls tools
-through ``DobbyServer.call_tool``, so the answer checked is exactly what the
+through ``PinletServer.call_tool``, so the answer checked is exactly what the
 AI client receives.
 
 What must hold:
@@ -13,7 +13,7 @@ What must hold:
   interrupted, paused), never a generic "action failed", and no real input
   reaches the desktop for that step.
 * A Stop ends the task it was pressed for, not one started minutes later.
-* After the person hands back (wake), Dobby's next step runs at once.
+* After the person hands back (wake), Pinlet's next step runs at once.
 * The helper only treats real actions (clicks, drags, scrolls, keys) as a
   take-over, never a mouse move toward the bar or an Allow/Deny prompt.
 * Once the task is over, the "thinking" glow and the agent pointer go away.
@@ -30,11 +30,11 @@ from typing import Any
 
 import pytest
 
-from dobby.handoff import classify, is_handoff, kind_of
-from dobby.overlay import OverlayClient, OverlayHAL
-from dobby.overlay import protocol as p
-from dobby.overlay.client import OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
-from dobby.overlay.menu import idle_cleanup, takes_over
+from pinlet.handoff import classify, is_handoff, kind_of
+from pinlet.overlay import OverlayClient, OverlayHAL
+from pinlet.overlay import protocol as p
+from pinlet.overlay.client import OverlayDenied, OverlayInterrupted, OverlayPaused, OverlayStopped
+from pinlet.overlay.menu import idle_cleanup, takes_over
 
 # A helper that answers like the real one. ``intent "EMIT:a,b"`` and
 # ``sleep.wait`` with reason ``EMIT:...`` make it send those events, the way a
@@ -101,7 +101,7 @@ def _client(tmp_path, answer="deny", **kw) -> OverlayClient:
 
 
 def person(client: OverlayClient, *events: str) -> None:
-    """The person does something on the bar / desktop; wait until Dobby has read it."""
+    """The person does something on the bar / desktop; wait until Pinlet has read it."""
     client.intent("EMIT:" + ",".join(events))
     client.move(1, 1, ms=0)  # a round trip: the events were read before the ack
 
@@ -109,7 +109,7 @@ def person(client: OverlayClient, *events: str) -> None:
 @pytest.fixture
 def rig(tmp_path, monkeypatch):
     """The server with a real overlay client in front of a desktop spy."""
-    srv = pytest.importorskip("dobby.server")
+    srv = pytest.importorskip("pinlet.server")
     clients = []
 
     def make(answer="deny", **kw):
@@ -248,7 +248,7 @@ def test_trajectory_stops_at_a_handoff_even_with_continue_on_failure(rig):
 def test_a_stale_stop_does_not_kill_the_next_task(rig):
     srv, make = rig
     client, desktop = make(stop_ttl=0.2)
-    person(client, "stop")  # pressed after the last task, while Dobby idled
+    person(client, "stop")  # pressed after the last task, while Pinlet idled
     time.sleep(0.3)
     assert call(srv, "click", x=70, y=70, verify_delta=False)["success"] is True
     assert clicks(desktop) == [("click", 70, 70)]
@@ -265,8 +265,8 @@ def test_a_stale_stop_does_not_end_the_next_wait_for_wake(tmp_path):
 
 
 # ------------------------------------------- the full round trip
-def test_dobby_person_dobby_round_trip(rig, monkeypatch):
-    """Dobby works, the person takes over, the AI waits, the person wakes Dobby, Dobby goes on."""
+def test_pinlet_person_pinlet_round_trip(rig, monkeypatch):
+    """Pinlet works, the person takes over, the AI waits, the person wakes Pinlet, Pinlet goes on."""
     srv, make = rig
     client, desktop = make()
     assert call(srv, "click", x=1, y=1, verify_delta=False)["success"]
@@ -297,7 +297,7 @@ def test_takeover_then_wake_while_paused_hands_back_cleanly(tmp_path):
 
 # ----------------------------------------------- classification
 def test_classification_covers_every_handoff():
-    from dobby.control import ControlBusy, ControlChanged, ControlStopped
+    from pinlet.control import ControlBusy, ControlChanged, ControlStopped
 
     cases = {
         OverlayStopped("x"): "stopped",
@@ -328,7 +328,7 @@ def test_ordinary_errors_still_fail_normally(rig):
 
 
 def test_tools_that_do_not_return_a_dict_raise_with_the_advice():
-    from dobby.server import ToolError, _handoff_guard
+    from pinlet.server import ToolError, _handoff_guard
 
     def lister() -> list[dict[str, Any]]:
         raise OverlayStopped("stopped")
@@ -338,7 +338,7 @@ def test_tools_that_do_not_return_a_dict_raise_with_the_advice():
 
 
 def test_every_registered_tool_is_guarded():
-    srv = pytest.importorskip("dobby.server")
+    srv = pytest.importorskip("pinlet.server")
     for info in srv.mcp_server._tool_manager.list_tools():
         fn = getattr(info, "fn", None)
         assert fn is not None and getattr(fn, "__wrapped__", None) is not None, info.name
@@ -349,7 +349,7 @@ _NOT_IDLE = dict(working=True, paused=False, takeover=False, turbo=False, confir
 
 
 @pytest.mark.parametrize("kind", ["click", "drag", "scroll", "key"])
-def test_real_actions_take_over_while_dobby_works(kind):
+def test_real_actions_take_over_while_pinlet_works(kind):
     assert takes_over(kind, **_NOT_IDLE)
 
 
@@ -364,7 +364,7 @@ def test_answering_allow_deny_is_not_a_take_over():
         assert not takes_over(kind, **{**_NOT_IDLE, "confirming": True})
 
 
-def test_idle_dobby_and_turbo_ignore_the_person():
+def test_idle_pinlet_and_turbo_ignore_the_person():
     assert not takes_over("click", **{**_NOT_IDLE, "working": False})
     assert not takes_over("click", **{**_NOT_IDLE, "turbo": True})
     assert takes_over("click", **{**_NOT_IDLE, "turbo": True, "paused": True})
@@ -402,13 +402,13 @@ def test_nothing_is_put_away_mid_task_or_while_the_person_is_involved():
 def test_linux_desktop_gets_the_overlay(monkeypatch):
     import types
 
-    from dobby.hal import factory
+    from pinlet.hal import factory
 
     seen = []
-    fake = types.ModuleType("dobby.hal.linux_x11")
+    fake = types.ModuleType("pinlet.hal.linux_x11")
     fake.build_hal = lambda: DesktopSpy()
-    monkeypatch.setitem(sys.modules, "dobby.hal.linux_x11", fake)
-    import dobby.overlay as ov
+    monkeypatch.setitem(sys.modules, "pinlet.hal.linux_x11", fake)
+    import pinlet.overlay as ov
 
     monkeypatch.setattr(ov, "wrap_hal", lambda hal: seen.append(hal) or hal)
     monkeypatch.setattr(factory, "_quiescence_for", lambda kind, backend: None)

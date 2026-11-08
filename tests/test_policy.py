@@ -1,18 +1,18 @@
-"""Admin policy (dobby.policy): what an organisation's policy file can lock down."""
+"""Admin policy (pinlet.policy): what an organisation's policy file can lock down."""
 
 import json
 
 import pytest
 
-from dobby import mode, policy
-from dobby.overlay import DenyingOverlay, wrap_hal
-from dobby.overlay.grants import AppBlocked, AppGrants
+from pinlet import mode, policy
+from pinlet.overlay import DenyingOverlay, wrap_hal
+from pinlet.overlay.grants import AppBlocked, AppGrants
 
 
 def _write(tmp_path, monkeypatch, data, raw=None):
     path = tmp_path / "policy.json"
     path.write_text(raw if raw is not None else json.dumps(data))
-    monkeypatch.setenv("DOBBY_POLICY_FILE", str(path))
+    monkeypatch.setenv("PINLET_POLICY_FILE", str(path))
     policy.reset_cache()
     return path
 
@@ -59,25 +59,27 @@ def test_broken_policy_fails_closed(tmp_path, monkeypatch, raw):
     assert not p.tool_allowed("click")
     assert p.tool_allowed("manage_toolsets")  # the AI can still learn what is going on
     assert p.app_tier("anything") == "read"
-    assert policy.shell_enabled(p, env={"DOBBY_ALLOW_SHELL": "1"})[0] is False
+    assert policy.shell_enabled(p, env={"PINLET_ALLOW_SHELL": "1"})[0] is False
 
 
 # ------------------------------------------------------------ mode
 def test_secure_policy_overrides_turbo_everywhere(tmp_path, monkeypatch):
     _write(tmp_path, monkeypatch, {"mode": "secure"})
-    assert mode.security_mode(env={"DOBBY_MODE": "turbo"}, argv=["dobby", "--turbo"]) == mode.SECURE
+    assert (
+        mode.security_mode(env={"PINLET_MODE": "turbo"}, argv=["pinlet", "--turbo"]) == mode.SECURE
+    )
     with mode.session_mode(mode.TURBO):
         assert mode.is_secure()
 
 
 def test_secure_policy_ignores_overlay_turbo_and_overlay_off(tmp_path, monkeypatch):
-    from dobby.overlay import overlay_config, overlay_enabled
+    from pinlet.overlay import overlay_config, overlay_enabled
 
-    monkeypatch.setenv("DOBBY_OVERLAY_TURBO", "1")
+    monkeypatch.setenv("PINLET_OVERLAY_TURBO", "1")
     assert overlay_config().get("turbo") is True
     _write(tmp_path, monkeypatch, {"mode": "secure"})
     assert "turbo" not in overlay_config()
-    assert overlay_enabled({"DOBBY_OVERLAY": "0"}, platform="darwin") is True
+    assert overlay_enabled({"PINLET_OVERLAY": "0"}, platform="darwin") is True
 
 
 # ------------------------------------------------------------ tools
@@ -96,7 +98,7 @@ def test_denied_and_allow_listed_tools(tmp_path, monkeypatch):
 def test_server_refuses_and_hides_denied_tools(tmp_path, monkeypatch):
     import anyio
 
-    import dobby.server as server
+    import pinlet.server as server
 
     _write(tmp_path, monkeypatch, {"tools": {"deny": ["list_windows"]}})
     names = {t.name for t in anyio.run(server.mcp_server.list_tools)}
@@ -108,7 +110,7 @@ def test_server_refuses_and_hides_denied_tools(tmp_path, monkeypatch):
 # ------------------------------------------------------------ shell
 def test_shell_is_off_by_default():
     ok, why = policy.shell_enabled(env={})
-    assert not ok and "DOBBY_ALLOW_SHELL" in why
+    assert not ok and "PINLET_ALLOW_SHELL" in why
     res = policy.run_command("echo hi", timeout=5)
     assert res["refused"] and not res["success"]
 
@@ -137,7 +139,7 @@ def test_allow_list_runs_listed_commands_without_a_shell(tmp_path, monkeypatch):
 
 
 def test_terminal_tool_follows_the_policy(tmp_path, monkeypatch):
-    import dobby.server as server
+    import pinlet.server as server
 
     assert server.run_terminal_command("echo nope")["refused"]
     _write(tmp_path, monkeypatch, {"shell": {"enabled": True, "allow": ["echo *"]}})
@@ -157,7 +159,7 @@ def test_admin_app_tiers_beat_apps_json_and_the_persons_allow(tmp_path, monkeypa
 
 
 def test_admin_app_tiers_apply_with_grants_turned_off(tmp_path, monkeypatch):
-    grants = AppGrants(path=tmp_path / "none.json", env={"DOBBY_APP_GRANTS": "off"})
+    grants = AppGrants(path=tmp_path / "none.json", env={"PINLET_APP_GRANTS": "off"})
     grants.check("Slack", "type", _never_asked)  # no policy: off means off
     _write(tmp_path, monkeypatch, {"apps": {"Slack": "click"}})
     grants.check("Slack", "click", _never_asked)
@@ -176,7 +178,7 @@ def test_app_default_applies_to_unlisted_apps(tmp_path, monkeypatch):
 def test_without_an_overlay_the_policy_still_holds_and_questions_are_denied(
     tmp_path, monkeypatch, mock_hal
 ):
-    from dobby.overlay import NullOverlay, OverlayDenied
+    from pinlet.overlay import NullOverlay, OverlayDenied
 
     assert wrap_hal(mock_hal, overlay=NullOverlay()) is mock_hal  # no policy: unchanged
     _write(tmp_path, monkeypatch, {"mode": "secure"})
@@ -189,7 +191,7 @@ def test_without_an_overlay_the_policy_still_holds_and_questions_are_denied(
 
 # ------------------------------------------------------------ bundled model
 def test_tampered_bundled_model_is_refused(tmp_path, monkeypatch):
-    from dobby.vdom import fast_detector as fd
+    from pinlet.vdom import fast_detector as fd
 
     assert fd.bundled_model_ok(fd.BUNDLED_MODEL_PATH)
     fake = tmp_path / "ui_detector_fast.onnx"

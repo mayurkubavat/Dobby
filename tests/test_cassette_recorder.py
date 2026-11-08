@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from dobby.hal.cassette_recorder import LiveCassetteRecorder, pixel_delta, sanitize_name
-from dobby.hal.cassette_replay import replay_cassette
-from dobby.hal.mock_replay import MockReplayHAL, ScreenFrameState
-from dobby.hal.session import DesktopSession
-from dobby.types import DisplayMetrics, DisplayTopology
+from pinlet.hal.cassette_recorder import LiveCassetteRecorder, pixel_delta, sanitize_name
+from pinlet.hal.cassette_replay import replay_cassette
+from pinlet.hal.mock_replay import MockReplayHAL, ScreenFrameState
+from pinlet.hal.session import DesktopSession
+from pinlet.types import DisplayMetrics, DisplayTopology
 
 
 def _session():
@@ -71,8 +71,8 @@ def test_recorded_session_replays(tmp_path: Path):
 
 
 def test_replay_catches_drift(tmp_path: Path):
-    from dobby.hal.errors import CassetteMismatch
-    from dobby.hal.mock_replay import load_cassette
+    from pinlet.hal.errors import CassetteMismatch
+    from pinlet.hal.mock_replay import load_cassette
 
     session, _ = _session()
     rec = LiveCassetteRecorder("drift", tmp_path, _FakeScreen(), settle_ms=0)
@@ -137,7 +137,7 @@ def test_helpers():
 
 
 def test_mcp_tools_record_and_write(tmp_path: Path, monkeypatch):
-    import dobby.server as server
+    import pinlet.server as server
 
     session, _ = _session()
 
@@ -166,7 +166,7 @@ def test_mcp_tools_record_and_write(tmp_path: Path, monkeypatch):
 
 
 def test_controller_snapshot_shape():
-    from dobby.agent_loop.controller import FeedbackLoopController
+    from pinlet.agent_loop.controller import FeedbackLoopController
 
     session, _ = _session()
     frame, image = FeedbackLoopController(session).cassette_snapshot(capture_ocr=False)

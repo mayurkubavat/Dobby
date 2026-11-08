@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-import dobby.server as server
-from dobby.perception.cv_detector import CVDetector
+import pinlet.server as server
+from pinlet.perception.cv_detector import CVDetector
 
 
 def test_cv_detector_synthetic_ui():

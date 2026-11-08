@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from dobby.hub import control, prompts, sessions
-from dobby.overlay import topbar
+from pinlet.hub import control, prompts, sessions
+from pinlet.overlay import topbar
 
 
 def _agents(*pids, started=1000.0):
@@ -75,9 +75,9 @@ def test_hiding_is_saved_and_pruned(tmp_path):
     assert topbar.Hiding.load(path).pids == {2: 10.0}
 
 
-def test_control_stop_takes_the_dobby_out_of_the_menu(tmp_path, monkeypatch):
-    monkeypatch.setenv("DOBBY_CONTROL_DIR", str(tmp_path))
-    monkeypatch.setenv("DOBBY_MENU_HIDE_IDLE", "0")
+def test_control_stop_takes_the_pinlet_out_of_the_menu(tmp_path, monkeypatch):
+    monkeypatch.setenv("PINLET_CONTROL_DIR", str(tmp_path))
+    monkeypatch.setenv("PINLET_MENU_HIDE_IDLE", "0")
     started = time.time() - 5
     monkeypatch.setattr(control, "agents", lambda: _agents(11, 12, started=started))
     assert len(control.handle({"id": 1, "op": "topbar"})["view"]["rows"]) == 2
@@ -93,7 +93,7 @@ def test_control_stop_takes_the_dobby_out_of_the_menu(tmp_path, monkeypatch):
 # ------------------------------------------------------------ prompts
 @pytest.fixture
 def app_owned(monkeypatch):
-    monkeypatch.setenv("DOBBY_APP_OWNED", "1")
+    monkeypatch.setenv("PINLET_APP_OWNED", "1")
     prompts._reset_for_tests()
     yield
     prompts._reset_for_tests()
@@ -103,10 +103,10 @@ def test_prompts_need_a_polling_app(app_owned, monkeypatch):
     assert not prompts.app_listening()
     prompts.note_poll(now=100.0)
     assert prompts.app_listening(now=101.0) and not prompts.app_listening(now=104.0)
-    monkeypatch.setenv("DOBBY_APP_PROMPTS", "0")
+    monkeypatch.setenv("PINLET_APP_PROMPTS", "0")
     assert not prompts.app_listening(now=101.0)
-    monkeypatch.delenv("DOBBY_APP_OWNED")
-    monkeypatch.delenv("DOBBY_APP_PROMPTS")
+    monkeypatch.delenv("PINLET_APP_OWNED")
+    monkeypatch.delenv("PINLET_APP_PROMPTS")
     assert not prompts.app_listening(now=101.0)
 
 
@@ -127,7 +127,7 @@ def test_the_app_answers_through_the_control_socket(app_owned, monkeypatch):
     info = sessions.open_session("Tibble · Claude Code", 4242, "secure")
     token = sessions.CURRENT.set(info)
     try:
-        t, out = _ask_in_thread(text="Allow Dobby to press Send?", secs=5, detail="In Mail")
+        t, out = _ask_in_thread(text="Allow Pinlet to press Send?", secs=5, detail="In Mail")
     finally:
         sessions.CURRENT.reset(token)
         sessions.close_session(info)
@@ -135,7 +135,7 @@ def test_the_app_answers_through_the_control_socket(app_owned, monkeypatch):
     assert prompts.app_listening()
     (p,) = reply["prompts"]
     assert (
-        p["text"] == "Allow Dobby to press Send?" and p["detail"] == "In Mail" and p["pid"] == 4242
+        p["text"] == "Allow Pinlet to press Send?" and p["detail"] == "In Mail" and p["pid"] == 4242
     )
     assert p["name"] == "Tibble · Claude Code" and 0 < p["secs_left"] <= 5
     assert reply["view"]["rows"][0]["state"] == "confirm"
@@ -161,7 +161,7 @@ def test_timeout_and_stop_all_deny(app_owned, monkeypatch):
 
 
 def test_overlay_confirm_goes_to_the_app_when_it_listens(app_owned):
-    from dobby.overlay.client import OverlayClient
+    from pinlet.overlay.client import OverlayClient
 
     client = OverlayClient.__new__(OverlayClient)  # no helper process
     sent = []

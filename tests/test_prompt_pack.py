@@ -3,8 +3,8 @@
 from PIL import Image, ImageDraw
 from test_gemma3_sidecar import FakeOllama
 
-from dobby.gemma.client import GemmaClient
-from dobby.gemma.prompts import (
+from pinlet.gemma.client import GemmaClient
+from pinlet.gemma.prompts import (
     PROMPTS,
     evidence_in_ocr,
     get_prompt,
@@ -12,7 +12,7 @@ from dobby.gemma.prompts import (
     parse_answer,
     yes_no_user,
 )
-from dobby.vdom.gemma3_sidecar import Gemma3Grounder
+from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
 
 IMG = Image.new("RGB", (200, 100), (240, 240, 240))
 ImageDraw.Draw(IMG).rectangle([20, 20, 120, 60], fill=(30, 30, 30))  # not blank
@@ -144,8 +144,8 @@ def test_verify_only_does_not_show_ocr_to_gemma():
 def test_ask_screen_verifies_with_ocr_by_default():
     from unittest.mock import MagicMock
 
-    from dobby.agent_loop.controller import FeedbackLoopController
-    from dobby.perception.ocr import CachedOCR, OCREngine, OCRLine
+    from pinlet.agent_loop.controller import FeedbackLoopController
+    from pinlet.perception.ocr import CachedOCR, OCREngine, OCRLine
 
     class _Ocr(OCREngine):
         name = "fake"

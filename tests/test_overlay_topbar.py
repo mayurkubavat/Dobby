@@ -1,4 +1,4 @@
-"""The top-bar item's model: per-Dobby status files, the dropdown view, icons."""
+"""The top-bar item's model: per-Pinlet status files, the dropdown view, icons."""
 
 from __future__ import annotations
 
@@ -6,21 +6,21 @@ import json
 import os
 import time
 
-from dobby.overlay import topbar
+from pinlet.overlay import topbar
 
 
 def _agents():
     return [
         {
             "pid": 11,
-            "name": "Mail Dobby",
+            "name": "Mail Pinlet",
             "paused": False,
             "holding": True,
             "waiting": False,
             "color": "#14B8A6",
         },
-        {"pid": 22, "name": "Xcode Dobby", "paused": True, "holding": False, "waiting": False},
-        {"pid": 33, "name": "Notes Dobby", "paused": False, "holding": False, "waiting": True},
+        {"pid": 22, "name": "Xcode Pinlet", "paused": True, "holding": False, "waiting": False},
+        {"pid": 33, "name": "Notes Pinlet", "paused": False, "holding": False, "waiting": True},
     ]
 
 
@@ -79,9 +79,13 @@ def test_view_counts_and_orders_rows():
         11: {"mode": "working", "step": "Click ‘Send’", "steps": 7, "elapsed": 42, "app": "Mail"}
     }
     v = topbar.topbar_view(_agents(), states, own_pid=11)
-    assert v.header == "Dobby"
+    assert v.header == "Pinlet"
     assert v.subtitle == "3 running · 1 working · 1 paused"
-    assert [r.name for r in v.rows] == ["Xcode Dobby", "Mail Dobby", "Notes Dobby"]  # paused first
+    assert [r.name for r in v.rows] == [
+        "Xcode Pinlet",
+        "Mail Pinlet",
+        "Notes Pinlet",
+    ]  # paused first
     xcode, mail, notes = v.rows
     assert mail.detail == "Working · Click ‘Send’ · in Mail · step 7 · 0:42"
     assert mail.shape == "spark" and mail.color == "#14B8A6" and mail.own
@@ -92,7 +96,7 @@ def test_view_counts_and_orders_rows():
     assert topbar.icon_state(v) == "attention" and topbar.icon_title(v) == "3"
 
 
-def test_view_single_sleeping_dobby():
+def test_view_single_sleeping_pinlet():
     v = topbar.topbar_view(_agents()[:1], {}, own_pid=11)
     assert v.subtitle == "1 running · sleeping"
     assert v.rows[0].detail == "Sleeping" and v.rows[0].shape == "moon"
@@ -120,8 +124,8 @@ def test_signature_changes_with_content():
     assert a.signature() == topbar.topbar_view(_agents()[:1], {}).signature()
 
 
-def test_dobby_mode_priority():
-    m = topbar.dobby_mode
+def test_pinlet_mode_priority():
+    m = topbar.pinlet_mode
     assert (
         m(paused=True, takeover=False, confirming=True, stopped=False, working=True, awake=False)
         == "confirm"

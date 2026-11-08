@@ -6,8 +6,8 @@ import sys
 import pytest
 from PIL import Image
 
-from dobby.hal.base import IDesktopHAL
-from dobby.types import BoundingBox, WindowInfo
+from pinlet.hal.base import IDesktopHAL
+from pinlet.types import BoundingBox, WindowInfo
 
 
 class MockDesktopHAL(IDesktopHAL):
@@ -116,13 +116,13 @@ def _display_is_virtual(display: str, proc_root: str = "/proc", tmp: str = "/tmp
 
 def live_desktop_allowed(env=None, platform: str = sys.platform, **kw) -> bool:
     env = os.environ if env is None else env
-    flag = env.get("DOBBY_LIVE_DESKTOP_TESTS", "").strip().lower()
+    flag = env.get("PINLET_LIVE_DESKTOP_TESTS", "").strip().lower()
     if flag in _TRUE:
         return True
     if flag in ("0", "false", "no", "off"):
         return False  # force the guard on, e.g. to check what would be skipped
     if (
-        env.get("DOBBY_REPLAY", "").strip().lower() in _TRUE
+        env.get("PINLET_REPLAY", "").strip().lower() in _TRUE
         or env.get("DESKTOP_HAL", "").lower() == "replay"
     ):
         return True
@@ -134,7 +134,7 @@ def live_desktop_allowed(env=None, platform: str = sys.platform, **kw) -> bool:
 def _refuse(*_a, **_k):
     pytest.skip(
         "would send real mouse/keyboard input to this desktop "
-        "(set DOBBY_LIVE_DESKTOP_TESTS=1, or run under Xvfb)"
+        "(set PINLET_LIVE_DESKTOP_TESTS=1, or run under Xvfb)"
     )
 
 
@@ -174,15 +174,15 @@ def _guard_real_desktop_input():
 
 
 # ------------------------------------------------- local model role isolation
-# Model roles resolve env > runtime > ~/.dobby/models.json > CONFIG. A user's
-# real models.json (or DOBBY_MODEL_* in the shell) would point the fake Ollama
+# Model roles resolve env > runtime > ~/.pinlet/models.json > CONFIG. A user's
+# real models.json (or PINLET_MODEL_* in the shell) would point the fake Ollama
 # tests at a model the fake does not serve, so every test starts from defaults.
 @pytest.fixture(autouse=True)
 def _isolate_model_roles(monkeypatch, tmp_path):
-    from dobby import local_models as lm
+    from pinlet import local_models as lm
 
     for role in lm.ROLES:
-        monkeypatch.delenv(f"DOBBY_MODEL_{role.upper()}", raising=False)
+        monkeypatch.delenv(f"PINLET_MODEL_{role.upper()}", raising=False)
         lm.set_role(role, None)
     monkeypatch.setattr(lm, "MODELS_FILE", tmp_path / "models.json")
     yield
@@ -193,11 +193,11 @@ def _isolate_model_roles(monkeypatch, tmp_path):
 @pytest.fixture(autouse=True)
 def _isolate_admin_policy(monkeypatch, tmp_path):
     """Tests never read the machine's real admin policy or the person's shell opt-in."""
-    from dobby import policy
+    from pinlet import policy
 
     monkeypatch.setattr(policy, "system_path", lambda *a, **k: tmp_path / "no-system-policy.json")
-    monkeypatch.delenv("DOBBY_POLICY_FILE", raising=False)
-    monkeypatch.delenv("DOBBY_ALLOW_SHELL", raising=False)
+    monkeypatch.delenv("PINLET_POLICY_FILE", raising=False)
+    monkeypatch.delenv("PINLET_ALLOW_SHELL", raising=False)
     policy.reset_cache()
     yield
     policy.reset_cache()
@@ -205,8 +205,8 @@ def _isolate_admin_policy(monkeypatch, tmp_path):
 
 @pytest.fixture
 def shell_on(monkeypatch):
-    """The person opted in to terminal commands (DOBBY_ALLOW_SHELL=1)."""
-    monkeypatch.setenv("DOBBY_ALLOW_SHELL", "1")
+    """The person opted in to terminal commands (PINLET_ALLOW_SHELL=1)."""
+    monkeypatch.setenv("PINLET_ALLOW_SHELL", "1")
 
 
 # ------------------------------------------------- real-screen reads
@@ -214,15 +214,15 @@ def shell_on(monkeypatch):
 def live_screen():
     """For tests that read the real screen through the server (never input).
 
-    Skips with the reason when this machine has no screen Dobby can capture:
+    Skips with the reason when this machine has no screen Pinlet can capture:
     CI or a cloud container without DISPLAY, Wayland without XWayland, or
     macOS without Screen Recording permission. Elsewhere the test runs.
     """
     from subprocess import CalledProcessError
 
-    from dobby.hal.errors import CapabilityUnavailable
+    from pinlet.hal.errors import CapabilityUnavailable
 
-    server = pytest.importorskip("dobby.server")
+    server = pytest.importorskip("pinlet.server")
     try:
         server.hal.capture_screen()
     except (CapabilityUnavailable, CalledProcessError, OSError) as exc:
@@ -231,11 +231,11 @@ def live_screen():
 
 
 # ------------------------------------------------- menu list tidying
-# Stop / Clear finished remember hidden rows in ~/.dobby/overlay/menu_hidden.json;
+# Stop / Clear finished remember hidden rows in ~/.pinlet/overlay/menu_hidden.json;
 # keep tests away from the real file.
 @pytest.fixture(autouse=True)
 def _isolate_menu_hiding(monkeypatch, tmp_path):
-    from dobby.overlay import topbar
+    from pinlet.overlay import topbar
 
     monkeypatch.setattr(topbar, "HIDDEN_PATH", str(tmp_path / "menu_hidden.json"))
     topbar._last_active.clear()

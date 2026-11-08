@@ -4,8 +4,8 @@ Unit tests for Phase 4 (Unified vDOM & Neural Sidecar) and Phase 5 (Dynamic Anch
 
 from PIL import Image
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.types import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.types import (
     AnchorEdge,
     BoundaryConstraint,
     BoundingBox,
@@ -17,7 +17,7 @@ from dobby.types import (
     VirtualDOMSnapshot,
     WindowInfo,
 )
-from dobby.vdom import (
+from pinlet.vdom import (
     SubPaneLayoutSolver,
     VDOMFusionEngine,
     VDOMQueryEngine,

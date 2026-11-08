@@ -30,7 +30,7 @@ def _need(app: str) -> None:
 
 @pytest.fixture(scope="module")
 def hal():
-    from dobby.hal.linux import LinuxHAL
+    from pinlet.hal.linux import LinuxHAL
 
     h = LinuxHAL()
     if h.display_server == "none":
@@ -55,9 +55,9 @@ def spawn(hal):
 
     def _spawn(kind: str = "--info", extra=(), capture: bool = False):
         _need("zenity")
-        title = f"dobby-{uuid.uuid4().hex[:8]}"
+        title = f"pinlet-{uuid.uuid4().hex[:8]}"
         p = subprocess.Popen(
-            ["zenity", kind, f"--title={title}", "--text=Dobby test", *extra],
+            ["zenity", kind, f"--title={title}", "--text=Pinlet test", *extra],
             stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -120,7 +120,7 @@ def test_focus_unknown_window_fails(hal):
 
 @pytest.fixture(scope="module")
 def inspector(hal):
-    from dobby.perception.atspi import ATSPIInspector
+    from pinlet.perception.atspi import ATSPIInspector
 
     insp = ATSPIInspector(hal=hal)
     if not insp.is_available:
@@ -176,7 +176,7 @@ def test_atspi_hit_test_reports_covering_window(hal, inspector, spawn):
 def test_atspi_without_bus_does_not_abort():
     """libatspi aborts the process when the a11y bus is missing; the probe must prevent that."""
     code = (
-        "from dobby.perception.atspi import ATSPIInspector\n"
+        "from pinlet.perception.atspi import ATSPIInspector\n"
         "i = ATSPIInspector(hal=object())\n"
         "print('available', i.is_available)\n"
         "print(len(i.inspect_desktop()), i.hit_test(10, 10))\n"
@@ -216,11 +216,11 @@ def _entry_dialog(hal, inspector, spawn):
 def test_type_click_and_submit(hal, inspector, spawn):
     _win, proc, entry = _entry_dialog(hal, inspector, spawn)
     hal.mouse_click(*_center(entry.bbox))
-    hal.keyboard_type("hello dobby")
+    hal.keyboard_type("hello pinlet")
     ok = next(e for e in inspector.inspect_desktop() if e.name == "OK")
     hal.mouse_click(*_center(ok.bbox))
     out, _ = proc.communicate(timeout=5)
-    assert out.strip() == "hello dobby"
+    assert out.strip() == "hello pinlet"
 
 
 def test_hotkey_select_all_replaces_and_enter_submits(hal, inspector, spawn):
@@ -282,10 +282,10 @@ def test_stop_hotkey_moves_when_ctrl_alt_esc_is_taken(hal, monkeypatch):
     from Xlib import display as xdisplay
 
     pytest.importorskip("gi")
-    from dobby.overlay import x11_helper
+    from pinlet.overlay import x11_helper
 
     assert x11_helper._HOTKEYS["stop"] == ("Escape", "End")
-    # Keys of their own, so a desktop shortcut or another Dobby overlay cannot interfere.
+    # Keys of their own, so a desktop shortcut or another Pinlet overlay cannot interfere.
     monkeypatch.setattr(
         x11_helper, "_HOTKEYS", {"stop": ("bracketleft", "bracketright"), "pause": ("semicolon",)}
     )
@@ -313,8 +313,8 @@ def test_topology_and_ui_scale(hal):
 
 def test_factory_without_display_fails_closed():
     code = (
-        "from dobby.hal.factory import get_desktop_hal\n"
-        "from dobby.hal.errors import CapabilityUnavailable\n"
+        "from pinlet.hal.factory import get_desktop_hal\n"
+        "from pinlet.hal.errors import CapabilityUnavailable\n"
         "h = get_desktop_hal()\n"
         "try:\n"
         "    h.capture_screen()\n"
@@ -335,9 +335,9 @@ def test_factory_without_display_fails_closed():
 
 def test_screen_state_loop_end_to_end(hal, spawn):
     """observe -> type -> click, through the same screen-state code the MCP tools use."""
-    from dobby.agent_loop.controller import FeedbackLoopController
-    from dobby.screen_state import StateTracker
-    from dobby.screen_state.observe import act_on_element, observe
+    from pinlet.agent_loop.controller import FeedbackLoopController
+    from pinlet.screen_state import StateTracker
+    from pinlet.screen_state.observe import act_on_element, observe
 
     win, proc = spawn("--entry", capture=True)
     hal.focus_window(win.window_id)
@@ -351,19 +351,19 @@ def test_screen_state_loop_end_to_end(hal, spawn):
         )
     )
     assert state is not None
-    assert state.app == "zenity" or (state.window_title or "").startswith("dobby-")
+    assert state.app == "zenity" or (state.window_title or "").startswith("pinlet-")
     entry = next(e for e in state.elements if e.source == "ax" and e.role == "text")
     assert entry.focused, "the entry starts focused in a zenity --entry dialog"
     assert "type" in state.as_dict()["operations"]
 
-    r = act_on_element(ctl, tracker, entry.eid, state.generation, action="type", text="Dobby")
+    r = act_on_element(ctl, tracker, entry.eid, state.generation, action="type", text="Pinlet")
     assert r["ok"], r
     state2 = observe(ctl, tracker, use_ocr=False)
     ok = next(e for e in state2.elements if e.label == "OK")
     r = act_on_element(ctl, tracker, ok.eid, state2.generation, action="click")
     assert r["ok"], r
     out, _ = proc.communicate(timeout=5)
-    assert out.strip() == "Dobby"
+    assert out.strip() == "Pinlet"
 
 
 # ---------------------------------------------------------------- overlay
@@ -384,7 +384,7 @@ def overlay(hal, tmp_path):
         from gi.repository import Gtk  # noqa: F401
     except Exception:
         pytest.skip("GTK 3 (python3-gi, gir1.2-gtk-3.0) not installed")
-    from dobby.overlay.client import OverlayClient
+    from pinlet.overlay.client import OverlayClient
 
     # Plain wording: these check the bar, test_personality checks the voice.
     client = OverlayClient(
@@ -413,7 +413,7 @@ def test_overlay_pointer_glow_and_capture_hiding(hal, overlay, spawn):
 
 
 def test_overlay_hal_capture_never_shows_overlay(hal, overlay):
-    from dobby.overlay import OverlayHAL
+    from pinlet.overlay import OverlayHAL
 
     wrapped = OverlayHAL(hal, overlay)
     wrapped.mouse_move(500, 400)  # the agent pointer glides here first
@@ -426,7 +426,7 @@ def test_overlay_hal_capture_never_shows_overlay(hal, overlay):
 
 
 def test_overlay_panels_are_not_listed_as_windows(hal, overlay):
-    from dobby.overlay.protocol import OVERLAY_WINDOW_TITLE
+    from pinlet.overlay.protocol import OVERLAY_WINDOW_TITLE
 
     assert overlay.move(300, 300)
     time.sleep(0.2)
@@ -436,7 +436,7 @@ def test_overlay_panels_are_not_listed_as_windows(hal, overlay):
 def test_overlay_confirm_allow_deny_and_timeout(hal, overlay):
     import threading
 
-    from dobby.perception.atspi import ATSPIInspector
+    from pinlet.perception.atspi import ATSPIInspector
 
     insp = ATSPIInspector(hal=hal)
     if not insp.is_available:
@@ -453,7 +453,7 @@ def test_overlay_confirm_allow_deny_and_timeout(hal, overlay):
             lambda: next(
                 (
                     e
-                    for e in insp.inspect_desktop(app_name_filter="Dobby Overlay")
+                    for e in insp.inspect_desktop(app_name_filter="Pinlet Overlay")
                     if e.name == button
                 ),
                 None,
@@ -466,7 +466,7 @@ def test_overlay_confirm_allow_deny_and_timeout(hal, overlay):
 
 
 def _bar_items(insp):
-    return insp.inspect_desktop(app_name_filter="Dobby Overlay", filter_interactable=False)
+    return insp.inspect_desktop(app_name_filter="Pinlet Overlay", filter_interactable=False)
 
 
 def _bar_label(insp, words):
@@ -484,23 +484,23 @@ def _click(hal, el):
 
 
 def test_control_bar_sleep_wake_pause_stop(hal, overlay):
-    from dobby.perception.atspi import ATSPIInspector
+    from pinlet.perception.atspi import ATSPIInspector
 
     insp = ATSPIInspector(hal=hal)
     if not insp.is_available:
         pytest.skip("AT-SPI unavailable")
     overlay.start_async()
-    sleeping = _bar_label(insp, "Dobby is sleeping")
+    sleeping = _bar_label(insp, "Pinlet is sleeping")
     assert sleeping is not None, "idle control bar not shown"
     assert sleeping.bbox.y < 60  # top of the screen
 
     _click(hal, sleeping)  # click the bar: wake
     assert _wait_for(lambda: overlay.awake, timeout=3)
-    awake = _bar_label(insp, "Dobby is awake")
+    awake = _bar_label(insp, "Pinlet is awake")
     assert awake is not None
     _click(hal, awake)  # click again: back to sleep
     assert _wait_for(lambda: not overlay.awake, timeout=3)
-    # Nothing runs while Dobby sleeps, so the bar has no Pause or Stop then.
+    # Nothing runs while Pinlet sleeps, so the bar has no Pause or Stop then.
     assert not any(e.name in ("Pause", "⏸", "Stop", "■") for e in _bar_items(insp))
 
     assert overlay.move(700, 500, verb="Click")  # working: pause (⏸) and stop (■)
@@ -508,19 +508,19 @@ def test_control_bar_sleep_wake_pause_stop(hal, overlay):
     pause = next(e for e in _bar_items(insp) if e.name == "⏸")
     _click(hal, pause)
     assert _wait_for(lambda: overlay._paused, timeout=3)
-    assert _bar_label(insp, "Dobby is paused") is not None
+    assert _bar_label(insp, "Pinlet is paused") is not None
     resume = next(e for e in _bar_items(insp) if e.name == "▶")
     _click(hal, resume)
     assert _wait_for(lambda: not overlay._paused, timeout=3)
 
     stop = _wait_for(lambda: next((e for e in _bar_items(insp) if e.name == "■"), None))
     _click(hal, stop)
-    assert _bar_label(insp, "Dobby stopped") is not None
+    assert _bar_label(insp, "Pinlet stopped") is not None
     assert _wait_for(lambda: overlay._stop_requested, timeout=3)
 
 
 def test_control_bar_working_and_hidden_for_capture(hal, overlay):
-    from dobby.perception.atspi import ATSPIInspector
+    from pinlet.perception.atspi import ATSPIInspector
 
     insp = ATSPIInspector(hal=hal)
     if not insp.is_available:

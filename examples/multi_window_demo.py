@@ -16,7 +16,7 @@ import os
 import subprocess
 import time
 
-import dobby.server as server
+import pinlet.server as server
 
 
 def run_multi_window_demo():
@@ -24,7 +24,7 @@ def run_multi_window_demo():
     print("🌐 STARTING MULTI-WINDOW DEMO: CHROME WEB DASHBOARD + TERMINAL")
     print("=" * 75)
 
-    artifact_dir = os.path.expanduser(os.environ.get("DOBBY_ARTIFACT_DIR", "artifacts"))
+    artifact_dir = os.path.expanduser(os.environ.get("PINLET_ARTIFACT_DIR", "artifacts"))
     os.makedirs(artifact_dir, exist_ok=True)
 
     dashboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "dashboard.html"))

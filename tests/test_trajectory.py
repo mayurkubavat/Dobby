@@ -4,9 +4,9 @@ Unit and Integration Tests for Local Macro & Trajectory Dispatcher (Option 4).
 
 from PIL import Image
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.agent_loop.trajectory import TrajectoryEngine
-from dobby.types import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.agent_loop.trajectory import TrajectoryEngine
+from pinlet.types import (
     BoundingBox,
     TrajectorySpec,
     TrajectoryStep,
@@ -264,7 +264,7 @@ def test_trajectory_continue_on_failure(shell_on):
 
 def test_server_execute_trajectory_tool(shell_on):
     """Validates server execute_trajectory FastMCP tool."""
-    from dobby.server import execute_trajectory
+    from pinlet.server import execute_trajectory
 
     spec_dict = {
         "trajectory_name": "server_mcp_batch",

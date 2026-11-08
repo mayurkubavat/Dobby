@@ -1,4 +1,4 @@
-"""Contracts added by the dobby architecture plan."""
+"""Contracts added by the pinlet architecture plan."""
 
 import json
 from pathlib import Path
@@ -6,20 +6,20 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-import dobby.server as server
-from dobby.agent_loop.bicameral import BicameralStepController, VerificationTier
-from dobby.agent_loop.cache import ActionCache
-from dobby.crystallization.trace_compiler import TraceCompiler, replay_macro
-from dobby.hal.errors import CapabilityUnavailable, CassetteMismatch
-from dobby.hal.factory import get_desktop_hal, reset_desktop_hal
-from dobby.hal.linux_wayland import WaylandHAL
-from dobby.hal.mock_replay import MockReplayHAL, ScreenFrameState, Transition, load_cassette
-from dobby.hal.protocols import IDesktopHALProtocol, IQuiescenceMonitor
-from dobby.perception.grounding.engine import GroundingEngine
-from dobby.perception.grounding.magnitude import match_magnitude
-from dobby.perception.window_clipper import WindowClipper
-from dobby.toolset import OutputMode, ToolSetManager
-from dobby.types import (
+import pinlet.server as server
+from pinlet.agent_loop.bicameral import BicameralStepController, VerificationTier
+from pinlet.agent_loop.cache import ActionCache
+from pinlet.crystallization.trace_compiler import TraceCompiler, replay_macro
+from pinlet.hal.errors import CapabilityUnavailable, CassetteMismatch
+from pinlet.hal.factory import get_desktop_hal, reset_desktop_hal
+from pinlet.hal.linux_wayland import WaylandHAL
+from pinlet.hal.mock_replay import MockReplayHAL, ScreenFrameState, Transition, load_cassette
+from pinlet.hal.protocols import IDesktopHALProtocol, IQuiescenceMonitor
+from pinlet.perception.grounding.engine import GroundingEngine
+from pinlet.perception.grounding.magnitude import match_magnitude
+from pinlet.perception.window_clipper import WindowClipper
+from pinlet.toolset import OutputMode, ToolSetManager
+from pinlet.types import (
     BoundingBox,
     CorrelatedStep,
     DisplayMetrics,
@@ -117,7 +117,7 @@ def test_resource_mode_omits_filesystem_path(tmp_path: Path):
     result = mgr.format_output("capture_vdom", payload)
     assert result["offloaded"] is True
     assert "file_path" not in result
-    assert result["uri"].startswith("mcp://dobby/state/")
+    assert result["uri"].startswith("mcp://pinlet/state/")
     name = result["uri"].rsplit("/", 1)[-1]
     text = mgr.resolve_state_file(name).read_text(encoding="utf-8")
     assert "Run Synthesis" in text
@@ -162,7 +162,7 @@ def test_default_screenshot_is_marks_not_pixels():
     assert res["marks"] == [{"id": 1, "role": "push_button", "name": "Run", "center": [9, 10]}]
     assert res["image_offloaded"] is True
     assert "image_base64" not in res
-    assert str(res["uri"]).startswith("mcp://dobby/state/")
+    assert str(res["uri"]).startswith("mcp://pinlet/state/")
     inline = server._screenshot_summary(payload, include_image=True)
     assert inline["image_base64"] == "abc"
 
@@ -223,7 +223,7 @@ def test_ground_icon_writes_relational_anchor(tmp_path: Path):
 
 
 def test_macro_replay_is_required_before_registration(tmp_path: Path):
-    from dobby.crystallization.registry import DynamicSkillRegistry
+    from pinlet.crystallization.registry import DynamicSkillRegistry
 
     steps = [
         CorrelatedStep(

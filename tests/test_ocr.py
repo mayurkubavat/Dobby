@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.perception import ocr as ocr_mod
-from dobby.perception.ocr import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.perception import ocr as ocr_mod
+from pinlet.perception.ocr import (
     AppleVisionOCR,
     CachedOCR,
     NullOCR,
@@ -22,7 +22,7 @@ from dobby.perception.ocr import (
     text_matches,
     vision_observations_to_lines,
 )
-from dobby.types import (
+from pinlet.types import (
     BoundingBox,
     PostConditionAssertion,
     PostConditionContract,
@@ -209,7 +209,7 @@ def test_read_screen_text_when_ocr_missing():
 
 
 def test_capture_vdom_uses_ocr_for_names_and_free_text():
-    from dobby.vdom.fusion import VDOMFusionEngine
+    from pinlet.vdom.fusion import VDOMFusionEngine
 
     ctrl = _controller(
         [OCRLine("Run", 12, 12, 30, 16, 0.9), OCRLine("clk_250m", 300, 100, 80, 16, 0.9)]

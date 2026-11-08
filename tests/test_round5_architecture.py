@@ -12,21 +12,21 @@ Validates:
 import json
 from pathlib import Path
 
-import dobby.server as server
-from dobby.agent_loop.bicameral import (
+import pinlet.server as server
+from pinlet.agent_loop.bicameral import (
     BicameralStepController,
     VerificationTier,
 )
-from dobby.hal.factory import get_desktop_hal
-from dobby.hal.mock_replay import MockReplayHAL, ScreenFrameState
-from dobby.hal.protocols import (
+from pinlet.hal.factory import get_desktop_hal
+from pinlet.hal.mock_replay import MockReplayHAL, ScreenFrameState
+from pinlet.hal.protocols import (
     IDesktopHALProtocol,
     IInputDriver,
     IScreenCapture,
     IWindowManager,
 )
-from dobby.toolset import OutputMode, ToolDefinition, ToolSetManager
-from dobby.types import BoundingBox, WindowInfo
+from pinlet.toolset import OutputMode, ToolDefinition, ToolSetManager
+from pinlet.types import BoundingBox, WindowInfo
 
 
 def test_hal_protocols_runtime_checkable():
@@ -171,7 +171,7 @@ def test_toolset_manager_out_of_band_file_offloading(tmp_path):
     assert res_large.get("offloaded") is True
     assert res_large.get("output_mode") == "file"
     assert "resource_uri" in res_large
-    assert res_large["resource_uri"].startswith("mcp://dobby/state/")
+    assert res_large["resource_uri"].startswith("mcp://pinlet/state/")
     assert "file_path" in res_large
     assert Path(res_large["file_path"]).exists()
     assert res_large["estimated_tokens_saved"] > 0
@@ -337,7 +337,7 @@ def test_compact_trajectory_history_8_part_invariant():
 
 def test_cursor_state_checkpoint_schema_validation():
     """Verify StateCheckpoint Pydantic model validates structured fields."""
-    from dobby.agent_loop.bicameral import EscalationPredicate, StateCheckpoint
+    from pinlet.agent_loop.bicameral import EscalationPredicate, StateCheckpoint
 
     checkpoint = StateCheckpoint(
         user_instructions="Synthesize Vivado top-level module",
@@ -361,8 +361,8 @@ def test_cursor_state_checkpoint_schema_validation():
 
 def test_hal_factory_desktop_hal_replay_override(monkeypatch):
     """Verify DESKTOP_HAL=replay environment override instantiates MockReplayHAL."""
-    from dobby.hal import factory
-    from dobby.hal.mock_replay import MockReplayHAL
+    from pinlet.hal import factory
+    from pinlet.hal.mock_replay import MockReplayHAL
 
     monkeypatch.setenv("DESKTOP_HAL", "replay")
     factory._HAL_INSTANCE = None  # Reset singleton

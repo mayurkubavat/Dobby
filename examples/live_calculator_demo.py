@@ -15,8 +15,8 @@ import os
 import subprocess
 import time
 
-import dobby.server as server
-from dobby.types import UIElement
+import pinlet.server as server
+from pinlet.types import UIElement
 
 
 def run_demo():
@@ -72,7 +72,7 @@ def run_demo():
         print(f"  ✓ Total Interactive Marks Tagged: {len(initial_snap['marks'])}")
 
         # Save initial annotated image
-        artifact_dir = os.path.expanduser(os.environ.get("DOBBY_ARTIFACT_DIR", "artifacts"))
+        artifact_dir = os.path.expanduser(os.environ.get("PINLET_ARTIFACT_DIR", "artifacts"))
         os.makedirs(artifact_dir, exist_ok=True)
         initial_img_data = base64.b64decode(initial_snap["image_base64"])
         with open(f"{artifact_dir}/demo_som_initial.jpg", "wb") as f:

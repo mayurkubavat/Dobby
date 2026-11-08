@@ -1,6 +1,6 @@
 # Setup and Configuration Guide
 
-This guide covers installing `dobby` and configuring it with various Model Context Protocol (MCP) clients.
+This guide covers installing `pinlet` and configuring it with various Model Context Protocol (MCP) clients.
 
 ---
 
@@ -13,8 +13,8 @@ This guide covers installing `dobby` and configuring it with various Model Conte
 
 ### Virtual Environment Setup
 ```bash
-git clone https://github.com/<your-org>/Dobby.git
-cd Dobby
+git clone https://github.com/<your-org>/Pinlet.git
+cd Pinlet
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -43,18 +43,18 @@ pip install -e ".[dev]"
 
 ## 3. Client Configuration
 
-The quick way: `dobby setup` registers Dobby with every AI tool it finds and links the agent skills (`dobby setup --dry-run` to preview, `--list` to see each tool). The entries below are the manual equivalent.
+The quick way: `pinlet setup` registers Pinlet with every AI tool it finds and links the agent skills (`pinlet setup --dry-run` to preview, `--list` to see each tool). The entries below are the manual equivalent.
 
 ### Claude Desktop
-Add `dobby` to your Claude Desktop configuration file:
+Add `pinlet` to your Claude Desktop configuration file:
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
-    "Dobby": {
-      "command": "/absolute/path/to/Dobby/.venv/bin/dobby",
+    "Pinlet": {
+      "command": "/absolute/path/to/Pinlet/.venv/bin/pinlet",
       "env": {
         "DISPLAY": ":0"
       }
@@ -64,13 +64,13 @@ Add `dobby` to your Claude Desktop configuration file:
 ```
 
 ### Antigravity / Gemini CLI
-Add `dobby` to Antigravity's MCP config (`~/.gemini/config/mcp_config.json` for the app, `~/.gemini/antigravity-cli/mcp_config.json` for the CLI; Gemini CLI uses `~/.gemini/settings.json`):
+Add `pinlet` to Antigravity's MCP config (`~/.gemini/config/mcp_config.json` for the app, `~/.gemini/antigravity-cli/mcp_config.json` for the CLI; Gemini CLI uses `~/.gemini/settings.json`):
 
 ```json
 {
   "mcpServers": {
-    "Dobby": {
-      "command": "/absolute/path/to/Dobby/.venv/bin/dobby",
+    "Pinlet": {
+      "command": "/absolute/path/to/Pinlet/.venv/bin/pinlet",
       "env": {
         "DISPLAY": ":20"
       }
@@ -80,13 +80,13 @@ Add `dobby` to Antigravity's MCP config (`~/.gemini/config/mcp_config.json` for 
 ```
 
 ### Cursor / VS Code
-In your project or global Cursor settings (`.cursor/mcp.json` or `~/.cursor/mcp.json`). Codex uses `~/.codex/config.toml` with a `[mcp_servers.Dobby]` table and `command = "..."`:
+In your project or global Cursor settings (`.cursor/mcp.json` or `~/.cursor/mcp.json`). Codex uses `~/.codex/config.toml` with a `[mcp_servers.Pinlet]` table and `command = "..."`:
 
 ```json
 {
   "mcpServers": {
-    "Dobby": {
-      "command": "/absolute/path/to/Dobby/.venv/bin/dobby"
+    "Pinlet": {
+      "command": "/absolute/path/to/Pinlet/.venv/bin/pinlet"
     }
   }
 }
@@ -103,5 +103,5 @@ Verify that the server starts and lists tools correctly:
 .venv/bin/pytest tests/
 
 # Test the CLI command directly
-.venv/bin/dobby --help
+.venv/bin/pinlet --help
 ```

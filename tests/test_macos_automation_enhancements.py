@@ -11,9 +11,9 @@ from unittest.mock import MagicMock
 
 from PIL import Image
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.agent_loop.trajectory import TrajectoryEngine
-from dobby.types import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.agent_loop.trajectory import TrajectoryEngine
+from pinlet.types import (
     BoundingBox,
     TrajectorySpec,
     TrajectoryStep,

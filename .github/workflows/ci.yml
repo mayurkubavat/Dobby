@@ -51,12 +51,12 @@ jobs:
         if: runner.os == 'macOS'
         run: python -m pip install -e ".[dev,macos,ocr]"
       - name: Byte-compile
-        run: python -m compileall -q dobby
+        run: python -m compileall -q pinlet
       - name: Tests
-        # The suite never sends real mouse or keyboard input (DOBBY_LIVE_DESKTOP_TESTS is unset).
+        # The suite never sends real mouse or keyboard input (PINLET_LIVE_DESKTOP_TESTS is unset).
         # Shared runners are slower than a developer machine: 3x the latency budgets.
         env:
-          DOBBY_PERF_SCALE: "3"
+          PINLET_PERF_SCALE: "3"
         run: python -m pytest -q
 
   audit:

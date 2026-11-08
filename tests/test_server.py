@@ -4,7 +4,7 @@ from subprocess import CalledProcessError
 
 import pytest
 
-import dobby.server as server
+import pinlet.server as server
 
 
 def test_mcp_tools_registered():

@@ -1,4 +1,4 @@
-"""Input lock (DOBBY_INPUT_LOCK): the shared rules, the server side, and the X11 shield."""
+"""Input lock (PINLET_INPUT_LOCK): the shared rules, the server side, and the X11 shield."""
 
 import os
 import shutil
@@ -9,25 +9,25 @@ from types import SimpleNamespace
 
 import pytest
 
-from dobby.overlay import NullOverlay, OverlayClient, OverlayHAL, overlay_config
-from dobby.overlay import inputlock as il
-from dobby.overlay import protocol as p
-from dobby.overlay.menu import bar_click, bar_view
-from dobby.overlay.style import bar_spec
+from pinlet.overlay import NullOverlay, OverlayClient, OverlayHAL, overlay_config
+from pinlet.overlay import inputlock as il
+from pinlet.overlay import protocol as p
+from pinlet.overlay.menu import bar_click, bar_view
+from pinlet.overlay.style import bar_spec
 
 
 # ------------------------------------------------------------------ rules
 def test_lock_mode_is_opt_in():
     assert il.lock_mode({}) == "off"
-    assert il.lock_mode({"DOBBY_INPUT_LOCK": "off"}) == "off"
-    assert il.lock_mode({"DOBBY_INPUT_LOCK": "nonsense"}) == "off"
+    assert il.lock_mode({"PINLET_INPUT_LOCK": "off"}) == "off"
+    assert il.lock_mode({"PINLET_INPUT_LOCK": "nonsense"}) == "off"
     for on in ("window", "on", "1", "TRUE"):
-        assert il.lock_mode({"DOBBY_INPUT_LOCK": on}) == "window"
+        assert il.lock_mode({"PINLET_INPUT_LOCK": on}) == "window"
 
 
 def test_overlay_config_carries_the_lock():
     assert "input_lock" not in overlay_config({})
-    assert overlay_config({"DOBBY_INPUT_LOCK": "window"})["input_lock"] == "window"
+    assert overlay_config({"PINLET_INPUT_LOCK": "window"})["input_lock"] == "window"
 
 
 def _armed(**kw):
@@ -53,7 +53,7 @@ def test_never_armed_while_the_person_is_in_control_or_asked(why):
 TARGET = (100, 100, 400, 300)
 
 
-def test_blocks_clicks_only_inside_dobbys_window():
+def test_blocks_clicks_only_inside_pinlets_window():
     assert il.blocks("click", (200, 200), target=TARGET)
     assert il.blocks("scroll", (200, 200), target=TARGET)
     assert il.blocks("drag", (499, 399), target=TARGET)
@@ -75,7 +75,7 @@ def test_windows_on_top_and_the_bar_stay_clickable():
     assert not il.blocks("click", (310, 110), target=TARGET, own=bar)
 
 
-def test_keys_blocked_only_while_dobbys_window_is_in_front():
+def test_keys_blocked_only_while_pinlets_window_is_in_front():
     assert il.blocks("key", None, target=TARGET, target_front=True)
     assert not il.blocks("key", None, target=TARGET, target_front=False)
 
@@ -162,7 +162,7 @@ def test_client_sends_input_pass_only_when_the_x11_lock_is_on(monkeypatch):
         ("input.pass", False, False),
     ]
     sent.clear()
-    monkeypatch.setattr(sys, "platform", "darwin")  # the tap knows Dobby's events
+    monkeypatch.setattr(sys, "platform", "darwin")  # the tap knows Pinlet's events
     client.input_pass(True)
     assert sent == []
 
@@ -225,7 +225,7 @@ def test_actions_are_wrapped_in_input_pass():
     assert calls[i - 1] == ("pass", True) and calls[i + 1] == ("pass", False)
 
 
-def test_dobby_takes_its_window_back_before_acting():
+def test_pinlet_takes_its_window_back_before_acting():
     hal, calls = _hal(active="w1")
     hal.focus_window("w1")
     hal.inner.active = "person-app"  # the person clicked into another app meanwhile
@@ -250,7 +250,7 @@ def test_keys_that_switch_windows_are_followed():
     assert ("track", "w2") in calls
     calls.clear()
     hal.keyboard_type("x")
-    assert ("hal.focus", "w1") not in calls  # w2 is Dobby's window now
+    assert ("hal.focus", "w1") not in calls  # w2 is Pinlet's window now
 
 
 # ------------------------------------------------------- X11 shield (Xvfb)
@@ -266,12 +266,12 @@ def _xvfb():
     return proc, disp
 
 
-def test_x11_shield_blocks_person_passes_dobby_and_dies_with_the_helper():
+def test_x11_shield_blocks_person_passes_pinlet_and_dies_with_the_helper():
     pytest.importorskip("Xlib")  # Linux extra; skip cleanly on macOS
     from Xlib import XK, X, Xatom, display
     from Xlib.ext import xtest
 
-    from dobby.overlay.x11_lock import X11InputLock
+    from pinlet.overlay.x11_lock import X11InputLock
 
     xvfb, disp = _xvfb()
     try:
@@ -332,7 +332,7 @@ def test_x11_shield_blocks_person_passes_dobby_and_dies_with_the_helper():
         key("a")
         assert not app_got(X.ButtonPress) and seen[-2:] == ["click", "key"]
 
-        lock.set_pass(True)  # Dobby's own input
+        lock.set_pass(True)  # Pinlet's own input
         assert not lock.mapped and not lock.keys_grabbed
         click()
         key("a")
@@ -396,7 +396,7 @@ class FakeAX:
 
 
 def test_ax_press_presses_a_button_under_its_label():
-    from dobby.hal.background import ax_press_at
+    from pinlet.hal.background import ax_press_at
 
     tree = {
         "label": {"AXRole": "AXStaticText", "AXParent": "btn"},
@@ -421,7 +421,7 @@ def test_ax_press_presses_a_button_under_its_label():
     ],
 )
 def test_ax_press_refuses_what_is_not_a_plain_button(tree, at):
-    from dobby.hal.background import ax_press_at
+    from pinlet.hal.background import ax_press_at
 
     ax = FakeAX(tree, at)
     assert ax_press_at(ax, 42, 1, 1) is None
@@ -429,7 +429,7 @@ def test_ax_press_refuses_what_is_not_a_plain_button(tree, at):
 
 
 def test_ax_press_failure_is_none():
-    from dobby.hal.background import ax_press_at
+    from pinlet.hal.background import ax_press_at
 
     ax = FakeAX({"b": {"AXRole": "AXButton", "actions": ["AXPress"]}}, "b", fail=True)
     assert ax_press_at(ax, 42, 1, 1) is None
@@ -492,7 +492,7 @@ def test_background_clicks_can_be_turned_off():
     hal.mouse_click(5, 6)
     assert not any(c[0] == "hal.press" for c in calls)
     assert (
-        overlay_config({"DOBBY_INPUT_LOCK": "window", "DOBBY_BACKGROUND_CLICKS": "0"})[
+        overlay_config({"PINLET_INPUT_LOCK": "window", "PINLET_BACKGROUND_CLICKS": "0"})[
             "background_clicks"
         ]
         is False

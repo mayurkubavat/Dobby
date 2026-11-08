@@ -1,6 +1,6 @@
 # Architecture Overview
 
-`dobby` is designed around a closed-loop **Perception $\rightarrow$ Actuation $\rightarrow$ Verification** cycle.
+`pinlet` is designed around a closed-loop **Perception $\rightarrow$ Actuation $\rightarrow$ Verification** cycle.
 
 ```
        +-----------------------------------------------+
@@ -9,7 +9,7 @@
                              |  JSON-RPC (stdio)
                              v
        +-----------------------------------------------+
-       |            Dobby Server             |
+       |            Pinlet Server             |
        +-----------------------------------------------+
          /            |             \             \
         v             v              v             v
@@ -30,7 +30,7 @@
 
 ## 1. Hardware Abstraction Layer (HAL)
 
-The Hardware Abstraction Layer isolates platform-specific desktop APIs behind a common Python interface (`DesktopHAL` in `dobby/hal/base.py`):
+The Hardware Abstraction Layer isolates platform-specific desktop APIs behind a common Python interface (`DesktopHAL` in `pinlet/hal/base.py`):
 
 - **Linux (`LinuxHAL`)**:
   - Screen capture using `mss`.
@@ -49,16 +49,16 @@ The Hardware Abstraction Layer isolates platform-specific desktop APIs behind a 
 Interactive elements are discovered through three complementary mechanisms:
 
 1. **Accessibility Tree (AT-SPI2)**: Directly reads semantic names, accessible roles, and exact pixel bounds from the operating system without visual inference.
-2. **Fast ONNX UI Detector**: A lightweight, 159 KB neural model (`dobby/models/ui_detector_fast.onnx`) running on CPU AVX-512 in **~8.3 ms** (~120 FPS). Identifies buttons, inputs, tabs, and panels directly from pixel data.
+2. **Fast ONNX UI Detector**: A lightweight, 159 KB neural model (`pinlet/models/ui_detector_fast.onnx`) running on CPU AVX-512 in **~8.3 ms** (~120 FPS). Identifies buttons, inputs, tabs, and panels directly from pixel data.
 3. **Template Matching**: Uses normalized cross-correlation (`cv2.matchTemplate`) for finding specific icons, toolbars, and custom widgets.
 
-The **vDOM Fusion Engine** (`dobby/vdom/fusion.py`) merges accessibility nodes and visual proposals into an indexed virtual DOM tree that can be queried with CSS-style selectors (`query_vdom`).
+The **vDOM Fusion Engine** (`pinlet/vdom/fusion.py`) merges accessibility nodes and visual proposals into an indexed virtual DOM tree that can be queried with CSS-style selectors (`query_vdom`).
 
 ---
 
 ## 3. Dynamic Self-Healing Locator Cache
 
-To avoid re-grounding familiar UI elements on every turn, the action cache (`dobby/agent_loop/cache.py`) provides:
+To avoid re-grounding familiar UI elements on every turn, the action cache (`pinlet/agent_loop/cache.py`) provides:
 
 1. **Window Movement Re-Projection**: Automatically translates element coordinates when host windows move or resize.
 2. **Pre-Flight dHash Verification**: Computes a 64-bit perceptual visual hash on the candidate element patch in **<0.5 ms**. If the visual hash matches, the action executes immediately with 0 visual tokens.
@@ -68,7 +68,7 @@ To avoid re-grounding familiar UI elements on every turn, the action cache (`dob
 
 ## 4. Local Macro & Trajectory Dispatcher
 
-Instead of executing multi-step interactions through individual client-server round-trips, the trajectory engine (`dobby/agent_loop/trajectory.py`) batches steps locally:
+Instead of executing multi-step interactions through individual client-server round-trips, the trajectory engine (`pinlet/agent_loop/trajectory.py`) batches steps locally:
 
 - **17 Declarative Primitives**: Focus windows, clicks, text typing, shortcuts, sub-pane captures, vDOM queries, plugin features, and shell commands.
 - **Jinja2 Variable Interpolation**: Steps can use variables (`{{sim_time}}`) or reference outputs from earlier steps (`{{steps.step_id.output}}`).
@@ -79,4 +79,4 @@ Instead of executing multi-step interactions through individual client-server ro
 
 ## 5. Event-Driven Quiescence (XDamage)
 
-Instead of relying on arbitrary `sleep()` calls, the quiescence monitor (`dobby/hal/quiescence.py`) tracks X11 damage events (`XDamageNotify`). Physical actions wait until pixel updates stop for a configurable settle window (e.g. 150ms), ensuring reliable interaction with animated or rendering UIs.
+Instead of relying on arbitrary `sleep()` calls, the quiescence monitor (`pinlet/hal/quiescence.py`) tracks X11 damage events (`XDamageNotify`). Physical actions wait until pixel updates stop for a configurable settle window (e.g. 150ms), ensuring reliable interaction with animated or rendering UIs.

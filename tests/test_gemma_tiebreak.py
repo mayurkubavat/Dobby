@@ -9,10 +9,10 @@ import pytest
 from PIL import Image
 from test_gemma3_sidecar import FakeOllama
 
-from dobby.agent_loop.controller import FeedbackLoopController
-from dobby.agent_loop.obstruction import SemanticModalRouter
-from dobby.gemma.client import GemmaClient
-from dobby.types import (
+from pinlet.agent_loop.controller import FeedbackLoopController
+from pinlet.agent_loop.obstruction import SemanticModalRouter
+from pinlet.gemma.client import GemmaClient
+from pinlet.types import (
     BoundingBox,
     ModalButtonOption,
     ModalRiskTier,
@@ -21,7 +21,7 @@ from dobby.types import (
     StateAssertionType,
     WindowInfo,
 )
-from dobby.vdom.gemma3_sidecar import Gemma3Grounder
+from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
 
 
 def _buttons(*labels: str) -> list[ModalButtonOption]:
@@ -217,7 +217,7 @@ def test_ask_screen_without_gemma():
 
 
 def _with_ocr(ctrl, lines):
-    from dobby.perception.ocr import CachedOCR, OCREngine
+    from pinlet.perception.ocr import CachedOCR, OCREngine
 
     class _Fake(OCREngine):
         name = "fake"
@@ -234,7 +234,7 @@ def _with_ocr(ctrl, lines):
 
 
 def test_visual_query_expected_text_found_by_ocr_skips_gemma():
-    from dobby.perception.ocr import OCRLine
+    from pinlet.perception.ocr import OCRLine
 
     fake = FakeOllama()  # no replies queued: any Gemma call would fail the test
     ctrl = _with_ocr(
@@ -281,7 +281,7 @@ def test_ask_screen_expected_text_only_absent_is_false():
 
 
 def test_client_warmup_loads_model():
-    from dobby.gemma.client import GemmaClient
+    from pinlet.gemma.client import GemmaClient
 
     calls = []
 

@@ -1,9 +1,9 @@
-"""``dobby setup`` registers Dobby with each AI tool and links the skills, idempotently."""
+"""``pinlet setup`` registers Pinlet with each AI tool and links the skills, idempotently."""
 
 import json
 from pathlib import Path
 
-from dobby import agent_setup
+from pinlet import agent_setup
 
 
 def _home(tmp_path: Path) -> Path:
@@ -16,7 +16,7 @@ def _home(tmp_path: Path) -> Path:
 
 
 def _run(home: Path, *extra: str) -> int:
-    return agent_setup.main(["--home", str(home), "--command", "/opt/dobby", *extra])
+    return agent_setup.main(["--home", str(home), "--command", "/opt/pinlet", *extra])
 
 
 def test_setup_registers_every_found_tool_and_keeps_other_servers(tmp_path, capsys):
@@ -24,17 +24,17 @@ def test_setup_registers_every_found_tool_and_keeps_other_servers(tmp_path, caps
     assert _run(home) == 0
     cursor = json.loads((home / ".cursor" / "mcp.json").read_text())
     assert cursor["mcpServers"]["other"] == {"command": "x"}
-    assert cursor["mcpServers"]["Dobby"]["command"] == "/opt/dobby"
-    assert (home / ".cursor" / "mcp.json.dobby-backup").exists()
+    assert cursor["mcpServers"]["Pinlet"]["command"] == "/opt/pinlet"
+    assert (home / ".cursor" / "mcp.json.pinlet-backup").exists()
     codex = (home / ".codex" / "config.toml").read_text()
     assert codex.startswith('model = "gpt-5"\n')
-    assert '[mcp_servers.Dobby]\ncommand = "/opt/dobby"' in codex
+    assert '[mcp_servers.Pinlet]\ncommand = "/opt/pinlet"' in codex
     anti = json.loads((home / ".gemini" / "config" / "mcp_config.json").read_text())
-    assert anti["mcpServers"]["Dobby"]["command"] == "/opt/dobby"
+    assert anti["mcpServers"]["Pinlet"]["command"] == "/opt/pinlet"
     copilot = json.loads((home / ".copilot" / "mcp-config.json").read_text())
-    assert copilot["mcpServers"]["Dobby"]["tools"] == ["*"]
+    assert copilot["mcpServers"]["Pinlet"]["tools"] == ["*"]
     opencode = json.loads((home / ".config" / "opencode" / "opencode.json").read_text())
-    assert opencode["mcp"]["Dobby"]["command"] == ["/opt/dobby"]
+    assert opencode["mcp"]["Pinlet"]["command"] == ["/opt/pinlet"]
     # Tools that are not installed are left alone.
     assert not (home / ".gemini" / "settings.json").exists()
     assert not (home / ".claude").exists()
@@ -45,7 +45,7 @@ def test_skills_are_linked_into_the_shared_folder(tmp_path):
     _run(home, "--no-mcp")
     linked = home / ".agents" / "skills"
     names = agent_setup.skill_names()
-    assert names[0] == "dobby" and len(names) >= 9
+    assert names[0] == "pinlet" and len(names) >= 9
     for name in names:
         assert (linked / name / "SKILL.md").is_file()
         assert (linked / name).resolve() == (agent_setup.skills_dir() / name).resolve()
@@ -55,7 +55,7 @@ def test_second_run_changes_nothing(tmp_path):
     home = _home(tmp_path)
     _run(home)
     before = (home / ".codex" / "config.toml").read_text()
-    changes = agent_setup.plan(home, command=["/opt/dobby"], env={})
+    changes = agent_setup.plan(home, command=["/opt/pinlet"], env={})
     assert changes and all(c.apply is None for c in changes), [
         (c.tool, c.status) for c in changes if c.apply
     ]
@@ -63,16 +63,16 @@ def test_second_run_changes_nothing(tmp_path):
     assert (home / ".codex" / "config.toml").read_text() == before
 
 
-def test_an_existing_dobby_entry_is_kept_unless_forced(tmp_path):
+def test_an_existing_pinlet_entry_is_kept_unless_forced(tmp_path):
     home = _home(tmp_path)
-    (home / ".cursor" / "mcp.json").write_text('{"mcpServers": {"dobby": {"command": "/old"}}}')
+    (home / ".cursor" / "mcp.json").write_text('{"mcpServers": {"pinlet": {"command": "/old"}}}')
     _run(home, "--only", "cursor")
     assert json.loads((home / ".cursor" / "mcp.json").read_text())["mcpServers"] == {
-        "dobby": {"command": "/old"}
+        "pinlet": {"command": "/old"}
     }
     _run(home, "--only", "cursor", "--force")
     assert json.loads((home / ".cursor" / "mcp.json").read_text())["mcpServers"] == {
-        "Dobby": {"command": "/opt/dobby"}
+        "Pinlet": {"command": "/opt/pinlet"}
     }
 
 
@@ -89,7 +89,7 @@ def test_dry_run_and_list_write_nothing(tmp_path, capsys):
 
 def test_a_foreign_skill_folder_is_never_replaced(tmp_path):
     home = _home(tmp_path)
-    mine = home / ".agents" / "skills" / "dobby"
+    mine = home / ".agents" / "skills" / "pinlet"
     mine.mkdir(parents=True)
     (mine / "SKILL.md").write_text("mine")
     _run(home, "--no-mcp", "--force")
@@ -102,9 +102,9 @@ def test_unknown_tool_is_an_error(tmp_path):
 
 def test_skills_are_readable_without_a_skills_client():
     index = agent_setup.skills_index_markdown()
-    assert "mcp://dobby/skills/dobby" in index
-    assert agent_setup.read_skill("dobby").startswith("---\nname: dobby\n")
-    for bad in ("../dobby", "dobby/SKILL.md", "", "nope"):
+    assert "mcp://pinlet/skills/pinlet" in index
+    assert agent_setup.read_skill("pinlet").startswith("---\nname: pinlet\n")
+    for bad in ("../pinlet", "pinlet/SKILL.md", "", "nope"):
         try:
             agent_setup.read_skill(bad)
         except ValueError:
@@ -115,17 +115,17 @@ def test_skills_are_readable_without_a_skills_client():
 def test_server_serves_the_skills_as_resources_and_a_prompt():
     import asyncio
 
-    from dobby.server import mcp_server
+    from pinlet.server import mcp_server
 
     async def go():
         templates = await mcp_server.list_resource_templates()
-        assert any("mcp://dobby/skills/{name}" in str(t.uri_template) for t in templates)
-        body = await mcp_server.read_resource("mcp://dobby/skills/dobby")
+        assert any("mcp://pinlet/skills/{name}" in str(t.uri_template) for t in templates)
+        body = await mcp_server.read_resource("mcp://pinlet/skills/pinlet")
         prompts = await mcp_server.list_prompts()
         return body, prompts
 
     body, prompts = asyncio.run(go())
     text = "".join(getattr(part, "content", "") or "" for part in body)
-    assert "name: dobby" in text
-    assert "dobby" in [p.name for p in prompts]
-    assert "mcp://dobby/skills/dobby" in (mcp_server.instructions or "")
+    assert "name: pinlet" in text
+    assert "pinlet" in [p.name for p in prompts]
+    assert "mcp://pinlet/skills/pinlet" in (mcp_server.instructions or "")

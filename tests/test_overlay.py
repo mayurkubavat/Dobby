@@ -1,4 +1,4 @@
-"""Tests for dobby.overlay that run anywhere (no AppKit needed)."""
+"""Tests for pinlet.overlay that run anywhere (no AppKit needed)."""
 
 import json
 import sys
@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dobby.overlay import (
+from pinlet.overlay import (
     NullOverlay,
     OverlayClient,
     OverlayHAL,
@@ -17,8 +17,8 @@ from dobby.overlay import (
     unwrap,
     wrap_hal,
 )
-from dobby.overlay import geometry as g
-from dobby.overlay import protocol as p
+from pinlet.overlay import geometry as g
+from pinlet.overlay import protocol as p
 
 
 # --------------------------------------------------------------- protocol
@@ -120,21 +120,25 @@ def test_occluded():
 # --------------------------------------------------------------- enabling
 def test_overlay_enabled_rules():
     assert not overlay_enabled({}, platform="linux")
-    assert not overlay_enabled({"DOBBY_OVERLAY": "1"}, platform="linux")
+    assert not overlay_enabled({"PINLET_OVERLAY": "1"}, platform="linux")
     assert overlay_enabled({"DISPLAY": ":0"}, platform="linux")
-    assert not overlay_enabled({"DISPLAY": ":0", "DOBBY_OVERLAY": "0"}, platform="linux")
+    assert not overlay_enabled({"DISPLAY": ":0", "PINLET_OVERLAY": "0"}, platform="linux")
     assert not overlay_enabled({"DISPLAY": ":0", "PYTEST_CURRENT_TEST": "x"}, platform="linux")
     assert not overlay_enabled({"WAYLAND_DISPLAY": "wayland-0"}, platform="linux")
     assert overlay_enabled({}, platform="darwin")
-    assert not overlay_enabled({"DOBBY_OVERLAY": "0"}, platform="darwin")
+    assert not overlay_enabled({"PINLET_OVERLAY": "0"}, platform="darwin")
     assert not overlay_enabled({"PYTEST_CURRENT_TEST": "x"}, platform="darwin")
-    assert overlay_enabled({"PYTEST_CURRENT_TEST": "x", "DOBBY_OVERLAY": "1"}, platform="darwin")
-    assert not overlay_enabled({"DOBBY_REPLAY": "1"}, platform="darwin")
+    assert overlay_enabled({"PYTEST_CURRENT_TEST": "x", "PINLET_OVERLAY": "1"}, platform="darwin")
+    assert not overlay_enabled({"PINLET_REPLAY": "1"}, platform="darwin")
 
 
 def test_overlay_config():
     cfg = overlay_config(
-        {"DOBBY_OVERLAY_COLOR": "#00ff00", "DOBBY_OVERLAY_SPEED": "0", "DOBBY_OVERLAY_LABEL": "D"}
+        {
+            "PINLET_OVERLAY_COLOR": "#00ff00",
+            "PINLET_OVERLAY_SPEED": "0",
+            "PINLET_OVERLAY_LABEL": "D",
+        }
     )
     assert cfg == {
         "color": "#00ff00",
@@ -143,36 +147,36 @@ def test_overlay_config():
         "label": "D",
         "turbo": True,
     }
-    assert overlay_config({"DOBBY_OVERLAY_SPEED": "fast"}) == {
+    assert overlay_config({"PINLET_OVERLAY_SPEED": "fast"}) == {
         "turbo": True
     }  # turbo is the default
-    assert overlay_config({"DOBBY_OVERLAY_CAPTURE_VISIBLE": "0", "DOBBY_MODE": "secure"}) == {
+    assert overlay_config({"PINLET_OVERLAY_CAPTURE_VISIBLE": "0", "PINLET_MODE": "secure"}) == {
         "capture_visible": False
     }
     assert overlay_config(
         {
-            "DOBBY_OVERLAY_TURBO": "1",
-            "DOBBY_OVERLAY_RESUME": "manual",
-            "DOBBY_OVERLAY_IDLE_SECS": "0.1",
-            "DOBBY_OVERLAY_TRAIL": "0",
+            "PINLET_OVERLAY_TURBO": "1",
+            "PINLET_OVERLAY_RESUME": "manual",
+            "PINLET_OVERLAY_IDLE_SECS": "0.1",
+            "PINLET_OVERLAY_TRAIL": "0",
         }
     ) == {"turbo": True, "takeover_resume": "manual", "idle_secs": 0.5, "trail": False}
 
 
 def test_overlay_config_narration_is_on_unless_turned_off():
     assert "narrate" not in overlay_config({})
-    assert overlay_config({"DOBBY_OVERLAY_NARRATE": "0", "DOBBY_MODE": "secure"}) == {
+    assert overlay_config({"PINLET_OVERLAY_NARRATE": "0", "PINLET_MODE": "secure"}) == {
         "narrate": False
     }
-    assert "narrate" not in overlay_config({"DOBBY_OVERLAY_NARRATE": "1"})
+    assert "narrate" not in overlay_config({"PINLET_OVERLAY_NARRATE": "1"})
 
 
 def test_overlay_config_menu_bar_item_on_unless_turned_off():
     assert "menu_bar" not in overlay_config({})  # the helpers default to on
-    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "1", "DOBBY_MODE": "secure"}) == {
+    assert overlay_config({"PINLET_OVERLAY_MENU_BAR": "1", "PINLET_MODE": "secure"}) == {
         "menu_bar": True
     }
-    assert overlay_config({"DOBBY_OVERLAY_MENU_BAR": "0", "DOBBY_MODE": "secure"}) == {
+    assert overlay_config({"PINLET_OVERLAY_MENU_BAR": "0", "PINLET_MODE": "secure"}) == {
         "menu_bar": False
     }
 
@@ -504,8 +508,8 @@ def test_active_window_errors_are_ignored():
 
 
 # --------------------------------------------------------------- phase 2
-from dobby.overlay import OverlayInterrupted, OverlayStopped, find_overlay_hal, step  # noqa: E402
-from dobby.overlay.hal import combo_label, danger_reason, typed_label  # noqa: E402
+from pinlet.overlay import OverlayInterrupted, OverlayStopped, find_overlay_hal, step  # noqa: E402
+from pinlet.overlay.hal import combo_label, danger_reason, typed_label  # noqa: E402
 
 
 def test_protocol_v2_ops():
@@ -800,7 +804,7 @@ def test_scroll_and_key_intents(wrapped):
 # --------------------------------------------------------------- annotate
 from PIL import Image  # noqa: E402
 
-from dobby.overlay import annotate as an  # noqa: E402
+from pinlet.overlay import annotate as an  # noqa: E402
 
 
 def _track():
@@ -863,7 +867,7 @@ def test_render_gif_and_frames(tmp_path):
 def test_annotate_chip_grows_with_detail_and_uses_risk_colour():
     from PIL import Image
 
-    from dobby.overlay.annotate import TrackState, annotate
+    from pinlet.overlay.annotate import TrackState, annotate
 
     bg = Image.new("RGB", (400, 80), (255, 255, 255))
 
@@ -882,12 +886,12 @@ def test_annotate_chip_grows_with_detail_and_uses_risk_colour():
 
 
 def test_overlay_config_pill_options():
-    from dobby.overlay import overlay_config
+    from pinlet.overlay import overlay_config
 
     assert "pill" not in overlay_config({})
-    assert overlay_config({"DOBBY_OVERLAY_PILL": "auto"})["pill"] == "auto"
-    assert overlay_config({"DOBBY_OVERLAY_PILL": "0"})["pill"] == "off"
-    assert overlay_config({"DOBBY_OVERLAY_PILL_RECORD": "1"})["pill_in_recordings"] is True
+    assert overlay_config({"PINLET_OVERLAY_PILL": "auto"})["pill"] == "auto"
+    assert overlay_config({"PINLET_OVERLAY_PILL": "0"})["pill"] == "off"
+    assert overlay_config({"PINLET_OVERLAY_PILL_RECORD": "1"})["pill_in_recordings"] is True
 
 
 def test_client_start_async_starts_one_helper(fake_client):
@@ -904,8 +908,8 @@ def test_client_start_async_starts_one_helper(fake_client):
 
 
 def test_wrap_hal_starts_overlay_early_only_for_always_bar():
-    from dobby.overlay import wrap_hal
-    from dobby.overlay.client import OverlayClient
+    from pinlet.overlay import wrap_hal
+    from pinlet.overlay.client import OverlayClient
 
     class Probe(OverlayClient):
         def __init__(self, cfg):
@@ -922,7 +926,7 @@ def test_wrap_hal_starts_overlay_early_only_for_always_bar():
 
 
 def test_bar_owner_lock_is_exclusive_and_handed_over(tmp_path):
-    from dobby.overlay.barlock import BarOwner
+    from pinlet.overlay.barlock import BarOwner
 
     path = str(tmp_path / "bar.lock")
     a, b = BarOwner(path), BarOwner(path)
@@ -934,7 +938,7 @@ def test_bar_owner_lock_is_exclusive_and_handed_over(tmp_path):
 
 
 def test_bar_rows_stack_and_move_up_when_freed(tmp_path):
-    from dobby.overlay.barlock import BarRow
+    from pinlet.overlay.barlock import BarRow
 
     path = str(tmp_path / "bar.lock")
     a, b, c = BarRow(path), BarRow(path), BarRow(path)
@@ -950,7 +954,7 @@ def test_bar_rows_stack_and_move_up_when_freed(tmp_path):
 
 
 def test_bar_rows_overlap_rather_than_vanish_when_full(tmp_path):
-    from dobby.overlay.barlock import BarRow
+    from pinlet.overlay.barlock import BarRow
 
     path = str(tmp_path / "bar.lock")
     rows = [BarRow(path, max_rows=2) for _ in range(3)]
@@ -962,7 +966,7 @@ def test_bar_rows_overlap_rather_than_vanish_when_full(tmp_path):
 def test_others_showing_ignores_own_and_dead_helpers(tmp_path):
     import os
 
-    from dobby.overlay.barlock import mark_waiting, others_showing, showing_dir
+    from pinlet.overlay.barlock import mark_waiting, others_showing, showing_dir
 
     d = showing_dir(str(tmp_path / "bar.lock"))
     assert not others_showing(d, os.getpid())
@@ -976,27 +980,27 @@ def test_others_showing_ignores_own_and_dead_helpers(tmp_path):
 
 
 def test_overlay_config_awake_secs():
-    from dobby.overlay import overlay_config
+    from pinlet.overlay import overlay_config
 
     assert "awake_secs" not in overlay_config({})
-    assert overlay_config({"DOBBY_OVERLAY_AWAKE_SECS": "30"})["awake_secs"] == 30.0
-    assert overlay_config({"DOBBY_OVERLAY_AWAKE_SECS": "1"})["awake_secs"] == 5.0
-    assert "awake_secs" not in overlay_config({"DOBBY_OVERLAY_AWAKE_SECS": "soon"})
+    assert overlay_config({"PINLET_OVERLAY_AWAKE_SECS": "30"})["awake_secs"] == 30.0
+    assert overlay_config({"PINLET_OVERLAY_AWAKE_SECS": "1"})["awake_secs"] == 5.0
+    assert "awake_secs" not in overlay_config({"PINLET_OVERLAY_AWAKE_SECS": "soon"})
 
 
 def test_glass_env_turns_liquid_glass_off():
-    from dobby.overlay import overlay_config
+    from pinlet.overlay import overlay_config
 
     assert overlay_config({}).get("liquid_glass", "auto") == "auto"
-    assert overlay_config({"DOBBY_OVERLAY_GLASS": "0"})["liquid_glass"] == "off"
-    assert overlay_config({"DOBBY_OVERLAY_GLASS": "regular"})["liquid_glass"] == "regular"
-    assert overlay_config({"DOBBY_OVERLAY_GLASS": "auto"})["liquid_glass"] == "auto"
+    assert overlay_config({"PINLET_OVERLAY_GLASS": "0"})["liquid_glass"] == "off"
+    assert overlay_config({"PINLET_OVERLAY_GLASS": "regular"})["liquid_glass"] == "regular"
+    assert overlay_config({"PINLET_OVERLAY_GLASS": "auto"})["liquid_glass"] == "auto"
 
 
 def test_theme_env_picks_the_dark_light_or_desktop_look():
-    from dobby.overlay import overlay_config
+    from pinlet.overlay import overlay_config
 
     assert "theme" not in overlay_config({})  # helpers default to dark
-    assert overlay_config({"DOBBY_OVERLAY_THEME": "Light"})["theme"] == "light"
-    assert overlay_config({"DOBBY_OVERLAY_THEME": "auto"})["theme"] == "auto"
-    assert "theme" not in overlay_config({"DOBBY_OVERLAY_THEME": "purple"})
+    assert overlay_config({"PINLET_OVERLAY_THEME": "Light"})["theme"] == "light"
+    assert overlay_config({"PINLET_OVERLAY_THEME": "auto"})["theme"] == "auto"
+    assert "theme" not in overlay_config({"PINLET_OVERLAY_THEME": "purple"})

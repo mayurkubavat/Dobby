@@ -30,9 +30,9 @@ def main() -> int:
     ap.add_argument("--no-gemma", action="store_true")
     args = ap.parse_args()
 
-    from dobby.hal.factory import get_desktop_hal
-    from dobby.perception.ax import get_accessibility_inspector
-    from dobby.perception.ocr import get_ocr_engine
+    from pinlet.hal.factory import get_desktop_hal
+    from pinlet.perception.ax import get_accessibility_inspector
+    from pinlet.perception.ocr import get_ocr_engine
 
     report = {"platform": sys.platform}
     hal = get_desktop_hal()
@@ -88,7 +88,7 @@ def main() -> int:
         }
 
     if not args.no_gemma and img is not None:
-        from dobby.vdom.gemma3_sidecar import Gemma3Grounder
+        from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
 
         g = Gemma3Grounder()
         report["gemma_available"] = g.is_available()
@@ -119,7 +119,7 @@ def main() -> int:
         report["gemma_stats"] = g.diagnostics()
 
     print(json.dumps(report, indent=2, default=str))
-    from dobby.personality import startup_line
+    from pinlet.personality import startup_line
 
     greeting = startup_line()
     if greeting:

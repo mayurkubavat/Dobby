@@ -1,4 +1,4 @@
-"""The person's instructions and wake-ups for a running Dobby (dobby.control.inbox)."""
+"""The person's instructions and wake-ups for a running Pinlet (pinlet.control.inbox)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dobby.control import inbox
+from pinlet.control import inbox
 
 
 def test_notes_queue_and_are_taken_once(tmp_path):
@@ -42,8 +42,8 @@ def test_wake_and_listening(tmp_path):
 
 
 def test_overview_and_menu_show_listening_and_queued(tmp_path):
-    from dobby.control import commands, registry
-    from dobby.overlay import topbar
+    from pinlet.control import commands, registry
+    from pinlet.overlay import topbar
 
     pid = os.getpid()
     registry.register(tmp_path, pid=pid, name="Tibble · Claude", agent_id="a")
@@ -60,9 +60,9 @@ def test_overview_and_menu_show_listening_and_queued(tmp_path):
 
 
 def test_control_tell_and_wake(tmp_path, monkeypatch):
-    from dobby.hub import control
+    from pinlet.hub import control
 
-    monkeypatch.setenv("DOBBY_CONTROL_DIR", str(tmp_path))
+    monkeypatch.setenv("PINLET_CONTROL_DIR", str(tmp_path))
     out = control.handle({"id": 1, "op": "tell", "pid": 9, "text": "stop after the first file"})
     assert out == {"id": 1, "ok": True, "pid": 9, "queued": 1, "woke": False}
     inbox.set_listening(tmp_path, 9, True)
@@ -75,7 +75,7 @@ def test_control_tell_and_wake(tmp_path, monkeypatch):
 
 @pytest.fixture
 def person_ctl(tmp_path, monkeypatch):
-    server = pytest.importorskip("dobby.server")
+    server = pytest.importorskip("pinlet.server")
     ctl = SimpleNamespace(root=tmp_path, agent=SimpleNamespace(pid=555))
     monkeypatch.setattr(server, "get_controller", lambda create=True: ctl)
     monkeypatch.setattr(server, "_control_or_none", lambda: None)

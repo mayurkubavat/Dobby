@@ -46,9 +46,9 @@ def main() -> int:
     ap.add_argument("--no-gemma", action="store_true")
     args = ap.parse_args()
 
-    from dobby.hal.factory import get_desktop_hal
-    from dobby.perception.ax import get_accessibility_inspector
-    from dobby.perception.ocr import get_ocr_engine
+    from pinlet.hal.factory import get_desktop_hal
+    from pinlet.perception.ax import get_accessibility_inspector
+    from pinlet.perception.ocr import get_ocr_engine
 
     hal = get_desktop_hal()
     win = hal.get_active_window()
@@ -92,7 +92,7 @@ def main() -> int:
         }
 
     if not args.no_gemma:
-        from dobby.vdom.gemma3_sidecar import Gemma3Grounder
+        from pinlet.vdom.gemma3_sidecar import Gemma3Grounder
 
         g = Gemma3Grounder()
         if g.is_available():

@@ -8,8 +8,8 @@ from unittest.mock import patch
 import pytest
 from PIL import Image, ImageDraw
 
-from dobby.gemma.client import GemmaClient, GemmaError, normalize_base_url
-from dobby.types import (
+from pinlet.gemma.client import GemmaClient, GemmaError, normalize_base_url
+from pinlet.types import (
     BoundingBox,
     GroundingSource,
     ModalRiskTier,
@@ -17,13 +17,13 @@ from dobby.types import (
     VDOMNode,
     VirtualDOMSnapshot,
 )
-from dobby.vdom.gemma3_sidecar import (
+from pinlet.vdom.gemma3_sidecar import (
     Gemma3Grounder,
     SemanticROICache,
     compute_dhash,
     hamming_distance,
 )
-from dobby.vdom.sidecar import LocalNeuralGrounder
+from pinlet.vdom.sidecar import LocalNeuralGrounder
 
 
 def _create_sample_image(color="white", draw_button=True) -> Image.Image:
