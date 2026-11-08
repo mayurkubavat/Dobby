@@ -136,3 +136,18 @@ def test_install_script_is_valid_sh():
     script = Path(__file__).resolve().parents[1] / "scripts" / "install.sh"
     assert os.access(script, os.X_OK)
     subprocess.run(["sh", "-n", str(script)], check=True)
+
+
+def test_doctor_names_the_engine_the_app_starts(home, monkeypatch, tmp_path):
+    from pinlet.hub import paths
+
+    app = tmp_path / "app.json"
+    app.write_text('{"python": "/gone/.venv/bin/python"}')
+    monkeypatch.setattr(paths, "app_config_path", lambda: app)
+    monkeypatch.delenv("PINLET_PYTHON", raising=False)
+    assert doctor._app_config("darwin")[0].status == "fail"
+    own = runtime.runtime_python()
+    own.parent.mkdir(parents=True)
+    own.symlink_to(sys.executable)
+    check = doctor._app_config("darwin")[0]
+    assert check.status == "ok" and "own runtime" in check.detail

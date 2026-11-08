@@ -143,6 +143,7 @@ struct AIToolsList: View {
                     if model.found.contains(where: \.needsRepair) {
                         Text("Some tools still start Pinlet from an old place.")
                             .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
                     if model.busy { ProgressView().controlSize(.small) }

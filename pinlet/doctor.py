@@ -88,8 +88,15 @@ def _listening(path: Path) -> bool:
 
 
 def _app_config(platform: str) -> list[Check]:
+    """The Python Pinlet.app starts, in the app's own order (see EngineConfig.resolve)."""
     if platform != "darwin":
         return []
+    custom = os.environ.get("PINLET_PYTHON", "")
+    if custom and os.access(os.path.expanduser(custom), os.X_OK):
+        return [Check("Pinlet.app engine", "ok", f"{custom} (PINLET_PYTHON)")]
+    own = runtime.runtime_python()
+    if os.access(own, os.X_OK):
+        return [Check("Pinlet.app engine", "ok", f"{own} (Pinlet's own runtime)")]
     path = paths.app_config_path()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

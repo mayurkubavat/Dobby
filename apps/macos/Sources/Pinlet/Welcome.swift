@@ -40,7 +40,7 @@ final class WelcomeWindowController {
 /// Shows a window of this menu bar app in front of the app the person is using.
 /// `activate` alone can leave it behind the frontmost app.
 func bringForward(_ window: NSWindow?) {
-    NSApp.activate(ignoringOtherApps: true)
+    if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
     window?.makeKeyAndOrderFront(nil)
     window?.orderFrontRegardless()
 }
