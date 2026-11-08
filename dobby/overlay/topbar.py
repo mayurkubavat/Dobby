@@ -446,11 +446,13 @@ def topbar_view(
         subtitle += f" · {hidden} hidden"
     all_actions: list[tuple[str, str]] = []
     if running > 1:
-        all_actions = [
-            ("Pause all", "pause_all"),
-            ("Resume all", "resume_all"),
-            ("Stop all", "stop_all"),
-        ]
+        # Only the group actions that would do something right now.
+        halted = sum(r.state in ("paused", "takeover") for r in rows)
+        if halted < running:
+            all_actions.append(("Pause all", "pause_all"))
+        if halted:
+            all_actions.append(("Resume all", "resume_all"))
+        all_actions.append(("Stop all", "stop_all"))
     if hiding is not None:
         if any(r.state in _FINISHED_STATES for r in rows):
             all_actions.append(("Clear finished", "clear_finished"))

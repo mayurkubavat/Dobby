@@ -30,6 +30,7 @@ struct TopbarView: Equatable {
     var iconTitle: String
     var tooltip: String
     var palette: [String: String]
+    var hidden = 0  // rows left out (stopped, cleared or long asleep)
 
     static let empty = TopbarView(
         header: "Dobby", subtitle: "Starting…", rows: [], running: 0, working: 0, attention: false,
@@ -71,6 +72,7 @@ struct TopbarView: Equatable {
         iconTitle = json["icon_title"] as? String ?? ""
         tooltip = json["tooltip"] as? String ?? "Dobby"
         palette = json["palette"] as? [String: String] ?? [:]
+        hidden = (json["hidden"] as? NSNumber)?.intValue ?? 0
     }
 
     init(header: String, subtitle: String, rows: [Row], running: Int, working: Int, attention: Bool,

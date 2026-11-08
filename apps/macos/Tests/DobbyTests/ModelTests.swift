@@ -52,3 +52,9 @@ import Testing
     #expect(prompts[0].pid == 4242 && prompts[0].secsLeft == 24.5 && !prompts[0].isAccess)
     #expect(prompts[1].isAccess && prompts[1].pid == nil && prompts[1].allow == "Allow" && prompts[1].secsLeft == 30)
 }
+
+@Test func menuTitlesUseTitleCase() {
+    #expect(StatusMenu.menuTitle("Show 3 hidden") == "Show 3 Hidden")
+    #expect(StatusMenu.menuTitle("Clear finished") == "Clear Finished")
+    #expect(StatusMenu.menuTitle("Pause all") == "Pause All")
+}

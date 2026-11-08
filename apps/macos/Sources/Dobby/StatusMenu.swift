@@ -58,8 +58,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         menu.addItem(header())
         menu.addItem(.separator())
-        if view.rows.isEmpty && engineNote == nil {
-            let empty = NSMenuItem(title: "Add `dobby` to Claude, Antigravity or Cursor to start.", action: nil, keyEquivalent: "")
+        if view.rows.isEmpty && engineNote == nil && view.hidden == 0 {
+            let empty = NSMenuItem(title: "Connect an AI app such as Claude or Cursor to start", action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         }
@@ -69,35 +69,38 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         if !view.allActions.isEmpty {
             menu.addItem(.separator())
             for action in view.allActions {
-                menu.addItem(actionItem(action.label, key: action.key, pid: nil))
+                menu.addItem(actionItem(StatusMenu.menuTitle(action.label), key: action.key, pid: nil))
             }
         }
         menu.addItem(.separator())
         addPermissionItems()
-        let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
-        login.target = self
-        login.state = LoginItem.enabled ? .on : .off
-        menu.addItem(login)
-        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
-        settings.target = self
-        menu.addItem(settings)
-        let welcome = NSMenuItem(title: "Permissions…", action: #selector(openWelcome), keyEquivalent: "")
-        welcome.target = self
-        menu.addItem(welcome)
-        let done = NSMenuItem(title: "Notify When Done", action: #selector(toggleNotifyDone), keyEquivalent: "")
-        done.target = self
-        done.state = Notifier.notifyWhenDone ? .on : .off
-        menu.addItem(done)
-        let log = NSMenuItem(title: "Show Log", action: #selector(openLog), keyEquivalent: "")
-        log.target = self
-        menu.addItem(log)
-        let restart = NSMenuItem(title: "Restart Dobby", action: #selector(restartEngine), keyEquivalent: "")
-        restart.target = self
-        menu.addItem(restart)
+        // The menu's title already says "Dobby": the items don't repeat it.
+        // Open at Login and Done notifications live in Settings.
+        menu.addItem(item("Settings…", #selector(openSettings), key: ","))
+        let troubleshoot = NSMenuItem(title: "Troubleshoot", action: nil, keyEquivalent: "")
+        let sub = NSMenu(title: "Troubleshoot")
+        sub.addItem(item("Check Permissions…", #selector(openWelcome)))
+        sub.addItem(item("Show Log", #selector(openLog)))
+        sub.addItem(.separator())
+        sub.addItem(item("Relaunch", #selector(restartEngine)))
+        troubleshoot.submenu = sub
+        menu.addItem(troubleshoot)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Dobby", action: #selector(quit), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
+        menu.addItem(item("Quit", #selector(quit), key: "q"))
+    }
+
+    private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        item.target = self
+        return item
+    }
+
+    /// Menu items use title case on macOS ("Show 3 Hidden"); the shared
+    /// labels from dobby/overlay/topbar.py are in sentence case for GNOME.
+    static func menuTitle(_ label: String) -> String {
+        label.split(separator: " ").map { word in
+            word.prefix(1).uppercased() + word.dropFirst()
+        }.joined(separator: " ")
     }
 
     private func header() -> NSMenuItem {
@@ -170,8 +173,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         callbacks.action(ref.key, ref.pid)
     }
 
-    @objc private func toggleLogin() { LoginItem.set(!LoginItem.enabled) }
-    @objc private func toggleNotifyDone() { Notifier.notifyWhenDone.toggle() }
     @objc private func askScreen() { Permissions.askScreenRecording() }
     @objc private func askAccessibility() { Permissions.askAccessibility() }
     @objc private func openLog() { callbacks.openLog() }

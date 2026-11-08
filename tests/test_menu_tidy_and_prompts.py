@@ -177,3 +177,10 @@ def test_overlay_confirm_goes_to_the_app_when_it_listens(app_owned):
     prompts.answer(p["id"], False)
     t.join(2)
     assert sent == ["Waiting for you: Send it?", False]
+
+
+def test_group_actions_only_offer_what_would_do_something():
+    keys = lambda states: [k for _, k in topbar.topbar_view(_agents(1, 2), states).all_actions]  # noqa: E731
+    assert keys({}) == ["pause_all", "stop_all"]
+    assert keys({1: {"mode": "paused"}, 2: {"mode": "paused"}}) == ["resume_all", "stop_all"]
+    assert keys({1: {"mode": "paused"}}) == ["pause_all", "resume_all", "stop_all"]
