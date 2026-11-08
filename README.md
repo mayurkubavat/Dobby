@@ -382,13 +382,16 @@ More: [docs/shared-control.md](docs/shared-control.md).
 
 ```bash
 pip install -e ".[dev]"
+ruff check . && ruff format --check .
 pytest tests/
 pytest -m replay          # replay recorded sessions offline
 ```
 
 The test suite never sends real mouse or keyboard input unless you set
-`DOBBY_LIVE_DESKTOP_TESTS=1`.
+`DOBBY_LIVE_DESKTOP_TESTS=1`. See [CONTRIBUTING.md](CONTRIBUTING.md) for code
+style and pull request rules, [SECURITY.md](SECURITY.md) to report a
+vulnerability, and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## License
 
-Apache 2.0. See [LICENSE](LICENSE).
+Apache 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

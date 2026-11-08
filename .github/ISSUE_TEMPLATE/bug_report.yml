@@ -1,0 +1,56 @@
+name: Bug report
+description: Dobby did something wrong, or didn't do something it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If this is a security issue (Dobby acting without
+        consent, a way around the admin policy, secrets leaking), please use
+        **Security > Report a vulnerability** instead. See SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked the AI to do, what Dobby did, and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the client with `dobby --secure`
+        2. Ask it to ...
+        3. ...
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Linux (X11)
+        - Linux (XWayland)
+        - Windows
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: OS version, Python version, Dobby commit or version, MCP client.
+      placeholder: macOS 26.1, Python 3.13, Dobby 0.1.0, Claude Code
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - turbo (default)
+        - secure (dobby --secure)
+        - private (dobby stdio)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant part of ~/.dobby/logs (remove anything private first).
+      render: text
