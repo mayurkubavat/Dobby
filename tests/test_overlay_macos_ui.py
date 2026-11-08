@@ -436,7 +436,9 @@ def test_menu_bar_item_focus_style_menu(make, tmp_path, monkeypatch):
     assert "2 running" in button.toolTip()
     menu = c.status_item.menu()
     c.fill_topbar_menu(menu)
-    titles = [menu.itemAtIndex_(i).title() for i in range(menu.numberOfItems())]
+    # Newer AppKit returns the attributed string from title(), second line
+    # included; compare the first line only.
+    titles = [str(menu.itemAtIndex_(i).title()).split("\n")[0] for i in range(menu.numberOfItems())]
     assert titles[0] == "Dobby"
     assert "2 running · 1 working · 1 paused" in menu.itemAtIndex_(0).attributedTitle().string()
     mail = next(menu.itemAtIndex_(i) for i, t in enumerate(titles) if t == "Mail Dobby")
