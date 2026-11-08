@@ -126,6 +126,18 @@ def test_tool_caps_the_timeout(server):
     assert [c[0] for c in ov.calls] == [srv.WAIT_FOR_WAKE_CAP_S, 0.0]
 
 
+def test_tool_returns_before_the_clients_own_time_limit(server, monkeypatch):
+    from pinlet import clients
+
+    srv, install = server
+    ov = FakeOverlay()
+    install(ov)
+    monkeypatch.setattr(clients, "current", lambda: clients.profile_for("codex"))
+    r = asyncio.run(srv.wait_for_wake(timeout_s=600))
+    assert ov.calls[0][0] == 55.0  # Codex stops tool calls at 60 s
+    assert r["client_limit_s"] == 60.0
+
+
 @pytest.mark.parametrize(
     "result,word",
     [

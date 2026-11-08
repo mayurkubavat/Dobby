@@ -38,6 +38,8 @@ class SessionInfo:
     # Made by the client's connector when it starts and sent again on every
     # reconnect, so it outlives a restart of the shared Pinlet ("" = unknown).
     agent_key: str = ""
+    # PINLET_TOOL_TIMEOUT_S from the client's own config (None = not set).
+    tool_timeout_s: float | None = None
 
     @property
     def turbo(self) -> bool:

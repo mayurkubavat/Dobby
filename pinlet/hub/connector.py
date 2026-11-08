@@ -74,6 +74,11 @@ def hello(argv: Sequence[str]) -> dict[str, object]:
         "mode": _mode(argv),
         "name": os.environ.get("PINLET_AGENT_NAME") or _parent_name() or "AI client",
         "cwd": os.getcwd(),
+        **(
+            {"tool_timeout_s": os.environ["PINLET_TOOL_TIMEOUT_S"]}
+            if os.environ.get("PINLET_TOOL_TIMEOUT_S", "").strip()
+            else {}
+        ),
     }
 
 
@@ -89,7 +94,13 @@ def _connect(path: Path) -> socket.socket | None:
 
 # Settings that belong to one client, not to the shared Pinlet: each client
 # sends them in its hello instead.
-PER_CLIENT_ENV = ("PINLET_AGENT_NAME", "PINLET_MODE", "PINLET_SECURE", "PINLET_OVERLAY_LABEL")
+PER_CLIENT_ENV = (
+    "PINLET_AGENT_NAME",
+    "PINLET_MODE",
+    "PINLET_SECURE",
+    "PINLET_OVERLAY_LABEL",
+    "PINLET_TOOL_TIMEOUT_S",
+)
 
 
 def daemon_env(env: dict[str, str]) -> dict[str, str]:

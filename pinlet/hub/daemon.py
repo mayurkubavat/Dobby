@@ -134,6 +134,9 @@ class Hub:
             first = pick_first_name(pid or 0, prefer=str(hello.get("first_name") or ""))
             info = sessions.open_session(display(first, name), pid, mode, agent_key=key)
             info.first_name, info.client = first, name
+            from pinlet.clients import parse_timeout
+
+            info.tool_timeout_s = parse_timeout(hello.get("tool_timeout_s"))
             agent_id = f"{pid or 0}-{key[:12]}" if key else None
             ctl = await anyio.to_thread.run_sync(
                 lambda: new_session_controller(name, pid, first_name=first, agent_id=agent_id)

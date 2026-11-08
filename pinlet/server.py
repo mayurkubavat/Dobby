@@ -740,7 +740,17 @@ def manage_toolsets(
     Returns:
         Status dictionary with active domains, tool count, and output mode.
     """
-    return toolset_manager.manage_toolsets(action=action, domains=domains, output_mode=output_mode)
+    out = toolset_manager.manage_toolsets(action=action, domains=domains, output_mode=output_mode)
+    if action in ("enable", "disable") and isinstance(out, dict):
+        from pinlet.clients import current
+
+        profile = current()
+        if not profile.sees_list_changed:
+            out["note"] = (
+                f"{profile.label} does not refresh its tool list while running, so the "
+                "change shows only after its Pinlet connection restarts."
+            )
+    return out
 
 
 @mcp_server.tool()
@@ -2221,11 +2231,19 @@ def _wait_for_wake_blocking(timeout_s: float, reason: str, cancel: Any = None) -
     ctl = _control_or_none()
     if ctl is not None:
         ctl.release()  # waiting is not acting: let another agent use the desktop meanwhile
-    secs = max(0.0, min(float(timeout_s), WAIT_FOR_WAKE_CAP_S))
+    from pinlet.clients import blocking_budget, current
+
+    wanted = max(0.0, min(float(timeout_s), WAIT_FOR_WAKE_CAP_S))
+    # A client that cuts tool calls off (often after 60 s) gets a clean
+    # "call again" just before its limit instead of an error.
+    profile = current()
+    secs = blocking_budget(wanted, profile) if wanted > 0 else 0.0
     out: dict[str, Any] = {
         "ok": True,
         **_wait_bar_or_inbox(ov_hal.overlay, ctl, secs, reason or "", cancel),
     }
+    if secs < wanted:
+        out["client_limit_s"] = profile.tool_timeout_s
     if out.get("woken"):
         out["note"] = (
             "The user woke Pinlet. Ask for or continue with their next instruction, "
@@ -2320,7 +2338,9 @@ async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> dict[str, Any
     next instruction or re-check the screen. Returns woken/stopped/timed_out
     (and waited_s). timeout_s is capped at 1800; `reason` shows in the bar's
     tooltip (e.g. "finished the report; ready for more"). Waiting does not
-    hold desktop control, so other agents can work meanwhile.
+    hold desktop control, so other agents can work meanwhile. If your client
+    stops tool calls after a time limit, this returns timed_out just before
+    it: call it again to keep waiting.
     """
     import threading
 
