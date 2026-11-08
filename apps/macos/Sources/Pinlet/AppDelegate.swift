@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let notifier = Notifier()
     private let settingsWindow = SettingsWindowController()
     private let welcome = WelcomeWindowController()
+    private let activity = ActivityPanel()
+    private var hotKey: HotKey?
     private var timer: Timer?
     private var polling = false
 
@@ -18,7 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openLog: { NSWorkspace.shared.open(PinletPaths.daemonLog) },
             openSettings: { [weak self] in self?.settingsWindow.show() },
             openWelcome: { [weak self] in self?.welcome.show() },
+            openActivity: { [weak self] in self?.activity.show() },
             quit: { [weak self] in self?.quit() }))
+        activity.onAction = { [weak self] key, pid in self?.send(key, pid: pid) }
+        activity.onTell = { [weak self] pid, text, done in self?.tell(pid, text, done: done) }
+        hotKey = HotKey { [weak self] in self?.activity.toggle() }
+        NotificationCenter.default.addObserver(forName: ActivityPanel.showRequest, object: nil, queue: .main) {
+            [weak self] _ in self?.activity.show()
+        }
         promptPanel.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
         notifier.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
         notifier.onOpenPrompt = { [weak self] in self?.promptPanel.focus() }
@@ -70,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Reachable beats "starting": the socket answering means it is up.
                 let note = view == nil ? (self.note(for: state) ?? "Connecting…") : nil
                 self.menu.update(view: view ?? TopbarView.empty, engineNote: note)
+                self.activity.update(view ?? TopbarView.empty, reachable: view != nil)
                 let prompts = reply?.prompts ?? []
                 // One card at a time, the oldest question first; the rest wait their turn.
                 self.promptPanel.update(prompts.first, palette: view?.palette ?? [:])
@@ -83,6 +93,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         control.queue.async { [weak self] in
             self?.control.answer(promptID, ok: ok)
             DispatchQueue.main.async { self?.poll() }
+        }
+    }
+
+    private func tell(_ pid: Int, _ text: String, done: @escaping ([String: Any]?) -> Void) {
+        control.queue.async { [weak self] in
+            let reply = self?.control.tell(pid: pid, text: text)
+            DispatchQueue.main.async {
+                done(reply)
+                self?.poll()
+            }
         }
     }
 

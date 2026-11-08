@@ -12,7 +12,7 @@ let package = Package(
             path: "Sources/Pinlet",
             linkerSettings: [.linkedFramework("AppKit"), .linkedFramework("ServiceManagement"),
                              .linkedFramework("SwiftUI"), .linkedFramework("UserNotifications"),
-                             .linkedFramework("AppIntents")]
+                             .linkedFramework("AppIntents"), .linkedFramework("Carbon")]
         ),
         .testTarget(name: "PinletTests", dependencies: ["Pinlet"], path: "Tests/PinletTests"),
     ]

@@ -133,6 +133,12 @@ final class ControlClient {
         request("answer", ["prompt_id": promptID, "ok": ok])?["answered"] as? Bool == true
     }
 
+    /// Sends the person's instruction to the Pinlet with `pid` (control op "tell").
+    /// The reply has "queued" and "woke", or nil when the shared Pinlet is not reachable.
+    func tell(pid: Int, text: String) -> [String: Any]? {
+        request("tell", ["pid": pid, "text": text])
+    }
+
     @discardableResult
     func action(_ key: String, pid: Int? = nil) -> Bool {
         var fields: [String: Any] = ["key": key]

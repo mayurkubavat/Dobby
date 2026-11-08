@@ -32,3 +32,4 @@ targets:
       - sdk: SwiftUI.framework
       - sdk: UserNotifications.framework
       - sdk: AppIntents.framework
+      - sdk: Carbon.framework

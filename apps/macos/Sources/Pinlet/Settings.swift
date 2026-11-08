@@ -18,6 +18,7 @@ final class AppSettings: ObservableObject {
     @Published var theme: String = "" { didSet { store("theme", theme) } }                     // "", dark, light, auto
     @Published var hideIdleMinutes: Int = -1 { didSet { store("hideIdleMinutes", hideIdleMinutes) } }  // -1 = default
     @Published var appPrompts: Bool = true { didSet { store("appPrompts", appPrompts) } }
+    @Published var restingBar: Bool = false { didSet { store("restingBar", restingBar) } }  // keep the bar while resting
 
     /// The values as `pinlet serve` reads them. Only what was changed here.
     func engineEnvironment() -> [String: String] {
@@ -28,6 +29,7 @@ final class AppSettings: ObservableObject {
         if !theme.isEmpty { env["PINLET_OVERLAY_THEME"] = theme }
         if hideIdleMinutes >= 0 { env["PINLET_MENU_HIDE_IDLE"] = String(hideIdleMinutes * 60) }
         if !appPrompts { env["PINLET_APP_PROMPTS"] = "0" }
+        if restingBar { env["PINLET_OVERLAY_PILL"] = "always" }
         return env
     }
 
@@ -41,6 +43,7 @@ final class AppSettings: ObservableObject {
         theme = defaults.string(forKey: "theme") ?? ""
         hideIdleMinutes = defaults.object(forKey: "hideIdleMinutes") as? Int ?? -1
         appPrompts = defaults.object(forKey: "appPrompts") as? Bool ?? true
+        restingBar = defaults.object(forKey: "restingBar") as? Bool ?? false
     }
 
     /// The look of Pinlet's own windows (the Allow/Deny card): dark unless the
@@ -117,6 +120,10 @@ struct SettingsView: View {
                     Text("Frosted (no glass)").tag("0")
                 }
                 .onChange(of: settings.glass) { _ in changed = true }
+                Toggle("Show the bar while Pinlet rests", isOn: $settings.restingBar)
+                    .onChange(of: settings.restingBar) { _ in changed = true }
+                Text("Off: the bar only appears while Pinlet works, asks or is paused. Wake a resting Pinlet from the menu or with ⌃⌥Space.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             .tabItem { Label("General", systemImage: "gearshape") }
 

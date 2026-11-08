@@ -394,8 +394,12 @@ shortcuts (only while one is missing), Settings, Troubleshoot (permissions,
 log, relaunch) and Quit. Stopped Pinlets leave the list, and sleeping ones hide
 after 15 minutes (`PINLET_MENU_HIDE_IDLE`, in seconds). Allow/Deny questions
 show as a card with Return / Esc, and as a notification if you miss it.
-Spotlight and Shortcuts get Pause, Resume and Stop all Pinlets, and "What is
-Pinlet doing" (when built with XcodeGen: `brew install xcodegen`). Links such as `pinlet://pause-all`,
+**Activity…** (or Control-Option-Space anywhere) opens a Liquid Glass panel
+with what each Pinlet is doing, its recent steps, Wake / Pause / Stop, and a
+field to tell it what to do: Return sends the note, which reaches the AI at
+its next step (and wakes a Pinlet waiting for you).
+Spotlight and Shortcuts get Pause, Resume and Stop all Pinlets, "What is
+Pinlet doing", "Tell Pinlet" and "Show What Pinlet Is Doing" (when built with XcodeGen: `brew install xcodegen`). Links such as `pinlet://pause-all`,
 `pinlet://stop-all` or `pinlet://stop?pid=4242` do the same from Shortcuts or a
 script. `PINLET_APP=0` skips the app; `PINLET_APP=/path/Pinlet.app` picks one.
 Run `apps/macos/build.sh --setup-signing` once before your first build: it

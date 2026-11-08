@@ -163,7 +163,7 @@ private struct Countdown: View {
 ///
 /// The glass carries the same palette tint as the bar's regular glass (dark
 /// `#1B1826` at 34%, light `#FBFAFF` at 18%) and a thin rim in the card's colour.
-private struct CardBackground: ViewModifier {
+struct CardBackground: ViewModifier {
     let shape: RoundedRectangle
     var dark: Bool = true
     var rim: Color = .clear

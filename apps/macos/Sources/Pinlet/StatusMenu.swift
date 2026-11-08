@@ -10,6 +10,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         var openLog: () -> Void
         var openSettings: () -> Void
         var openWelcome: () -> Void
+        var openActivity: () -> Void
         var quit: () -> Void
     }
 
@@ -73,6 +74,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             }
         }
         menu.addItem(.separator())
+        let activity = item("Activity…", #selector(openActivity), key: " ")
+        activity.keyEquivalentModifierMask = [.control, .option]  // the global ⌃⌥Space, shown here
+        activity.image = NSImage(systemSymbolName: "text.bubble", accessibilityDescription: nil)
+        menu.addItem(activity)
+        menu.addItem(.separator())
         addPermissionItems()
         // The menu's title already says "Pinlet": the items don't repeat it.
         // Open at Login and Done notifications live in Settings.
@@ -135,7 +141,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         item.representedObject = ActionRef(key: key, pid: pid)
         let symbols = ["pause_toggle": title == "Resume" ? "play.fill" : "pause.fill", "stop": "stop.fill",
                        "pause_all": "pause.fill", "resume_all": "play.fill", "stop_all": "stop.fill",
-                       "clear_finished": "checkmark.circle", "show_hidden": "eye"]
+                       "clear_finished": "checkmark.circle", "show_hidden": "eye", "wake": "sun.max.fill"]
         if let name = symbols[key] {
             item.image = NSImage(systemSymbolName: name, accessibilityDescription: title)
         }
@@ -178,6 +184,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     @objc private func openLog() { callbacks.openLog() }
     @objc private func openSettings() { callbacks.openSettings() }
     @objc private func openWelcome() { callbacks.openWelcome() }
+    @objc private func openActivity() { callbacks.openActivity() }
     @objc private func restartEngine() { callbacks.restartEngine() }
     @objc private func quit() { callbacks.quit() }
 }

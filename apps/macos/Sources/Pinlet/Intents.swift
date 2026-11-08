@@ -65,11 +65,49 @@ struct PinletStatusIntent: AppIntent {
     }
 }
 
+struct TellPinletIntent: AppIntent {
+    static var title: LocalizedStringResource = "Tell Pinlet"
+    static var description = IntentDescription(
+        "Sends an instruction to the Pinlet that is working or waiting for you. Its AI reads it at its next step.")
+
+    @Parameter(title: "Instruction", requestValueDialog: "What should Pinlet do?")
+    var text: String
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let client = ControlClient()
+        defer { client.close() }
+        guard let view = client.topbar() else { throw PinletIntentError.notRunning }
+        guard let pid = ActivityModel.defaultSelection(view.rows),
+              let row = view.rows.first(where: { $0.pid == pid }) else {
+            return .result(dialog: "No Pinlet is running. Ask your AI app to use Pinlet first.")
+        }
+        guard let reply = client.tell(pid: pid, text: text), reply["ok"] as? Bool == true else {
+            throw PinletIntentError.notRunning
+        }
+        let woke = reply["woke"] as? Bool == true
+        return .result(dialog: woke ? "Woke \(row.firstName) with your note." : "Sent to \(row.firstName).")
+    }
+}
+
+struct ShowPinletActivityIntent: AppIntent {
+    static var title: LocalizedStringResource = "Show What Pinlet Is Doing"
+    static var description = IntentDescription("Opens Pinlet's activity panel, where you can also tell it what to do.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        NotificationCenter.default.post(name: ActivityPanel.showRequest, object: nil)
+        return .result()
+    }
+}
+
 struct PinletShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: PauseAllPinletsIntent(), phrases: ["Pause \(.applicationName)", "Pause all \(.applicationName)s"])
         AppShortcut(intent: ResumeAllPinletsIntent(), phrases: ["Resume \(.applicationName)", "Resume all \(.applicationName)s"])
         AppShortcut(intent: StopAllPinletsIntent(), phrases: ["Stop \(.applicationName)", "Stop all \(.applicationName)s"])
         AppShortcut(intent: PinletStatusIntent(), phrases: ["What is \(.applicationName) doing", "\(.applicationName) status"])
+        AppShortcut(intent: TellPinletIntent(), phrases: ["Tell \(.applicationName)", "Give \(.applicationName) an instruction"])
+        AppShortcut(intent: ShowPinletActivityIntent(), phrases: ["Show \(.applicationName) activity", "Open \(.applicationName) activity"])
     }
 }

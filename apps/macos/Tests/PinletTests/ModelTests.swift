@@ -73,3 +73,24 @@ import Testing
     #expect(settings.engineEnvironment()["PINLET_OVERLAY_THEME"] == "light")
     defaults.removePersistentDomain(forName: "pinlet.tests.look")
 }
+
+@Test func activityStepLineKeepsWhatPinletDoes() {
+    #expect(ActivityModel.stepLine("Working · Click ‘Send’ · in Mail · step 7 · 0:42") == "Click ‘Send’ · in Mail")
+    #expect(ActivityModel.stepLine("Working ⚡ · type · step 2 · 1h 05m · 1 note waiting") == "type")
+    #expect(ActivityModel.stepLine("Sleeping") == "")
+}
+
+@Test func activityDefaultSelectionPrefersWhoNeedsYou() throws {
+    let json = """
+    {"header": "Pinlet", "rows": [
+      {"pid": 1, "title": "Ash · Cursor", "state": "ready"},
+      {"pid": 2, "title": "Tibble · Claude Code", "state": "working"},
+      {"pid": 3, "title": "Nib · Codex", "state": "listening", "actions": [["Wake", "wake"]]}]}
+    """
+    let obj = try #require(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+    let view = try #require(TopbarView(json: obj))
+    #expect(ActivityModel.defaultSelection(view.rows) == 3)
+    #expect(ActivityModel.defaultSelection(Array(view.rows.prefix(2))) == 2)
+    #expect(view.rows[1].firstName == "Tibble")
+    #expect(ActivityRowView.symbol(view.rows[2].actions[0]) == "sun.max.fill")
+}
