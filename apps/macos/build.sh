@@ -106,8 +106,14 @@ if [[ "${1:-}" == "--install" ]]; then
   # A running Pinlet is still the old build (and the old signature): restart it.
   if pgrep -f "Pinlet.app/Contents/MacOS/Pinlet" >/dev/null; then
     osascript -e 'quit app "Pinlet"' >/dev/null 2>&1 || true
-    for _ in $(seq 1 50); do pgrep -f "Pinlet.app/Contents/MacOS/Pinlet" >/dev/null || break; sleep 0.1; done
-    open "$HOME/Applications/Pinlet.app"
-    echo "Restarted Pinlet"
+    for _ in $(seq 1 150); do pgrep -f "Pinlet.app/Contents/MacOS/Pinlet" >/dev/null || break; sleep 0.1; done
+    pkill -f "Pinlet.app/Contents/MacOS/Pinlet" 2>/dev/null || true  # still quitting after 15 s
+    # Right after a quit, Launch Services can refuse with error -600: try again.
+    started=""
+    for _ in 1 2 3 4 5; do
+      sleep 1
+      if open "$HOME/Applications/Pinlet.app" 2>/dev/null; then started=1; break; fi
+    done
+    if [[ -n "$started" ]]; then echo "Restarted Pinlet"; else echo "Could not restart Pinlet: open ~/Applications/Pinlet.app" >&2; fi
   fi
 fi
