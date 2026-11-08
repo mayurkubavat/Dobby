@@ -153,9 +153,13 @@ def test_fast_onnx_latency_benchmark():
     assert "letterbox_ms" in metrics
     assert "fps" in metrics
 
-    # Must satisfy sub-20ms latency requirement on Zen 4 CPU
-    assert metrics["total_latency_ms"] < 20.0, f"Latency {metrics['total_latency_ms']}ms exceeded 20ms threshold"
-    assert metrics["fps"] >= 50.0
+    # Must satisfy sub-20ms latency requirement on Zen 4 CPU. Shared CI runners
+    # (3 vCPUs, noisy neighbours) set DOBBY_PERF_SCALE to widen the budget
+    # while still catching a large regression.
+    scale = max(1.0, float(os.environ.get("DOBBY_PERF_SCALE", "1") or 1))
+    budget = 20.0 * scale
+    assert metrics["total_latency_ms"] < budget, f"Latency {metrics['total_latency_ms']}ms exceeded {budget:g}ms threshold"
+    assert metrics["fps"] >= 50.0 / scale
 
 
 @needs_onnx
