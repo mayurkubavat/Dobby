@@ -43,8 +43,8 @@ class SessionInfo:
 
     @property
     def turbo(self) -> bool:
-        """True unless the session asked for secure mode."""
-        return self.mode != "secure"
+        """True when the session never asks (not careful, not secure)."""
+        return self.mode == "turbo"
 
     def as_dict(self) -> dict[str, Any]:
         """The session as a JSON-ready dict, including ``turbo``."""

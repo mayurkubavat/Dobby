@@ -179,6 +179,7 @@ class OverlayHAL:
         confirm_clicks: bool = True,
         secure: bool = False,
         policy: Callable[[], bool] | None = None,
+        access_policy: Callable[[], bool] | None = None,
     ) -> None:
         self._inner = inner
         self.overlay = overlay or NullOverlay()
@@ -194,6 +195,9 @@ class OverlayHAL:
         # wrap_hal so one shared Pinlet can serve turbo and secure clients;
         # None keeps the fixed ``secure`` / ``confirm_danger`` flags.
         self._policy = policy
+        # access_policy() -> True when the current call asks "Let Pinlet use …?"
+        # per app (secure, not careful). None: the same as ``secure``.
+        self._access_policy = access_policy
         self._turbo_sent: bool | None = None
         self._confirm_clicks = confirm_clicks
         self._field: dict | None = None  # last element clicked, for "Type … into ‘Search’"
@@ -229,6 +233,16 @@ class OverlayHAL:
     @secure.setter
     def secure(self, value: bool) -> None:
         self._secure, self._policy = bool(value), None
+
+    @property
+    def asks_app_access(self) -> bool:
+        """True when the current call asks before using each app (secure mode)."""
+        if self._access_policy is not None:
+            try:
+                return bool(self._access_policy())
+            except Exception:  # noqa: BLE001 - fail safe
+                return True
+        return self.secure
 
     def _danger_prompts(self) -> bool:
         return self._confirm_danger and (self._policy is None or self.secure)
@@ -296,8 +310,8 @@ class OverlayHAL:
         """Per-app grants: ask once per app, refuse what its tier forbids."""
         if self.grants is None or not app:
             return
-        if not self.secure and self.grants.admin(app) is None:
-            return  # turbo: only the admin's app tiers apply
+        if not self.asks_app_access and self.grants.admin(app) is None:
+            return  # turbo and careful: only the admin's app tiers apply
         from .client import OverlayBlocked
 
         try:

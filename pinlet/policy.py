@@ -23,8 +23,10 @@ Every key is optional::
       "app_default": "ask"
     }
 
-* ``mode``: ``"secure"`` turns permission prompts on for every client;
-  ``--turbo`` and ``PINLET_MODE=turbo`` are then ignored.
+* ``mode``: the least asking level any client may run at. ``"secure"``
+  turns every permission prompt on for every client; ``"careful"`` keeps
+  Allow/Deny before risky steps (see ``pinlet.mode``). Lower requests
+  (``--turbo``, ``PINLET_MODE=turbo``) are raised to it.
 * ``tools.deny``: tools no client may call. ``tools.allow``, when not empty,
   is the only tools a client may call (``manage_toolsets`` and the handoff
   tools stay callable so the AI can still find out what is allowed).
@@ -102,6 +104,13 @@ class Policy:
         return self.source is not None
 
     @property
+    def floor(self) -> str | None:
+        """The least asking level any client may run at ("careful", "secure"), or None."""
+        if self.forces_secure:
+            return "secure"
+        return self.mode if self.mode == "careful" else None
+
+    @property
     def forces_secure(self) -> bool:
         """True when the policy forces secure mode; a broken policy always does."""
         return self.mode == "secure" or self.broken is not None
@@ -142,7 +151,7 @@ class Policy:
             "active": True,
             "file": self.source,
             "broken": self.broken,
-            "mode": "secure" if self.forces_secure else (self.mode or "person decides"),
+            "mode": self.floor or "person decides",
             "tools_denied": sorted(self.tools_deny),
             "tools_allowed_only": sorted(self.tools_allow),
             "shell": shell_summary(self),
@@ -174,7 +183,7 @@ def parse(data: Any, source: str) -> Policy:
     if not isinstance(data, dict):
         return Policy(source=source, broken="the file is not a JSON object")
     mode = str(data.get("mode", "")).strip().lower() or None
-    if mode not in (None, "secure", "turbo"):
+    if mode not in (None, "secure", "careful", "turbo"):
         return Policy(source=source, broken=f"unknown mode {mode!r}")
     tools = data.get("tools") if isinstance(data.get("tools"), dict) else {}
     shell = data.get("shell") if isinstance(data.get("shell"), dict) else {}

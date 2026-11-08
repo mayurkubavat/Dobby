@@ -81,7 +81,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ..mode import is_secure
+from ..mode import asks_risky, is_secure
 from ..personality import normalize_level
 from .client import (
     NullOverlay,
@@ -122,7 +122,7 @@ _FALSE = {"0", "false", "no", "off"}
 def _admin_secure() -> bool:
     from ..policy import current
 
-    return current().forces_secure
+    return current().floor is not None
 
 
 def overlay_enabled(env: dict[str, str] | None = None, platform: str = sys.platform) -> bool:
@@ -178,7 +178,7 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
             pass
     turbo_flag = env.get("PINLET_OVERLAY_TURBO", "").strip().lower()
     if not _admin_secure() and (
-        turbo_flag in _TRUE or (turbo_flag not in _FALSE and not is_secure(env))
+        turbo_flag in _TRUE or (turbo_flag not in _FALSE and not asks_risky(env))
     ):
         cfg["turbo"] = (
             True  # default: turbo; ``--secure`` / PINLET_MODE=secure turns the prompts on
@@ -242,8 +242,11 @@ def wrap_hal(hal: Any, overlay: NullOverlay | None = None, **kwargs: Any) -> Any
 
         # The mode is read per call (pinlet.mode): a shared Pinlet serves turbo
         # and secure clients at once. Turbo: no prompts at all, not even for ⌘Q.
-        kwargs.setdefault("policy", is_secure)
-        kwargs.setdefault("grants", AppGrants())  # secure: "Let Pinlet use …?" once per app
+        # careful and secure: Allow/Deny before risky steps; secure also asks
+        # "Let Pinlet use …?" once per app.
+        kwargs.setdefault("policy", asks_risky)
+        kwargs.setdefault("access_policy", is_secure)
+        kwargs.setdefault("grants", AppGrants())
         kwargs.setdefault(
             "confirm_clicks",
             _admin_secure()
@@ -253,12 +256,13 @@ def wrap_hal(hal: Any, overlay: NullOverlay | None = None, **kwargs: Any) -> Any
     from ..policy import current
 
     rules = current()
-    if rules.forces_secure or rules.apps or rules.app_default:
+    if rules.floor is not None or rules.apps or rules.app_default:
         # No overlay to ask on, but the admin policy still applies: its app
         # tiers hold, and every question it would ask is answered Deny.
         from .grants import AppGrants
 
-        kwargs.setdefault("policy", is_secure)
+        kwargs.setdefault("policy", asks_risky)
+        kwargs.setdefault("access_policy", is_secure)
         kwargs.setdefault("grants", AppGrants())
         return OverlayHAL(hal, DenyingOverlay(), **kwargs)
     return hal

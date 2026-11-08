@@ -114,15 +114,12 @@ class Hub:
                 await stream.send(b'{"pinlet_ready": 0, "error": "unknown hello version"}\n')
                 return
             pid = _peer_pid(stream) or hello.get("pid")
-            from pinlet.policy import current as admin_policy
-
-            # An admin policy can make every client secure, whatever it asked for.
-            mode = (
-                "secure"
-                if hello.get("mode") == "secure" or admin_policy().forces_secure
-                else "turbo"
-            )
             name = str(hello.get("name") or "AI client")[:40]
+            from pinlet.mode import mode_for_client
+
+            # The strictest of the client's request, the person's choice for
+            # this client (~/.pinlet/modes.json) and the admin policy's floor.
+            mode = mode_for_client(str(hello.get("mode") or ""), name)
             from pinlet.control import pick_first_name
             from pinlet.control.names import display
 
