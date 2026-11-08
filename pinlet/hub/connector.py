@@ -22,6 +22,7 @@ import threading
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from . import paths
 
@@ -193,8 +194,12 @@ def start_daemon(env: dict[str, str] | None = None) -> subprocess.Popen | None:
     )
 
 
-def connect_or_start(timeout_s: float = CONNECT_TIMEOUT_S) -> socket.socket | None:
+def connect_or_start(
+    timeout_s: float = CONNECT_TIMEOUT_S, stop: Any = None
+) -> socket.socket | None:
     """Connects to the shared Pinlet, starting it if nobody is listening.
+
+    ``stop()`` returning True ends the wait early (the client went away).
 
     Returns:
         A connected socket, or None if no Pinlet answered within ``timeout_s``.
@@ -205,7 +210,7 @@ def connect_or_start(timeout_s: float = CONNECT_TIMEOUT_S) -> socket.socket | No
         return sock
     start_daemon()
     deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline and not (stop is not None and stop()):
         sock = _connect(path)
         if sock is not None:
             return sock
@@ -228,10 +233,20 @@ def _read_line(sock: socket.socket, timeout_s: float) -> bytes:
 
 
 def handshake(
-    sock: socket.socket, argv: Sequence[str], timeout_s: float = CONNECT_TIMEOUT_S
+    sock: socket.socket,
+    argv: Sequence[str],
+    timeout_s: float = CONNECT_TIMEOUT_S,
+    name: str | None = None,
 ) -> dict[str, object]:
-    """Sends this client's hello and returns the shared Pinlet's reply."""
-    sock.sendall((json.dumps(hello(argv)) + "\n").encode())
+    """Sends this client's hello and returns the shared Pinlet's reply.
+
+    ``name`` (the client's MCP ``clientInfo.name``) beats the parent process
+    name, unless ``PINLET_AGENT_NAME`` is set.
+    """
+    greeting = hello(argv)
+    if name and not os.environ.get("PINLET_AGENT_NAME"):
+        greeting["name"] = name
+    sock.sendall((json.dumps(greeting) + "\n").encode())
     line = _read_line(sock, timeout_s)
     reply = json.loads(line.decode() or "{}")
     if not reply.get("pinlet_ready"):
@@ -280,6 +295,286 @@ def pump(sock: socket.socket, stdin_fd: int = 0, stdout_fd: int = 1) -> None:
     done.wait()
 
 
+RESTARTED = (
+    "Pinlet restarted while this call ran (the Pinlet app was updated, relaunched or quit), "
+    "so it may or may not have acted. Look at the screen again, then call the tool again."
+)
+UNREACHABLE = (
+    "Pinlet is not running and did not come back in time. Open Pinlet.app (or run "
+    "`pinlet doctor`), then call the tool again."
+)
+
+
+def _message_id(line: bytes) -> tuple[str | None, str | None]:
+    """(method, json-encoded id) of one JSON-RPC line, without trusting it to parse."""
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        return None, None
+    if not isinstance(msg, dict):
+        return None, None
+    rid = json.dumps(msg["id"]) if "id" in msg and msg["id"] is not None else None
+    method = msg.get("method")
+    return (method if isinstance(method, str) else None), rid
+
+
+def _shut(sock: socket.socket) -> None:
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+
+
+class Bridge:
+    """Pipes MCP lines between the client's stdio and the shared Pinlet, across restarts.
+
+    When the shared Pinlet goes away (Pinlet.app updated, relaunched or quit)
+    while the client is still running, the bridge starts or waits for a new
+    one, replays the client's ``initialize`` to it, and tells the client its
+    tool list changed. A call that was running when the old one went away is
+    answered with an error (:data:`RESTARTED`), never sent again: it may have
+    clicked already. Calls made while reconnecting wait for the new Pinlet.
+    """
+
+    def __init__(
+        self,
+        argv: Sequence[str],
+        stdin_fd: int = 0,
+        stdout_fd: int = 1,
+        connect: Any = None,
+        reconnect_s: float = CONNECT_TIMEOUT_S,
+    ) -> None:
+        self.argv = list(argv)
+        self.stdin_fd = stdin_fd
+        self.stdout_fd = stdout_fd
+        self.connect = connect or (lambda: connect_or_start(stop=self._client_gone))
+        self.reconnect_s = reconnect_s
+        self._cond = threading.Condition()
+        self._sock: socket.socket | None = None
+        self._down: Any = None
+        self._gone = False  # gave up reconnecting for now
+        self._stdin_closed = False
+        self._pending: dict[str, None] = {}  # request ids sent to this Pinlet, not answered
+        self._init: bytes | None = None
+        self._initialized: bytes | None = None
+        self._out = threading.Lock()
+        self.reconnects = 0
+        self._client_name: str | None = None
+        self._first: bytes | None = None
+
+    def _client_gone(self) -> bool:
+        with self._cond:
+            return self._stdin_closed
+
+    def _read_first_line(self, limit: int = 1 << 20) -> None:
+        """The client speaks first in MCP (``initialize``): read it to learn the client's name.
+
+        Without this the menu shows the launcher (``disclaimer`` for Claude
+        Desktop, ``node``) until the agent's first tool call.
+        """
+        buf = bytearray()
+        try:
+            while not buf.endswith(b"\n") and len(buf) < limit:
+                ch = os.read(self.stdin_fd, 1)
+                if not ch:
+                    break
+                buf += ch
+        except OSError:
+            pass
+        self._first = bytes(buf) or None
+        try:
+            msg = json.loads(buf) if buf else None
+        except ValueError:
+            return
+        if isinstance(msg, dict) and msg.get("method") == "initialize":
+            info = (msg.get("params") or {}).get("clientInfo") or {}
+            name = str(info.get("name") or "").strip()
+            self._client_name = name[:40] or None
+
+    # ----------------------------------------------------------- the client side
+    def _to_client(self, data: bytes) -> None:
+        with self._out:
+            view = memoryview(data)
+            while view:
+                n = os.write(self.stdout_fd, view)
+                view = view[n:]
+
+    def _error_to_client(self, rid: str, message: str) -> None:
+        reply = {
+            "jsonrpc": "2.0",
+            "id": json.loads(rid),
+            "error": {"code": -32000, "message": message},
+        }
+        self._to_client((json.dumps(reply) + "\n").encode())
+
+    def _wait_for_sock(self) -> socket.socket | None:
+        deadline = time.monotonic() + self.reconnect_s
+        with self._cond:
+            while self._sock is None and not self._gone:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    return None
+                self._cond.wait(min(left, 0.5))
+            return self._sock
+
+    def _up(self) -> None:
+        reader = os.fdopen(os.dup(self.stdin_fd), "rb", buffering=0)
+        buf = b""
+        try:
+            while True:
+                data = reader.read(65536)
+                if not data:
+                    break
+                buf += data
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    self._send_up(line + b"\n")
+        except OSError:
+            pass
+        finally:
+            with self._cond:
+                self._stdin_closed = True
+                sock = self._sock
+                self._cond.notify_all()
+            if sock is not None:
+                try:
+                    sock.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+                # The client is gone: do not linger if Pinlet never closes its side.
+                closer = threading.Timer(5.0, lambda: _shut(sock))
+                closer.daemon = True
+                closer.start()
+
+    def _send_up(self, line: bytes) -> None:
+        if not line.strip():
+            return
+        method, rid = _message_id(line)
+        if method == "initialize":
+            self._init = line
+        elif method == "notifications/initialized":
+            self._initialized = line
+        while True:
+            sock = self._wait_for_sock()
+            if sock is None:
+                if rid is not None and method is not None:
+                    self._error_to_client(rid, UNREACHABLE)
+                return
+            with self._cond:
+                if rid is not None and method is not None:
+                    self._pending[rid] = None
+            try:
+                sock.sendall(line)
+                return
+            except OSError:
+                with self._cond:
+                    self._pending.pop(rid, None) if rid else None
+                    if self._sock is sock:
+                        self._sock = None  # the reader thread reconnects
+                # loop: wait for the new Pinlet and send it there (it never reached the old one)
+
+    # ------------------------------------------------------------ the Pinlet side
+    def _attach(self, sock: socket.socket) -> bool:
+        """Hello, then the client's initialize again when this is a reconnect."""
+        try:
+            handshake(sock, self.argv, name=self._client_name)
+            down = sock.makefile("rb")
+            if self._init is not None:
+                replay_id = f"pinlet-reconnect-{self.reconnects}"
+                msg = json.loads(self._init)
+                msg["id"] = replay_id
+                sock.sendall((json.dumps(msg) + "\n").encode())
+                while True:
+                    line = down.readline()
+                    if not line:
+                        return False
+                    if _message_id(line)[1] == json.dumps(replay_id):
+                        break
+                if self._initialized is not None:
+                    sock.sendall(self._initialized)
+        except (OSError, ValueError, ConnectionError):
+            return False
+        with self._cond:
+            self._sock, self._down, self._gone = sock, down, False
+            self._cond.notify_all()
+        return True
+
+    def _drop(self) -> None:
+        """The Pinlet went away: fail the calls it was running."""
+        with self._cond:
+            sock, self._sock = self._sock, None
+            failed, self._pending = list(self._pending), {}
+        for rid in failed:
+            self._error_to_client(rid, RESTARTED)
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+
+    def _reconnect(self, announce: bool = True) -> bool:
+        deadline = time.monotonic() + self.reconnect_s
+        with self._cond:
+            self._gone = False  # calls made now wait for this attempt
+        while time.monotonic() < deadline:
+            with self._cond:
+                if self._stdin_closed:
+                    return False
+            sock = self.connect()
+            if sock is not None and self._attach(sock):
+                if announce:
+                    self.reconnects += 1
+                    self._to_client(
+                        b'{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}\n'
+                    )
+                return True
+            if sock is not None:
+                sock.close()
+            time.sleep(0.5)
+        with self._cond:
+            self._gone = True  # waiting calls get UNREACHABLE; the next call tries again
+            self._cond.notify_all()
+        return False
+
+    def run(self, sock: socket.socket) -> None:
+        """Serve until the client closes stdin. ``sock`` is connected but not yet greeted."""
+        self._read_first_line()
+        # A Pinlet that is quitting (Pinlet.app restarting its engine) accepts and
+        # then drops us. Wait for the next one rather than going private: a
+        # private Pinlet is a second engine fighting the shared one for the screen.
+        if not self._attach(sock):
+            sock.close()
+            if not self._reconnect(announce=False):
+                raise ConnectionError("the shared Pinlet did not answer the hello")
+        if self._first is not None:
+            self._send_up(self._first)  # before the up thread, so it stays first
+        threading.Thread(target=self._up, name="pinlet-up", daemon=True).start()
+        while True:
+            with self._cond:
+                down = self._down
+            try:
+                line = down.readline()
+            except OSError:
+                line = b""
+            if line:
+                method, rid = _message_id(line)
+                if rid is not None and method is None:
+                    with self._cond:
+                        self._pending.pop(rid, None)
+                self._to_client(line)
+                continue
+            self._drop()
+            with self._cond:
+                if self._stdin_closed:
+                    return
+            while not self._reconnect():
+                with self._cond:
+                    if self._stdin_closed:
+                        return
+                    # Nobody answered: wait for the client's next call before trying again.
+                    self._cond.wait(5.0)
+
+
 def run_in_process() -> None:
     """Runs a private Pinlet MCP server on this process's stdio."""
     from pinlet.server import main as serve_stdio
@@ -301,11 +596,32 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         run_in_process()
         return
+    bridge = Bridge(argv)
     try:
-        handshake(sock, argv)
-    except (OSError, ValueError, ConnectionError) as exc:
+        bridge.run(sock)
+    except ConnectionError as exc:
         sys.stderr.write(f"pinlet: {exc}; running a private one for this client\n")
         sock.close()
+        if bridge._first:
+            _prepend_stdin(bridge._first)  # the private server must see initialize too
         run_in_process()
-        return
-    pump(sock)
+
+
+def _prepend_stdin(data: bytes) -> None:
+    """Make fd 0 yield ``data`` first, then the rest of the real stdin."""
+    real = os.dup(0)
+    r, w = os.pipe()
+    os.write(w, data)
+
+    def copy() -> None:
+        try:
+            while chunk := os.read(real, 65536):
+                os.write(w, chunk)
+        except OSError:
+            pass
+        finally:
+            os.close(w)
+
+    threading.Thread(target=copy, name="pinlet-stdin", daemon=True).start()
+    os.dup2(r, 0)
+    os.close(r)

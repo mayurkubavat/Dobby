@@ -1,7 +1,9 @@
 # Shared control: two AI agents, one desktop
 
-Each AI client (Claude Code, Claude Desktop, Antigravity) starts its own Pinlet
-server. Shared control makes them take turns on the mouse and keyboard.
+Every AI client (Claude Code, Claude Desktop, Cursor, Codex, Gemini CLI,
+Antigravity, Copilot) connects to one shared Pinlet (`pinlet serve`, owned by
+Pinlet.app on macOS). Each connection is its own session. Shared control makes
+the sessions take turns on the mouse and keyboard.
 
 ## How it works
 
@@ -12,11 +14,19 @@ server. Shared control makes them take turns on the mouse and keyboard.
   busy until the tool returns, so another agent never cuts in between a click
   and the typing that follows.
 - With nobody waiting, the holder keeps control. When another agent waits, the
-  holder hands over between steps after `release_control`, after 10 s idle, or
+  holder hands over between steps after `release_control`, after 20 s idle, or
   after a 60 s slice. Higher `PINLET_AGENT_PRIORITY` wins the queue; waiting time
   ages priority up so nobody starves. `PINLET_CONTROL_PREEMPT=1` lets higher
   priority take over at the next step boundary.
 - A holder whose process died loses the lease at once.
+- A holder waiting for the person (an Allow/Deny card) yields at once, so an
+  unanswered card never freezes the other agents. After Allow it takes control
+  back; if another agent acted meanwhile, the step is skipped with "look again".
+- A tool that waited `PINLET_CONTROL_MAX_WAIT` without getting control returns
+  `control_busy` with who is using the screen, its place in line and roughly
+  when the holder must hand over. The agent keeps its place in line for 120 s,
+  so calling again does not send it to the back. Only agents waiting right now
+  can be handed control: one that went off to think never blocks the others.
 - After a handoff, if the other agent acted since this agent last read the
   screen, the first action is skipped with "look again" (like a take-over).
 - The overlay ignores synthetic input from every registered Pinlet process
@@ -24,6 +34,23 @@ server. Shared control makes them take turns on the mouse and keyboard.
   other. While queued, the overlay shows "Waiting for <agent>".
 - The person still outranks everyone: take-over, Pause and Stop work as before.
   Turbo never skips the lease.
+
+## What each session keeps to itself
+
+In the shared Pinlet the engine is one process, so state that an agent relies
+on between calls is kept per session: the Set-of-Marks ids of its last
+screenshot (`click(mark_id=...)`), the element ids of its last
+`get_screen_state` (`act_on_element`), its tool profile (`manage_toolsets`,
+with `tools/list_changed` sent only to that client), its trajectory history,
+and its Pause/Stop/inbox. The server log tags each tool call with
+`[s<id> <name>]` and logs every handoff (`... handed off: control_busy`).
+
+## Waking from the bar
+
+Several agents can wait in `wait_for_wake` at once. A click on the sleeping bar
+wakes one of them, the one that started waiting last; a Stop reaches all of
+them. The bar stays asleep until the last one stops waiting. Wake an older one
+from its row in the Pinlet menu.
 
 ## Pinlet picker (control bar ▾)
 
@@ -48,7 +75,7 @@ after 10 minutes paused.
 | `PINLET_AGENT_NAME` | MCP client name, else `Pinlet-<pid>` | Name shown to the other agent and as the overlay label |
 | `PINLET_AGENT_PRIORITY` | 0 | Higher goes first in the queue |
 | `PINLET_CONTROL` | on (off under pytest and replay) | `0` disables the lease |
-| `PINLET_CONTROL_IDLE_GRACE` | 10 | Seconds idle before a waiter may take over |
+| `PINLET_CONTROL_IDLE_GRACE` | 20 | Seconds idle before a waiter may take over (AI agents often think 10-20 s between calls) |
 | `PINLET_CONTROL_SLICE` | 60 | Longest hold while someone waits |
 | `PINLET_CONTROL_MAX_WAIT` | 45 | How long a tool waits before reporting who has control |
 | `PINLET_CONTROL_HOLD_CAP` | 120 | Upper bound for `hold_control` |

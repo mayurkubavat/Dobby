@@ -16,6 +16,11 @@ Policy (see :func:`decide`):
 * Among waiters the highest effective priority wins: priority plus one point
   per ``aging`` seconds waited, earliest first on a tie.
 * A holder whose process is gone loses the lease at once.
+* A holder waiting for the person (an Allow/Deny card, ``asking``) yields at
+  once: one unanswered card must not freeze every other agent.
+* A waiter that gave up after ``max_wait`` keeps its place (its ``since``) for
+  ``reserve`` seconds, so calling again does not send it to the back of the
+  line. Only waiters that are polling right now can be handed the lease.
 * ``world`` counts every finished action by any agent. An agent that gets the
   lease from someone else compares it with the ``world`` it last observed;
   if they differ the screen may have changed, so it must look again.
@@ -40,14 +45,18 @@ State = dict[str, Any]
 class ControlSettings:
     """Timing and policy knobs for the shared control lease (all times in seconds)."""
 
-    idle_grace: float = 10.0  # seconds without an action before a waiter may take over
+    # Seconds without an action before a waiter may take over. AI agents think
+    # between calls: on real logs 19% of gaps exceed 10 s but 10% exceed 20 s,
+    # so 10 s handed control away mid-task about every fifth step.
+    idle_grace: float = 20.0
     slice: float = 60.0  # longest continuous hold while someone waits
     max_wait: float = 45.0  # how long a tool waits for the lease before giving up
     hold_cap: float = 120.0  # upper bound for hold_control(seconds)
     preempt: bool = False  # higher priority may take over at the next step boundary
     aging: float = 15.0  # seconds of waiting worth one priority point
     busy_timeout: float = 300.0  # a step that runs longer than this counts as hung
-    waiter_ttl: float = 5.0  # a waiter that stopped polling this long ago is dropped
+    waiter_ttl: float = 5.0  # a waiter that stopped polling this long ago is not in line now
+    reserve: float = 120.0  # a waiter that gave up keeps its place this long
     poll: float = 0.1
     pause_max: float = 600.0  # a Pinlet paused from the picker gives up after this
 
@@ -155,14 +164,47 @@ def prune(
     waiters = state.setdefault("waiters", {})
     for wid in list(waiters):
         w = waiters[wid]
-        if not alive(int(w.get("pid", 0))) or now - float(w.get("seen", 0)) > settings.waiter_ttl:
+        stale = now - float(w.get("seen", 0)) > settings.waiter_ttl
+        if not alive(int(w.get("pid", 0))) or (stale and now > float(w.get("reserved_until", 0))):
             del waiters[wid]
+
+
+def polling(waiter: dict[str, Any], now: float, settings: ControlSettings) -> bool:
+    """True when ``waiter`` is waiting right now (not just keeping its place)."""
+    return now - float(waiter.get("seen", 0)) <= settings.waiter_ttl
+
+
+def yield_in(holder: dict[str, Any] | None, now: float, settings: ControlSettings) -> float | None:
+    """Seconds until ``holder`` must let a waiter in, or None when it is busy with a step."""
+    if holder is None or holder.get("asking"):
+        return 0.0
+    busy = bool(holder.get("busy")) and now - float(holder.get("last", now)) < settings.busy_timeout
+    if busy:
+        return None
+    idle_left = settings.idle_grace - (now - float(holder.get("last", now)))
+    slice_left = settings.slice - (now - float(holder.get("since", now)))
+    left = max(0.0, min(idle_left, slice_left))
+    return max(left, float(holder.get("hold_until", 0)) - now)
+
+
+def place_in_line(state: State, me_id: str, now: float, settings: ControlSettings) -> int:
+    """1 when ``me_id`` is next, 2 when one agent is ahead, ... (0 when not waiting)."""
+    waiters = state.get("waiters", {})
+    if me_id not in waiters:
+        return 0
+    order = sorted(
+        waiters.values(),
+        key=lambda w: (-effective_priority(w, now, settings), float(w.get("since", now))),
+    )
+    return 1 + [w.get("id") for w in order].index(me_id)
 
 
 def holder_yields(
     holder: dict[str, Any], me: Agent, now: float, settings: ControlSettings
 ) -> tuple[bool, str]:
     """May ``me`` take the lease from ``holder`` right now?"""
+    if holder.get("asking"):
+        return True, "asking"
     busy = bool(holder.get("busy")) and now - float(holder.get("last", now)) < settings.busy_timeout
     if busy:
         return False, "busy"
@@ -194,7 +236,7 @@ def decide(
     waiters = state.setdefault("waiters", {})
     holder = state.get("holder")
     if holder is not None and holder.get("id") == me.id:
-        holder.update(busy=True, last=now, name=me.name, priority=me.priority)
+        holder.update(busy=True, last=now, name=me.name, priority=me.priority, asking=False)
         waiters.pop(me.id, None)
         return True, "held"
 
@@ -202,6 +244,7 @@ def decide(
     if mine is None:
         mine = waiters[me.id] = {**_agent_record(me), "since": now}
     mine.update(seen=now, name=me.name, priority=me.priority)
+    mine.pop("reserved_until", None)
 
     reason = "free"
     if holder is not None:
@@ -210,7 +253,7 @@ def decide(
             return False, reason
 
     best = max(
-        waiters.values(),
+        (w for w in waiters.values() if polling(w, now, settings)),
         key=lambda w: (effective_priority(w, now, settings), -float(w.get("since", now))),
     )
     if best.get("id") != me.id:
@@ -225,6 +268,7 @@ def decide(
         "last": now,
         "busy": True,
         "hold_until": 0.0,
+        "asking": False,
     }
     state["last_holder"] = me.id
     return True, reason

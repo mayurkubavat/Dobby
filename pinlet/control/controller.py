@@ -3,16 +3,26 @@
 from __future__ import annotations
 
 import atexit
+import contextlib
 import random
 import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 from . import commands, inbox, registry
-from .lease import Agent, ControlSettings, LeaseStore, decide, pid_alive, prune
+from .lease import (
+    Agent,
+    ControlSettings,
+    LeaseStore,
+    decide,
+    pid_alive,
+    place_in_line,
+    prune,
+    yield_in,
+)
 
 
 class ControlError(RuntimeError):
@@ -129,12 +139,46 @@ class Controller:
                 "epoch": int(state.get("epoch", 0)),
                 "handoff": ok and prev not in (None, self.agent.id),
                 "now": now,
+                "place": 0 if ok else place_in_line(state, self.agent.id, now, self.settings),
             }
         return ok, reason, info
 
-    def _withdraw(self) -> None:
+    def _keep_place(self) -> None:
+        """Gave up waiting for now: stay in line (same ``since``) for ``settings.reserve``."""
+        now = self._clock()
         with self.store.transaction() as state:
-            state.setdefault("waiters", {}).pop(self.agent.id, None)
+            mine = state.setdefault("waiters", {}).get(self.agent.id)
+            if mine is not None:
+                mine["reserved_until"] = now + self.settings.reserve
+
+    def _busy_message(self, info: dict[str, Any], wait: float) -> str:
+        holder = info.get("holder") or {}
+        now = info["now"]
+        who = holder.get("name") or "another agent"
+        held = now - float(holder.get("since", now))
+        place = int(info.get("place") or 0)
+        line = (
+            "You are next in line"
+            if place == 1
+            else f"{place - 1} agent(s) are ahead of you"
+            if place > 1
+            else "You are in line"
+        )
+        left = yield_in(holder or None, now, self.settings)
+        when = (
+            "it is in the middle of a step"
+            if left is None
+            else f"it must let the next agent in within about {_fmt_secs(left)}"
+            if left > 0
+            else "it can hand over now"
+        )
+        return (
+            f"Another agent, {who}, is using the screen (for {_fmt_secs(held)}; {when}). "
+            f"Waited {_fmt_secs(wait)}. {line}, and you keep your place for "
+            f"{_fmt_secs(self.settings.reserve)}: call the same tool again to keep waiting, "
+            "or do work that does not need the mouse or keyboard meanwhile. Reading the "
+            "screen is always allowed. Look again before you act: the screen may change."
+        )
 
     def acquire(self, max_wait: float | None = None) -> dict[str, Any]:
         """Block until this agent holds the lease (marked busy), or raise ``ControlBusy``."""
@@ -152,17 +196,10 @@ class Controller:
                 notified = True
                 self.on_wait(info.get("holder"))
             if self._clock() >= deadline:
-                self._withdraw()
+                self._keep_place()
                 if notified and self.on_wait:
                     self.on_wait(None)
-                holder = info.get("holder") or {}
-                held = info["now"] - float(holder.get("since", info["now"]))
-                who = holder.get("name") or "another agent"
-                raise ControlBusy(
-                    f"{who} has control of the desktop (for {_fmt_secs(held)}; "
-                    f"waited {_fmt_secs(wait)}). Try again shortly, call control_status, "
-                    "or work on something that does not need the mouse or keyboard."
-                )
+                raise ControlBusy(self._busy_message(info, wait))
             self._sleep(self.settings.poll * (0.75 + random.random() * 0.5))
 
     def _check_world(self, info: dict[str, Any]) -> None:
@@ -301,6 +338,44 @@ class Controller:
                     raise ControlError("Lost control before the hold started; try again.")
                 holder["hold_until"] = now + secs
         return {"held_for": secs}
+
+    @contextlib.contextmanager
+    def waiting_for_person(self) -> Iterator[Any]:
+        """Let other agents use the desktop while this one waits for the person.
+
+        Wrap an Allow/Deny question asked in the middle of a step. The lease is
+        marked ``asking`` (a waiter may take it at once) and taken back after the
+        answer. If another agent acted meanwhile, :class:`ControlChanged` is
+        raised: the step is skipped and this agent must look again. Set
+        ``turn.reacquire = False`` on the yielded object when the step will not
+        run (a Deny), so the answer is reported as it is.
+        """
+        import types
+
+        turn = types.SimpleNamespace(reacquire=True)
+        with self._lock:
+            mine = self._depth > 0
+        if not mine:
+            yield turn
+            return
+        now = self._clock()
+        with self.store.transaction() as state:
+            holder = state.get("holder")
+            mine = holder is not None and holder.get("id") == self.agent.id
+            if mine:
+                holder.update(busy=False, last=now, asking=True)
+        if not mine:
+            yield turn
+            return
+        try:
+            yield turn
+        finally:
+            with self.store.transaction() as state:
+                holder = state.get("holder")
+                if holder is not None and holder.get("id") == self.agent.id:
+                    holder["asking"] = False
+        if turn.reacquire:
+            self.acquire()
 
     def _finish_without_world(self) -> None:
         now = self._clock()

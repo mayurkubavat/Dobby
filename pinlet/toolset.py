@@ -104,7 +104,16 @@ class ToolSetManager:
     ) -> None:
         self._registry: dict[str, ToolDefinition] = {}
         domains = self.PROFILES.get(initial_profile, ["core"])
-        self._active_domains: set[str] = set(domains)
+        # Each client of the shared Pinlet has its own profile: one agent's
+        # manage_toolsets must not change (or shrink) another agent's tools.
+        self._initial_domains: frozenset[str] = frozenset(domains)
+        self._domains_by_session: dict[int, set[str]] = {}
+        try:
+            from pinlet.hub import sessions
+
+            sessions.on_close(lambda sid: self._domains_by_session.pop(sid, None))
+        except ImportError:  # pragma: no cover
+            pass
         self._output_mode: OutputMode = output_mode
         self._max_inline_tokens: int = max_inline_tokens
         self._notify_cb = notify_tools_changed_cb
@@ -117,6 +126,23 @@ class ToolSetManager:
         else:
             self._state_dir = Path(tempfile.gettempdir()) / "dc_state"
         self._state_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def _active_domains(self) -> set[str]:
+        """The current session's enabled domains (see :mod:`pinlet.hub.per_session`)."""
+        from pinlet.hub.sessions import current_id
+
+        key = current_id()
+        domains = self._domains_by_session.get(key)
+        if domains is None:
+            domains = self._domains_by_session.setdefault(key, set(self._initial_domains))
+        return domains
+
+    @_active_domains.setter
+    def _active_domains(self, domains: set[str]) -> None:
+        from pinlet.hub.sessions import current_id
+
+        self._domains_by_session[current_id()] = set(domains)
 
     @property
     def output_mode(self) -> OutputMode:

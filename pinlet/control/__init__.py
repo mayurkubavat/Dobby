@@ -14,7 +14,7 @@ Environment (set per client in its MCP config):
 * ``PINLET_CONTROL=0|1`` - off disables the lease (default on; off under pytest
   and cassette replay).
 * ``PINLET_CONTROL_DIR`` (default ``~/.pinlet/control``),
-  ``PINLET_CONTROL_IDLE_GRACE`` (10 s), ``PINLET_CONTROL_SLICE`` (60 s),
+  ``PINLET_CONTROL_IDLE_GRACE`` (20 s), ``PINLET_CONTROL_SLICE`` (60 s),
   ``PINLET_CONTROL_MAX_WAIT`` (45 s), ``PINLET_CONTROL_HOLD_CAP`` (120 s),
   ``PINLET_CONTROL_PREEMPT=1`` (higher priority takes over at the next step).
 """

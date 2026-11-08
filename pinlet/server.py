@@ -5,6 +5,7 @@ perception with Set-of-Marks, pluggable GroundingEngine (ensemble, semantic, cv,
 input injection, compound autonomous actions, and closed-loop verification.
 """
 
+import contextvars
 import logging
 import os
 import sys
@@ -31,6 +32,10 @@ from pinlet.toolset import OutputMode, ToolDefinition, ToolSetManager
 from pinlet.types import DiagnosticsResult
 
 _TOOL_LIST_NOTIFICATIONS: list[str] = []
+# (session, event loop) of the MCP request being served; copied into the tool's worker thread.
+_REQUEST_SESSION: contextvars.ContextVar[tuple[Any, Any] | None] = contextvars.ContextVar(
+    "pinlet_request_session", default=None
+)
 
 # One line per tool call (name, duration, outcome) plus tracebacks, in
 # ~/.pinlet/logs/server.log. Never stdout: that carries the MCP protocol.
@@ -82,10 +87,14 @@ def setup_server_log(
 def _notify_tools_changed() -> None:
     """Records notifications/tools/list_changed and forwards it when a session exists."""
     _TOOL_LIST_NOTIFICATIONS.append("notifications/tools/list_changed")
-    session = getattr(mcp_server, "active_session", None)
+    # The calling client's session, not whichever client called last: in the
+    # shared Pinlet only that client's tool list changed.
+    session, loop = _REQUEST_SESSION.get() or (
+        getattr(mcp_server, "active_session", None),
+        getattr(mcp_server, "active_loop", None),
+    )
     if session is None or not hasattr(session, "send_tool_list_changed"):
         return None
-    loop = getattr(mcp_server, "active_loop", None)
     # Sync tools run in a worker thread. The session's streams belong to the server's
     # event loop, so the notification must be scheduled there, not in a new loop.
     if loop is not None and loop.is_running():
@@ -170,6 +179,8 @@ def _handoff_guard(fn: Any) -> Any:
 
     def answer(exc: BaseException) -> dict[str, Any]:
         result = classify(exc)
+        if result is not None:
+            tool_log.info("%s%s handed off: %s", _session_tag(), fn.__name__, result["handoff"])
         if result is None:
             tool_log.error("%s raised %s: %s", fn.__name__, type(exc).__name__, exc, exc_info=exc)
             raise exc
@@ -196,6 +207,14 @@ def _handoff_guard(fn: Any) -> Any:
             return _attach_person_notes(answer(exc))
 
     return guarded
+
+
+def _session_tag() -> str:
+    """A log prefix such as "[s3 Tibble · claude] " in the shared Pinlet, else empty."""
+    from pinlet.hub import sessions as _sessions
+
+    info = _sessions.CURRENT.get()
+    return f"[s{info.id} {info.name}] " if info is not None else ""
 
 
 class PinletServer(MCPServer):
@@ -228,6 +247,7 @@ class PinletServer(MCPServer):
             import asyncio
 
             self.active_loop = asyncio.get_running_loop()
+            _REQUEST_SESSION.set((self.active_session, self.active_loop))
         from pinlet import policy as _policy
 
         rules = _policy.current()
@@ -247,7 +267,8 @@ class PinletServer(MCPServer):
             result = await self._call_in_scope(name, arguments, context)
         except BaseException as exc:
             tool_log.error(
-                "%s failed after %.2fs: %s: %s",
+                "%s%s failed after %.2fs: %s: %s",
+                _session_tag(),
                 name,
                 time.monotonic() - started,
                 type(exc).__name__,
@@ -257,7 +278,8 @@ class PinletServer(MCPServer):
         is_error = bool(getattr(result, "is_error", getattr(result, "isError", False)))
         tool_log.log(
             logging.ERROR if is_error else logging.INFO,
-            "%s %s %.2fs",
+            "%s%s %s %.2fs",
+            _session_tag(),
             name,
             "error" if is_error else "ok",
             time.monotonic() - started,
@@ -1242,16 +1264,24 @@ def choose_option(
     }
 
 
-_screen_tracker = None
+class _Trackers:
+    """get_screen_state's element ids (e1, e2, ...) belong to the agent that observed them."""
+
+    from pinlet.hub.per_session import PerSession
+
+    tracker = PerSession(default=None)
+
+
+_screen_trackers = _Trackers()
 
 
 def _tracker():
-    global _screen_tracker
-    if _screen_tracker is None:
+    tracker = _screen_trackers.tracker
+    if tracker is None:
         from pinlet.screen_state import StateTracker
 
-        _screen_tracker = StateTracker()
-    return _screen_tracker
+        tracker = _screen_trackers.tracker = StateTracker()
+    return tracker
 
 
 @mcp_server.tool()
@@ -2157,6 +2187,20 @@ def hold_control(seconds: float = 30.0) -> dict[str, Any]:
 
 
 WAIT_FOR_WAKE_CAP_S = 1800
+_WAKE_THREADS: Any = None
+
+
+def _wake_limiter() -> Any:
+    """Sleeping agents wait on threads of their own, never on the ones tools need."""
+    global _WAKE_THREADS
+    import asyncio
+
+    import anyio
+
+    loop = asyncio.get_running_loop()
+    if _WAKE_THREADS is None or _WAKE_THREADS[0] is not loop:
+        _WAKE_THREADS = (loop, anyio.CapacityLimiter(64))
+    return _WAKE_THREADS[1]
 
 
 def _wait_for_wake_blocking(timeout_s: float, reason: str, cancel: Any = None) -> dict[str, Any]:
@@ -2285,7 +2329,9 @@ async def wait_for_wake(timeout_s: int = 600, reason: str = "") -> dict[str, Any
     cancel = threading.Event()
     try:
         return await anyio.to_thread.run_sync(
-            lambda: _wait_for_wake_blocking(timeout_s, reason, cancel), abandon_on_cancel=True
+            lambda: _wait_for_wake_blocking(timeout_s, reason, cancel),
+            abandon_on_cancel=True,
+            limiter=_wake_limiter(),
         )
     except BaseException:
         cancel.set()  # the client cancelled: take the waiting bar down

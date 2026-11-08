@@ -648,7 +648,35 @@ def test_wait_for_wake_unavailable_without_helper(tmp_path):
     assert client.wait_for_wake(timeout_s=5)["unavailable"] is True
 
 
-def test_wait_for_wake_is_thread_safe(fake_client):
+def test_one_wake_wakes_one_of_several_waiting_agents(fake_client):
+    """Shared Pinlet: a click on the bar wakes the latest waiter, not every AI at once."""
+    client, log = fake_client
+    import threading as _t
+
+    out: dict[str, dict] = {}
+
+    def wait(name: str) -> None:
+        out[name] = client.wait_for_wake(timeout_s=5)
+
+    first = _t.Thread(target=wait, args=("first",))
+    first.start()
+    time.sleep(0.2)
+    second = _t.Thread(target=wait, args=("second",))
+    second.start()
+    time.sleep(0.2)
+    client.intent("EMIT:wake")
+    second.join(5)
+    assert out["second"]["woken"] and "first" not in out  # the first still sleeps
+    client.move(1, 1, ms=0)
+    assert "sleep.done" not in _ops(log)  # the bar stays asleep for the first
+    client.intent("EMIT:wake")
+    first.join(5)
+    assert out["first"]["woken"]
+    client.move(1, 1, ms=0)
+    assert _ops(log).count("sleep.done") == 1
+
+
+def test_stop_reaches_every_waiting_agent(fake_client):
     client, _ = fake_client
     import threading as _t
 
@@ -659,10 +687,10 @@ def test_wait_for_wake_is_thread_safe(fake_client):
     for w in waiters:
         w.start()
     time.sleep(0.3)
-    client.intent("EMIT:wake")
+    client.intent("EMIT:stop")
     for w in waiters:
         w.join(5)
-    assert len(out) == 2 and all(r["woken"] for r in out)
+    assert len(out) == 2 and all(r["stopped"] for r in out)
 
 
 def test_null_overlay_wait_for_wake_returns_at_once():

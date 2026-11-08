@@ -15,6 +15,7 @@ next action.
 from __future__ import annotations
 
 import atexit
+import contextlib
 import json
 import logging
 import os
@@ -22,7 +23,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -198,6 +199,24 @@ class NullOverlay:
         return None
 
 
+@contextlib.contextmanager
+def _yield_lease_while_asking() -> Iterator[Any]:
+    """This agent's shared-control lease, marked "asking" for the block (no-op without one)."""
+    import types
+
+    try:
+        from pinlet.control import get_controller
+
+        ctl = get_controller(create=False)
+    except Exception:  # noqa: BLE001
+        ctl = None
+    if ctl is None:
+        yield types.SimpleNamespace(reacquire=True)
+        return
+    with ctl.waiting_for_person() as turn:
+        yield turn
+
+
 class OverlayClient(NullOverlay):
     """Drives the overlay helper process over a JSON-lines pipe.
 
@@ -241,6 +260,11 @@ class OverlayClient(NullOverlay):
         self._user_input_seen = False
         self.awake = False
         self._wakes = 0  # "wake" / "stop" events seen, for wait_for_wake
+        # Several AI clients of the shared Pinlet can wait on the one bar at once.
+        # A click on the bar wakes one of them (the latest to start waiting), not
+        # all; the menu's per-agent Wake reaches the others.
+        self._sleepers: list[object] = []
+        self._wakes_given = 0
         self._stops = 0
         self._resumes = 0
         self._wake_callbacks: list[Callable[[], None]] = []
@@ -508,6 +532,9 @@ class OverlayClient(NullOverlay):
         helper cannot run or dies, ``cancelled`` when ``cancel`` is set.
 
         * Only a wake or Stop that arrives during the wait counts.
+        * With several agents waiting (the shared Pinlet), one wake goes to the
+          agent that started waiting last; a Stop reaches them all. The bar
+          stays asleep until the last of them stops waiting.
         * A Stop pending from before (pressed on the idle bar) is reported
           at once and consumed, like a Stop is reported by one checkpoint.
         * Pause while waiting changes nothing; but when Pinlet was already
@@ -531,11 +558,17 @@ class OverlayClient(NullOverlay):
                 self._user_input_seen = False
                 return {**result, "stopped": True}
             self._stop_requested = False  # a stale Stop ended an earlier task
-            wakes, stops, resumes = self._wakes, self._stops, self._resumes
+            stops, resumes = self._stops, self._resumes
             # Paused before the AI began to wait (it was told "paused"): the
             # person's Resume is the hand-back, as much as a click on the bar.
             resume_wakes = self._paused
+            me = object()
+            if not self._sleepers:
+                self._wakes_given = self._wakes  # wakes from before the wait do not count
+            self._sleepers.append(me)
         if not self._send("sleep.wait", reason=reason or None):
+            with self._cond:
+                self._sleepers.remove(me)
             return {**result, "unavailable": True}
         deadline = t0 + max(0.0, float(timeout_s))
         try:
@@ -546,7 +579,10 @@ class OverlayClient(NullOverlay):
                         self._user_input_seen = False
                         result["stopped"] = True
                         break
-                    if self._wakes != wakes or (resume_wakes and self._resumes != resumes):
+                    woke = self._wakes > self._wakes_given and self._sleepers[-1] is me
+                    if woke or (resume_wakes and self._resumes != resumes):
+                        if woke:
+                            self._wakes_given += 1
                         self._paused = self._user_active = self._user_input_seen = False
                         result["woken"] = True
                         break
@@ -562,7 +598,12 @@ class OverlayClient(NullOverlay):
                         break
                     self._cond.wait(min(left, 0.25))
         finally:
-            self._send("sleep.done")
+            with self._cond:
+                self._sleepers.remove(me)
+                last = not self._sleepers
+                self._cond.notify_all()  # a wake nobody took yet goes to the next sleeper
+            if last:
+                self._send("sleep.done")
         result["waited_s"] = round(time.monotonic() - t0, 2)
         return result
 
@@ -581,7 +622,26 @@ class OverlayClient(NullOverlay):
         ``kind`` "access" asks whether Pinlet may use an app (calm colours);
         "danger" is a risky step. ``detail`` explains; ``allow``/``deny``
         are the button titles.
+
+        While the question waits, other agents may use the desktop (the lease
+        is marked ``asking``); if one acted, the step is skipped afterwards
+        with ``control_changed`` so this agent looks again.
         """
+        with _yield_lease_while_asking() as turn:
+            ok = self._confirm(text, secs, detail, allow, deny, kind, app)
+            turn.reacquire = ok  # a Deny is reported as a Deny, not as "look again"
+        return ok
+
+    def _confirm(
+        self,
+        text: str,
+        secs: float,
+        detail: str,
+        allow: str,
+        deny: str,
+        kind: str,
+        app: str,
+    ) -> bool:
         try:
             from pinlet.hub import prompts
 

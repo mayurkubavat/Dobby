@@ -26,6 +26,7 @@ from . import paths, sessions
 
 log = logging.getLogger("pinlet.hub")
 MAX_LINE = 64 * 1024 * 1024
+HUB_THREADS = 100
 
 
 def _idle_exit_s() -> float:
@@ -80,6 +81,13 @@ class Hub:
         self.last_client = time.monotonic()
         self.task_group: Any = None
         self.quitting = False
+        self._control_threads: Any = None
+
+    def _control_limiter(self) -> Any:
+        """Threads of the app's own: busy AI clients never leave the menu waiting."""
+        if self._control_threads is None:
+            self._control_threads = anyio.CapacityLimiter(4)
+        return self._control_threads
 
     async def handle(self, stream: Any) -> None:
         """Serves one connection: an MCP client session or a control connection."""
@@ -181,7 +189,8 @@ class Hub:
                 reply = {"ok": False, "error": f"bad request: {exc}"}
             else:
                 reply = await anyio.to_thread.run_sync(
-                    lambda: control.handle(request, lambda: quit_asked.append(1))
+                    lambda: control.handle(request, lambda: quit_asked.append(1)),
+                    limiter=self._control_limiter(),
                 )
             await stream.send((json.dumps(reply) + "\n").encode())
             if quit_asked:
@@ -348,6 +357,9 @@ def serve() -> int:
             listener = await anyio.create_unix_listener(str(sock_path), mode=0o600)
         finally:
             os.umask(old_umask)
+        # Every client's blocking tool calls share these threads; ten AI clients,
+        # each with a step waiting for control, would use up anyio's default 40.
+        anyio.to_thread.current_default_thread_limiter().total_tokens = HUB_THREADS
         async with anyio.create_task_group() as tg:
             hub.task_group = tg
             tg.start_soon(hub.idle_watch, tg)

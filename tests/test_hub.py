@@ -388,3 +388,68 @@ def test_clients_connecting_at_once_get_different_names(tmp_path, short_sock):
     finally:
         daemon.terminate()
         daemon.wait(timeout=10)
+
+
+def _rpc_noting(sock, buf, msg, seen):
+    """Like _rpc, but keeps the server's notifications in ``seen``."""
+    sock.sendall((json.dumps(msg) + "\n").encode())
+    while True:
+        while b"\n" not in buf[0]:
+            chunk = sock.recv(65536)
+            assert chunk, "server closed"
+            buf[0] += chunk
+        line, buf[0] = buf[0].split(b"\n", 1)
+        reply = json.loads(line)
+        if reply.get("id") == msg["id"]:
+            return reply
+        seen.append(reply.get("method"))
+
+
+@pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="needs Unix sockets")
+def test_one_clients_toolsets_never_change_anothers(tmp_path, short_sock):
+    env = {
+        **os.environ,
+        "PINLET_SOCKET": str(short_sock),
+        "PINLET_OVERLAY": "0",
+        "PINLET_IDLE_EXIT": "0",
+        "PINLET_TOOLSET_PROFILE": "minimal_computer_use",
+        "HOME": str(tmp_path),
+    }
+    root = Path(__file__).resolve().parents[1]
+    daemon = subprocess.Popen(
+        [sys.executable, "-m", "pinlet", "serve"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        a, abuf = _client(short_sock, "Claude Code", "turbo")
+        b, bbuf = _client(short_sock, "Codex", "turbo")
+        a_seen: list = []
+        b_seen: list = []
+
+        def names(sock, buf, seen, rid):
+            r = _rpc_noting(sock, buf, {"jsonrpc": "2.0", "id": rid, "method": "tools/list"}, seen)
+            return {t["name"] for t in r["result"]["tools"]}
+
+        assert "list_windows" not in names(a, abuf, a_seen, 10)
+        enable = {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {
+                "name": "manage_toolsets",
+                "arguments": {"action": "enable", "domains": ["window_mgmt"]},
+            },
+        }
+        _rpc_noting(a, abuf, enable, a_seen)
+        assert "list_windows" in names(a, abuf, a_seen, 12)
+        assert "list_windows" not in names(b, bbuf, b_seen, 13)
+        assert "notifications/tools/list_changed" in a_seen
+        assert "notifications/tools/list_changed" not in b_seen
+        a.close()
+        b.close()
+    finally:
+        daemon.terminate()
+        daemon.wait(timeout=10)

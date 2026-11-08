@@ -20,6 +20,7 @@ from pinlet.crystallization import (
 )
 from pinlet.hal.base import IDesktopHAL
 from pinlet.handoff import is_handoff
+from pinlet.hub.per_session import PerSession
 from pinlet.perception.capture import CapturePipeline
 from pinlet.perception.grounding.engine import GroundingEngine
 from pinlet.perception.ocr import OCRLine, assign_text_to_boxes, get_ocr_engine, text_matches
@@ -66,6 +67,16 @@ class FeedbackLoopController:
     ActionCache, ObstructionInterceptor, and Set-of-Marks mapping.
     """
 
+    # What one agent saw and did: kept per client of the shared Pinlet, so one
+    # agent's screenshot marks or history never answer another agent's call.
+    active_marks = PerSession(default={})
+    last_screenshot_meta = PerSession(default=None)
+    last_clean_frame = PerSession(default=None)
+    last_vdom_snapshot = PerSession(default=None)
+    _trajectory_log = PerSession(default=[])
+    _act_batches = PerSession(default=0)
+    _ax_previous_trees = PerSession(default={})
+
     def __init__(self, hal: IDesktopHAL) -> None:
         self.hal = hal
         self.pipeline = CapturePipeline(hal)
@@ -75,7 +86,6 @@ class FeedbackLoopController:
         self.window_clipper = WindowClipper(hal)
         self.action_cache = ActionCache()
         self.plugin_registry = PLUGIN_REGISTRY
-        self._ax_previous_trees: dict[str, list[UIElement]] = {}
 
         # Backward compatibility aliases
         self.atspi_inspector = self.grounding_engine._semantic.inspector
@@ -115,12 +125,6 @@ class FeedbackLoopController:
             local_gemma_client=gemma,
             text_reader=getattr(hal, "read_screen_text", None) or self.read_screen_text,
         )
-        self._trajectory_log: list[dict[str, Any]] = []
-        self._act_batches = 0
-        self.last_vdom_snapshot: VirtualDOMSnapshot | None = None
-        self.active_marks: dict[int, UIElement] = {}
-        self.last_screenshot_meta: tuple[int, int, float] | None = None
-        self.last_clean_frame: Image.Image | None = None
 
     def note_turn(self, role: str, content: str) -> None:
         """Appends one turn and compacts every six act-verify batches."""

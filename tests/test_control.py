@@ -74,7 +74,7 @@ def test_second_agent_waits_while_first_works(tmp_path):
     a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
     act(a)
     c.t += 3
-    with pytest.raises(ControlBusy, match="Claude has control"):
+    with pytest.raises(ControlBusy, match="Claude, is using the screen"):
         act(b)
 
 
@@ -85,7 +85,7 @@ def test_idle_holder_hands_over(tmp_path):
     c.t += 10.5
     act(b)
     assert b.status()["you_hold_control"]
-    with pytest.raises(ControlBusy, match="Agy has control"):
+    with pytest.raises(ControlBusy, match="Agy, is using the screen"):
         act(a)
 
 
@@ -554,3 +554,94 @@ def test_overview_and_picker_groups(tmp_path):
     assert groups[2][1] == 0
     commands.request_stop(tmp_path, other)
     assert commands.read(tmp_path, other) == {"paused": False, "stop": 1}
+
+
+# ------------------------------------------------- fairness and feedback
+def test_busy_message_names_holder_place_and_eta(tmp_path):
+    c = Clock()
+    a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
+    act(a)
+    c.t += 3
+    with pytest.raises(ControlBusy) as err:
+        act(b)
+    text = str(err.value)
+    assert "Claude, is using the screen" in text
+    assert "next in line" in text and "within about 7 s" in text  # idle_grace 10 - 3
+
+
+def test_waiter_that_gave_up_keeps_its_place(tmp_path):
+    c = Clock()
+    a, b, d = (make(tmp_path, c, n, p) for n, p in (("Claude", 1), ("Agy", 2), ("Codex", 3)))
+    act(a)
+    c.t += 1
+    with pytest.raises(ControlBusy, match="next in line"):
+        act(b)  # Agy queues first, then gives up (max_wait 0) and goes off to think
+    c.t += 6  # longer than waiter_ttl: Agy is not polling, but keeps its place
+    act(a)  # Claude keeps working
+    with pytest.raises(ControlBusy, match=r"1 agent\(s\) are ahead of you"):
+        act(d)
+    with pytest.raises(ControlBusy, match="next in line"):
+        act(b)  # Agy is back and still first
+
+
+def test_absent_reserved_waiter_never_blocks_a_present_one(tmp_path):
+    c = Clock()
+    a = make(tmp_path, c, "Claude", 1)
+    b = make(tmp_path, c, "Agy", 2)
+    d = make(tmp_path, c, "Codex", 3)
+    act(a)
+    with pytest.raises(ControlBusy):
+        act(b)  # Agy queues, gives up, and goes away
+    c.t += 25  # Claude idle past the grace; Agy is not polling
+    act(d)  # Codex is here now: it must not wait behind an absent Agy
+    assert d.status()["you_hold_control"]
+
+
+def test_reserved_place_expires(tmp_path):
+    c = Clock()
+    a = make(tmp_path, c, "Claude", 1)
+    b = make(tmp_path, c, "Agy", 2)
+    act(a)
+    with pytest.raises(ControlBusy):
+        act(b)
+    assert a.status()["waiting"]
+    c.t += a.settings.reserve + 1
+    assert a.status()["waiting"] == []
+
+
+def test_holder_asking_the_person_lets_others_work(tmp_path):
+    c = Clock()
+    a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
+    with pytest.raises(ControlChanged), a.action(), a.waiting_for_person():
+        act(b)  # Claude's card is up: Agy gets the desktop at once, no idle wait
+        assert b.status()["you_hold_control"]
+        b.release()
+
+
+def test_asking_holder_must_look_again_after_another_agent_acted(tmp_path):
+    c = Clock()
+    a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
+    with pytest.raises(ControlChanged):
+        with a.action():
+            a.note_observation()
+            with a.waiting_for_person():
+                act(b)
+                b.release()
+
+
+def test_asking_holder_keeps_control_when_nobody_cut_in(tmp_path):
+    c = Clock()
+    a = make(tmp_path, c, "Claude", 1)
+    with a.action():
+        with a.waiting_for_person():
+            c.t += 40  # a slow answer: nobody else wanted the desktop
+    assert a.status()["you_hold_control"]
+
+
+def test_denied_question_does_not_take_the_lease_back(tmp_path):
+    c = Clock()
+    a, b = make(tmp_path, c, "Claude", 1), make(tmp_path, c, "Agy", 2)
+    with a.action(), a.waiting_for_person() as turn:
+        act(b)  # Agy works while the card is up; then the person says Deny
+        turn.reacquire = False  # no ControlChanged: the Deny is the answer
+    assert not a.status()["you_hold_control"]

@@ -67,6 +67,7 @@ def close_session(info: SessionInfo) -> None:
     """Forgets a session when its client disconnects."""
     with _lock:
         _sessions.pop(info.id, None)
+    _run_forget_hooks(info.id)
 
 
 def note_call(tool: str) -> None:
@@ -99,3 +100,28 @@ def snapshot() -> list[dict[str, Any]]:
     """All open sessions as dicts, oldest first."""
     with _lock:
         return [s.as_dict() for s in sorted(_sessions.values(), key=lambda s: s.id)]
+
+
+def current_id() -> int:
+    """The current client session's id, or 0 outside the shared Pinlet (one private client)."""
+    info = CURRENT.get()
+    return info.id if info is not None else 0
+
+
+# Per-session engine state (screenshot marks, element ids, tool profiles) is
+# kept by whoever owns it; they register a forget hook so a closed session's
+# state goes away with it.
+_forget_hooks: list[Any] = []
+
+
+def on_close(hook: Any) -> None:
+    """Call ``hook(session_id)`` whenever a session closes."""
+    _forget_hooks.append(hook)
+
+
+def _run_forget_hooks(session_id: int) -> None:
+    for hook in list(_forget_hooks):
+        try:
+            hook(session_id)
+        except Exception:  # noqa: BLE001 - cleanup must never break a disconnect
+            pass

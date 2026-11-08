@@ -42,6 +42,25 @@ The first public release will be 0.1.0. It contains:
   the glass rim and the pointer move from violet to cool cyan (fill `#0E7490`,
   glow `#0EA5C6` / `#67E8F9` on dark). The menu bar icon keeps its shape.
 - `pinlet setup` registers the launcher instead of a venv's own `pinlet` script.
+- Several AI clients on one shared Pinlet work together smoothly:
+  - The connector survives a restart of the shared Pinlet (Pinlet.app updated,
+    relaunched or quit): it reconnects, replays the client's `initialize`, sends
+    `tools/list_changed`, and answers a call that was running with "Pinlet
+    restarted, look again" instead of hanging. A Pinlet that is quitting no
+    longer pushes a client into a private Pinlet of its own.
+  - Screenshot marks (`click(mark_id=...)`), `get_screen_state` element ids,
+    tool profiles (`manage_toolsets`) and trajectory history are per session,
+    so one agent's screenshot or profile change never answers another's call.
+    `tools/list_changed` goes only to the client whose tools changed.
+  - A click on the sleeping bar wakes one waiting agent (the latest), not all.
+  - An unanswered Allow/Deny card no longer freezes the other agents for up to
+    5 minutes: while it waits, they may use the desktop.
+  - `control_busy` says who is using the screen, your place in line and about
+    when they must hand over, and you keep your place for 120 s.
+  - Idle grace before a waiting agent may take over: 20 s (was 10 s, shorter
+    than AI think time between calls).
+  - The menu shows each client's own name from the start, and the server log
+    tags every call with its session and logs handoffs.
 
 ### Added
 
