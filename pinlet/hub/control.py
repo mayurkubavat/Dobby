@@ -15,6 +15,9 @@ then one JSON request per line, each answered with the same ``id``::
                                                          -> an Allow/Deny card's answer
     {"id": 6, "op": "tell", "pid": 4242, "text": "use the March file"}  -> {"queued": 1, "woke": false}
 
+``activity`` returns ``lines``: the activity journal grouped into sentences
+("Tibble · Cursor clicked 4 times in Safari"), oldest first (see :mod:`pinlet.journal`).
+
 ``topbar`` also returns ``prompts``: the Allow/Deny questions waiting for the
 app's card (see :mod:`pinlet.hub.prompts`).
 
@@ -240,6 +243,11 @@ def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -
 
             prompts.note_poll()
             body = {"prompts": prompts.pending()}
+        elif op == "activity":
+            from pinlet import journal
+
+            limit = int(request.get("limit") or 200)
+            body = {"lines": journal.summarize(journal.read(max(1, min(limit, 2000))))}
         elif op == "answer":
             from . import prompts
 

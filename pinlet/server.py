@@ -264,6 +264,7 @@ class PinletServer(MCPServer):
         _sessions.note_call(name)
         receipt = _receipt_for(name, arguments)
         if receipt is not None and receipt.get("blocked") is not None:
+            _journal(name, "repeat_blocked", 0.0)
             import json as _json
 
             from mcp.types import CallToolResult, TextContent
@@ -285,6 +286,9 @@ class PinletServer(MCPServer):
         except BaseException as exc:
             if receipt is not None:
                 _receipt_mark(receipt, False)
+            from pinlet import journal as _journal_mod
+
+            _journal(name, _journal_mod.outcome_of(None, failed=True), time.monotonic() - started)
             tool_log.error(
                 "%s%s failed after %.2fs: %s: %s",
                 _session_tag(),
@@ -297,6 +301,9 @@ class PinletServer(MCPServer):
         is_error = bool(getattr(result, "is_error", getattr(result, "isError", False)))
         if receipt is not None:
             _receipt_mark(receipt, not is_error)
+        from pinlet import journal as _journal_mod
+
+        _journal(name, _journal_mod.outcome_of(result), time.monotonic() - started)
         tool_log.log(
             logging.ERROR if is_error else logging.INFO,
             "%s%s %s %.2fs",
@@ -315,6 +322,29 @@ class PinletServer(MCPServer):
         # stays busy until the tool returns, so another agent never cuts in between.
         with ctl.tool_scope():
             return await super().call_tool(name, arguments, context)
+
+
+def _journal(tool: str, outcome: str, secs: float) -> None:
+    """One line in the activity journal (``pinlet.journal``): never the call's arguments."""
+    try:
+        from pinlet import journal
+        from pinlet.hub import sessions as _sessions
+
+        info = _sessions.CURRENT.get()
+        if info is not None:
+            who = {
+                "agent": info.agent_key[:12] or None,
+                "session": info.id,
+                "name": info.name,
+                "client": info.client,
+                "app": info.app,
+            }
+        else:
+            ctl = get_controller(create=False)
+            who = {"name": ctl.agent.name if ctl is not None else "Pinlet", "pid": os.getpid()}
+        journal.record({**who, "tool": tool, "outcome": outcome, "ms": int(secs * 1000)})
+    except Exception:  # noqa: BLE001 - the journal must never break a tool
+        pass
 
 
 def _receipt_for(name: str, arguments: Any) -> dict[str, Any] | None:

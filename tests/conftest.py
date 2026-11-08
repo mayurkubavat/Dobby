@@ -9,6 +9,9 @@ from PIL import Image
 from pinlet.hal.base import IDesktopHAL
 from pinlet.types import BoundingBox, WindowInfo
 
+# Tests never write to the person's activity journal (tests that need one set their own).
+os.environ["PINLET_JOURNAL"] = "0"
+
 
 class MockDesktopHAL(IDesktopHAL):
     """Deterministic mock HAL for automated unit and headless testing."""

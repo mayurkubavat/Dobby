@@ -7,6 +7,7 @@
     pinlet setup        register Pinlet and its skills with every AI tool on this computer
                         (--dry-run to preview, --list to see each tool; pinlet setup --help)
     pinlet doctor       check that Pinlet can run here and say how to fix what is missing
+    pinlet activity     what the agents did lately, from the activity journal (--raw, -n N)
 
 Set ``PINLET_SHARED=0`` to make plain ``pinlet`` behave like ``pinlet stdio``.
 Kept free of engine imports so connecting is fast.
@@ -39,6 +40,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         from pinlet.doctor import main as doctor
 
         sys.exit(doctor(argv[argv.index("doctor") + 1 :]))
+    if command == "activity":
+        from pinlet.journal import main as activity
+
+        sys.exit(activity(argv[argv.index("activity") + 1 :]))
     if command == "stdio":
         from pinlet.hub.connector import run_in_process
 
