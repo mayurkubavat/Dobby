@@ -7,7 +7,7 @@ Stop, and Pinlet's settings at the bottom.
 
 This module is pure (no AppKit, no GTK) so it is tested anywhere:
 
-* :data:`PALETTE`: palette A, "Elf Violet, tuned".
+* :data:`PALETTE`: palette "Frost".
 * :func:`publish` / :func:`read_states`: each overlay helper writes what its
   Pinlet is doing to ``~/.pinlet/overlay/status/<server pid>.json`` so the one
   helper that owns the top-bar item (the bar owner, see ``barlock``) can show
@@ -31,19 +31,19 @@ STATUS_DIR = os.path.expanduser("~/.pinlet/overlay/status")
 HIDDEN_PATH = os.path.expanduser("~/.pinlet/overlay/menu_hidden.json")
 ICON_DIR = os.path.expanduser("~/.pinlet/overlay/icons")
 
-# Palette A, "Elf Violet, tuned" (chosen Nov 2026).
+# Palette "Frost" (chosen 2026-11-08, replacing "Elf Violet, tuned").
 PALETTE: dict[str, str] = {
-    "accent": "#7C5CFF",  # glow and icon on a light desktop
-    "accent_dark": "#9B82FF",  # the same on a dark desktop
-    "fill": "#5B3FE0",  # filled buttons and tags, white text
+    "accent": "#0EA5C6",  # glow and icon on a light desktop
+    "accent_dark": "#67E8F9",  # the same on a dark desktop
+    "fill": "#0E7490",  # filled buttons and tags, white text
     "on_fill": "#FFFFFF",
     "ok": "#22A365",
     "caution": "#F5A524",  # paused, needs you
     "danger": "#F04438",  # stopped
-    "idle": "#9A98A6",  # sleeping / paused grey
-    "surface_light": "#FBFAFF",
-    "surface_dark": "#1B1826",
-    "text_secondary": "#8A8799",
+    "idle": "#98A1AC",  # sleeping / paused grey
+    "surface_light": "#F7FAFC",
+    "surface_dark": "#141A22",
+    "text_secondary": "#8A94A0",
 }
 
 # ------------------------------------------------------- per-Pinlet status
@@ -487,7 +487,7 @@ def topbar_view(
 
 
 def icon_state(view: View) -> str:
-    """Which top-bar icon: "attention" (amber), "working" (violet) or "idle"."""
+    """Which top-bar icon: "attention" (amber), "working" (cyan) or "idle"."""
     if view.attention:
         return "attention"
     if view.working:
@@ -566,7 +566,7 @@ def render_icon(
 
     ``template``: plain black (macOS tints it to the menu bar). Otherwise the
     pointer is ink on a light bar or near-white on a dark one, and the spark
-    is Pinlet violet. A green dot means working, amber means a Pinlet needs
+    is Pinlet cyan. A green dot means working, amber means a Pinlet needs
     you. ``count`` > 1 puts a number badge where the spark is (for trays that
     cannot show text beside the icon).
     """
@@ -626,8 +626,8 @@ def _tile_xy(x: float, y: float, s: float) -> tuple[float, float]:
 def render_tile_icon(state: str, size: int = 44, count: int = 0):
     """Draws the tray icon as a small Pinlet.app tile.
 
-    A rounded violet square with a white pointer and a gold spark, square like the
-    Claude app's chips.
+    "Frost": a white frosted square with a pearl pointer and a cyan star, like
+    Pinlet.app's icon.
 
     Reads on light and dark panels alike. Status dot and count badge as in :func:`render_icon`.
     """
@@ -641,24 +641,31 @@ def render_tile_icon(state: str, size: int = 44, count: int = 0):
     ImageDraw.Draw(mask).rounded_rectangle(
         [inset, inset, s - inset, s - inset], radius=_TILE_RADIUS * s, fill=255
     )
-    img.paste(_gradient(s, "#8E70FF", "#4A2FC8"), (0, 0), mask)
+    img.paste(_gradient(s, "#FFFFFF", "#DCE5EE"), (0, 0), mask)
     d = ImageDraw.Draw(img)
+    d.rounded_rectangle(  # the frosted tile's faint edge, so it holds on light panels
+        [inset, inset, s - inset, s - inset],
+        radius=_TILE_RADIUS * s,
+        outline=(11, 18, 32, 40),
+        width=max(1, int(s * 0.012)),
+    )
     poly = [_tile_xy(x, y, s) for x, y in _POINTER]
     white = (255, 255, 255, 255)
-    d.polygon(poly, fill=white)
-    w = max(1, int(round(34 / 824 * s)))
-    d.line(poly + [poly[0]], fill=white, width=w, joint="curve")
-    for x, y in poly:
-        d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=white)
+    for color, width in (((142, 166, 186, 255), 50), ((244, 248, 251, 255), 34)):
+        w = max(1, int(round(width / 824 * s)))  # a cool edge, then the pearl pointer
+        d.polygon(poly, fill=color)
+        d.line(poly + [poly[0]], fill=color, width=w, joint="curve")
+        for x, y in poly:
+            d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=color)
     sc, sr = ((722 - 100) / 824 * s, (318 - 100) / 824 * s), 122 / 824 * s * 1.15
     if count > 1:
         r = sr * 1.05
-        d.ellipse([sc[0] - r, sc[1] - r, sc[0] + r, sc[1] + r], fill=white)
-        _badge_text(d, sc, r, str(count) if count < 10 else "9+", _rgba(PALETTE["fill"]))
+        d.ellipse([sc[0] - r, sc[1] - r, sc[0] + r, sc[1] + r], fill=_rgba(PALETTE["fill"]))
+        _badge_text(d, sc, r, str(count) if count < 10 else "9+", white)
     else:
         spark = Image.new("L", (s, s), 0)
         ImageDraw.Draw(spark).polygon(_spark_points(sc[0], sc[1], sr), fill=255)
-        img.paste(_gradient(s, "#FFD978", "#F5A524"), (0, 0), spark)
+        img.paste(_gradient(s, "#8BEAFB", "#0EA5C6"), (0, 0), spark)
     if state in ("working", "attention"):
         d = ImageDraw.Draw(img)
         dot = _rgba(PALETTE["caution"] if state == "attention" else PALETTE["ok"])
@@ -824,7 +831,7 @@ def tray_icon_path(
 ) -> str | None:
     """The Linux tray's tile icon (see :func:`render_tile_icon`)."""
     return icon_file(
-        "tray-tile",
+        "tray-frost",
         state,
         size,
         min(count, 10) if count > 1 else 0,

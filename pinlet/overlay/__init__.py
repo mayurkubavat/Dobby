@@ -30,7 +30,7 @@ sleeps, regular once it narrates; frosted glass before macOS 26;
 working, one colour per running Pinlet, a glow that follows Pinlet's state and
 the window's corners, a short fading trail, a tag that flips away from screen
 edges) or ``classic`` (the earlier look). ``PINLET_OVERLAY_AGENT_COLORS=0``
-keeps every Pinlet violet; ``PINLET_OVERLAY_COLOR`` fixes one colour.
+keeps every Pinlet cyan; ``PINLET_OVERLAY_COLOR`` fixes one colour.
 ``PINLET_OVERLAY_THEME=dark`` (default) draws the dark bar on any desktop;
 ``light`` the light one; ``auto`` follows the desktop's light or dark mode.
 The modern look narrates by default: the bar says "Pinlet is working · Click
@@ -49,7 +49,7 @@ The bar's ▾ button opens Pinlet's menu. A Pinlet icon in the top bar (the
 macOS menu bar, or the Linux panel's tray) shows how many Pinlets run and, in
 a Focus-style dropdown, what each one does, with Pause / Resume / Stop
 (see ``pinlet.overlay.topbar``). ``PINLET_OVERLAY_MENU_BAR=0`` hides it.
-On Linux the tray icon is a small violet tile (pointer and spark), which
+On Linux the tray icon is a small white "Frost" tile (pearl pointer, cyan star), which
 reads on light and dark panels alike.
 
 Hotkeys while Pinlet runs: Ctrl+Option+Esc stops, Ctrl+Option+P pauses or

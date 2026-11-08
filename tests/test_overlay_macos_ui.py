@@ -696,7 +696,7 @@ def test_modern_agent_colour_name_and_dots(make):
     c.server_pid = 222
     c._apply_agents(
         [
-            {"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF", "waiting": True},
+            {"pid": 111, "name": "antigravity", "started": 1, "color": "#0EA5C6", "waiting": True},
             {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
         ]
     )
@@ -705,7 +705,7 @@ def test_modern_agent_colour_name_and_dots(make):
 
 
 _IDLE_AGENTS = [
-    {"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
+    {"pid": 111, "name": "antigravity", "started": 1, "color": "#0EA5C6"},
     {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
     {"pid": 333, "name": "cursor", "started": 3, "color": "#EC4899"},
 ]

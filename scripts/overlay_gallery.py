@@ -116,7 +116,7 @@ def main() -> int:
     c.server_pid = 222
     c._apply_agents(
         [
-            {"pid": 111, "name": "antigravity", "started": 1, "color": "#7C5CFF"},
+            {"pid": 111, "name": "antigravity", "started": 1, "color": "#0EA5C6"},
             {"pid": 222, "name": "claude-code", "started": 2, "color": "#14B8A6", "holding": True},
         ]
     )

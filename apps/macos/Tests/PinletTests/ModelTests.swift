@@ -8,7 +8,7 @@ import Testing
     let json = """
     {"header": "Pinlet", "subtitle": "2 running · 1 working", "running": 2, "working": 1, "attention": false,
      "rows": [{"pid": 42, "name": "Claude Code", "state": "working", "title": "Claude Code",
-               "detail": "Working · click", "color": "#5B3FE0", "shape": "spark", "own": false,
+               "detail": "Working · click", "color": "#0E7490", "shape": "spark", "own": false,
                "actions": [["Pause", "pause_toggle"], ["Stop", "stop"]]}],
      "all_actions": [["Pause all", "pause_all"]], "icon_state": "working", "icon_title": "2",
      "tooltip": "Pinlet: 2 running", "palette": {"ok": "#22A365"}}

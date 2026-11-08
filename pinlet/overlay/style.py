@@ -30,38 +30,39 @@ Point = tuple[float, float]
 
 STYLES = ("modern", "classic")
 
-# One colour per running Pinlet, in the order they start. Violet first so a
-# single Pinlet looks as before. No amber or red: those mean caution/danger.
-# Palette "Elf Violet, tuned" (chosen 2026-11-04). Brown replaces a second
-# purple so no two Pinlets look alike.
-AGENT_PALETTE: tuple[str, ...] = ("#7C5CFF", "#14B8A6", "#EC4899", "#3B82F6", "#84CC16", "#B07A4F")
+# One colour per running Pinlet, in the order they start. Pinlet cyan first so
+# a single Pinlet looks like the brand. No amber or red: those mean
+# caution/danger. Palette "Frost" (chosen 2026-11-08, replacing "Elf Violet,
+# tuned"). Violet takes the second slot so it stays far from the cyan; no
+# teal, which would look like a second cyan.
+AGENT_PALETTE: tuple[str, ...] = ("#0EA5C6", "#7C5CFF", "#EC4899", "#3B82F6", "#84CC16", "#B07A4F")
 
 # Filled buttons (Take over, Allow) and the pointer tag: white text on
-# #7C5CFF is only 4.3:1, so fills use the deeper #5B3FE0.
-FILL_COLOR = "#5B3FE0"
+# #0EA5C6 is only 2.9:1, so fills use the deeper #0E7490 (5.4:1).
+FILL_COLOR = "#0E7490"
 FILL_TITLES = frozenset({"Take over", "Allow"})
 
 # The bar follows the desktop's light or dark theme.
 BAR_THEMES: dict[str, dict[str, object]] = {
     "light": {
-        "bg": (251, 250, 255),
+        "bg": (247, 250, 252),
         "bg_alpha": 0.94,
-        "text": "#1E1A2E",
-        "dim": "#4A4560",
-        "border": (124, 92, 255, 0.28),
-        "accent": "#7C5CFF",
+        "text": "#0F1720",
+        "dim": "#46525F",
+        "border": (14, 165, 198, 0.28),
+        "accent": "#0EA5C6",
         "hover": (0, 0, 0, 0.07),
-        "button": "#ECE8FA",
+        "button": "#E6EDF3",
     },
     "dark": {
-        "bg": (27, 24, 38),
+        "bg": (20, 26, 34),
         "bg_alpha": 0.92,
-        "text": "#F3F0FF",
-        "dim": "#C9C3E0",
-        "border": (155, 130, 255, 0.35),
-        "accent": "#9B82FF",
+        "text": "#F1F6FA",
+        "dim": "#C2CCD6",
+        "border": (103, 232, 249, 0.35),
+        "accent": "#67E8F9",
         "hover": (255, 255, 255, 0.16),
-        "button": "#3A3550",
+        "button": "#2E3945",
     },
 }
 
@@ -141,7 +142,7 @@ def hex_rgb01(value: str) -> tuple[float, float, float]:
 
 
 def is_filled(button: Button) -> bool:
-    """Take over and Allow are filled #5B3FE0 buttons with white text."""
+    """Take over and Allow are filled #0E7490 buttons with white text."""
     return button.role == "accent" or button.title in FILL_TITLES
 
 

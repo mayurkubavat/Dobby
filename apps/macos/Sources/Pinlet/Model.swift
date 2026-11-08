@@ -60,7 +60,7 @@ struct TopbarView: Equatable {
                 state: r["state"] as? String ?? "ready",
                 title: r["title"] as? String ?? (r["name"] as? String ?? "Pinlet"),
                 detail: r["detail"] as? String ?? "",
-                color: r["color"] as? String ?? "#7C5CFF",
+                color: r["color"] as? String ?? "#0EA5C6",
                 shape: r["shape"] as? String ?? "moon",
                 actions: TopbarView.actions(r["actions"]))
         }

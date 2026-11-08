@@ -35,7 +35,7 @@ from PIL import Image, ImageDraw, ImageFont
 Rect = tuple[float, float, float, float]
 Point = tuple[float, float]
 
-COLORS = {"ok": (124, 92, 255), "caution": (245, 165, 36), "danger": (240, 68, 56)}
+COLORS = {"ok": (14, 165, 198), "caution": (245, 165, 36), "danger": (240, 68, 56)}
 INTENT_MS = 1600
 TRAIL_LEN = 5
 

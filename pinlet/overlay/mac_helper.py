@@ -8,13 +8,13 @@ when stdin closes, so it never outlives the Pinlet server.
 
 What it shows:
 
-* the violet pointer with a capsule name tag ("Pinlet", widening to
+* the cyan pointer with a capsule name tag ("Pinlet", widening to
   "Pinlet › Click 'Run Synthesis'") that says what Pinlet is about to do,
   a box around the target element (found by an Accessibility hit test),
   click ripples and a numbered trail of recent clicks;
 * a breathing glow around the window being worked on, dimmed when covered;
 * a "looking" shimmer while Pinlet reads the screen;
-* risk colours: violet (ok), amber (caution), red (danger);
+* risk colours: cyan (ok), amber (caution), red (danger);
 * Turbo mode (config, or Pinlet's menu): risky steps are allowed without a
   prompt and user input does not pause Pinlet; only Stop / Pause do;
 * a control bar at the top of the screen that stays while Pinlet runs
@@ -158,7 +158,7 @@ _kCGEventSourceUserData = 42
 PINLET_EVENT_TAG = 0x444F4242  # same value as pinlet.hal.macos.PINLET_EVENT_TAG
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "color": "#7C5CFF",  # Pinlet violet; deliberately not Claude's orange
+    "color": "#0EA5C6",  # Pinlet cyan; deliberately not Claude's orange
     "caution_color": "#F5A524",
     "danger_color": "#F04438",
     "label": "Pinlet",
@@ -244,7 +244,7 @@ _INPUT_KIND = {1: "click", 3: "click", 6: "drag", 22: "scroll", 5: "move", 10: "
 def _hex_rgb(value: str) -> tuple[float, float, float]:
     s = str(value).lstrip("#")
     if len(s) != 6:
-        s = "7C5CFF"
+        s = "0EA5C6"
     try:
         return tuple(int(s[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
     except ValueError:
@@ -726,6 +726,9 @@ class _Chip:
         return t
 
     def apply_color(self, rgb) -> None:
+        # The tag carries white text: Pinlet cyan is too light for it, so use the fill.
+        if all(abs(a - b) < 0.01 for a, b in zip(rgb, _ACCENT_RGB)):
+            rgb = _FILL_RGB
         CATransaction.begin()
         CATransaction.setAnimationDuration_(0.25)
         self.bg.setColors_([_cg(_lighter(rgb)), _cg(rgb)])
@@ -997,6 +1000,7 @@ def _dots_image(dots, caption: str = ""):
 _DANGER_RGB = (1.0, 0.42, 0.42)  # on the dark bar
 _DANGER_LIGHT_RGB = style.hex_rgb01("#F04438")  # on the light bar
 _FILL_RGB = style.hex_rgb01(style.FILL_COLOR)  # Take over, Allow: white text passes 4.5:1
+_ACCENT_RGB = style.hex_rgb01(style.AGENT_PALETTE[0])  # Pinlet cyan, too light for white text
 _FILL_HOVER_RGB = style.hex_rgb01("#6A50EA")
 
 
@@ -1181,7 +1185,7 @@ class _Pill:
         return style.overlay_dark(theme, _desktop_dark() if theme == "auto" else False)
 
     def _apply_theme(self, dark: bool) -> None:
-        """Palette "Elf Violet, tuned": the dark or light bar (``theme``)."""
+        """Palette "Frost": the dark or light bar (``theme``)."""
         self.dark = dark
         t = style.bar_theme(dark)
         name = NSAppearanceNameDarkAqua if dark else "NSAppearanceNameAqua"

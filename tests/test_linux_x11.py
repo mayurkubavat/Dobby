@@ -368,7 +368,7 @@ def test_screen_state_loop_end_to_end(hal, spawn):
 
 # ---------------------------------------------------------------- overlay
 
-VIOLET = (124, 92, 255)  # #7C5CFF, the default overlay color
+ACCENT = (14, 165, 198)  # #0EA5C6, the default overlay color
 
 
 def _near(px, rgb, tol=12):
@@ -402,13 +402,13 @@ def test_overlay_pointer_glow_and_capture_hiding(hal, overlay, spawn):
     time.sleep(0.6)  # glow follows on the next track tick
     shot = hal.capture_screen()
     b = win.bbox
-    assert _near(shot.getpixel((704, 508)), VIOLET), "pointer not drawn"
-    assert _near(shot.getpixel((b.x + b.width // 2, b.y - 2)), VIOLET), "glow not drawn"
+    assert _near(shot.getpixel((704, 508)), ACCENT), "pointer not drawn"
+    assert _near(shot.getpixel((b.x + b.width // 2, b.y - 2)), ACCENT), "glow not drawn"
 
     assert overlay.hide()
     hidden = hal.capture_screen()
-    assert not _near(hidden.getpixel((704, 508)), VIOLET)
-    assert not _near(hidden.getpixel((b.x + b.width // 2, b.y - 2)), VIOLET)
+    assert not _near(hidden.getpixel((704, 508)), ACCENT)
+    assert not _near(hidden.getpixel((b.x + b.width // 2, b.y - 2)), ACCENT)
     assert overlay.show()
 
 
@@ -419,10 +419,10 @@ def test_overlay_hal_capture_never_shows_overlay(hal, overlay):
     wrapped.mouse_move(500, 400)  # the agent pointer glides here first
     time.sleep(0.2)
     shot = wrapped.capture_screen()
-    assert not _near(shot.getpixel((504, 408)), VIOLET)
+    assert not _near(shot.getpixel((504, 408)), ACCENT)
     time.sleep(0.2)  # overlay maps back after the capture
     raw = hal.capture_screen()
-    assert _near(raw.getpixel((504, 408)), VIOLET)
+    assert _near(raw.getpixel((504, 408)), ACCENT)
 
 
 def test_overlay_panels_are_not_listed_as_windows(hal, overlay):

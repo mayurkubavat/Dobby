@@ -42,12 +42,12 @@ def test_style_from_env():
 
 # ------------------------------------------------------- agent colours
 class TestAgentColors:
-    def test_first_pinlet_is_violet(self):
-        assert style.pick_agent_color([]) == "#7C5CFF"
+    def test_first_pinlet_is_cyan(self):
+        assert style.pick_agent_color([]) == "#0EA5C6"
 
     def test_next_free_colour(self):
-        assert style.pick_agent_color(["#7c5cff"]) == style.AGENT_PALETTE[1]
-        assert style.pick_agent_color(["#7C5CFF", style.AGENT_PALETTE[2]]) == style.AGENT_PALETTE[1]
+        assert style.pick_agent_color(["#0ea5c6"]) == style.AGENT_PALETTE[1]
+        assert style.pick_agent_color(["#0EA5C6", style.AGENT_PALETTE[2]]) == style.AGENT_PALETTE[1]
 
     def test_wraps_to_least_used(self):
         taken = list(style.AGENT_PALETTE) + [style.AGENT_PALETTE[0]]
@@ -59,23 +59,23 @@ class TestAgentColors:
     def test_stored_colour_wins_and_start_order_fills_the_rest(self):
         agents = [
             {"pid": 3, "started": 30},
-            {"pid": 1, "started": 10, "color": "#14B8A6"},
+            {"pid": 1, "started": 10, "color": "#7C5CFF"},
             {"pid": 2, "started": 20},
         ]
         got = style.agent_colors(agents)
-        assert got[1] == "#14B8A6"
-        assert got[2] == "#7C5CFF" and got[3] == style.AGENT_PALETTE[2]
+        assert got[1] == "#7C5CFF"
+        assert got[2] == "#0EA5C6" and got[3] == style.AGENT_PALETTE[2]
 
     def test_registry_gives_each_pinlet_its_own_colour(self, tmp_path, monkeypatch):
         monkeypatch.setattr(registry, "pid_alive", lambda pid: True)
         registry.register(tmp_path, "a", "claude-code", 101)
         registry.register(tmp_path, "b", "antigravity", 102)
         recs = {r["pid"]: r for r in registry.list_agents(tmp_path)}
-        assert recs[101]["color"] == "#7C5CFF" and recs[102]["color"] == style.AGENT_PALETTE[1]
+        assert recs[101]["color"] == "#0EA5C6" and recs[102]["color"] == style.AGENT_PALETTE[1]
         started = recs[101]["started"]
         registry.register(tmp_path, "a", "Claude Code", 101)  # rename keeps colour and start time
         rec = {r["pid"]: r for r in registry.list_agents(tmp_path)}[101]
-        assert rec["color"] == "#7C5CFF" and rec["started"] == started
+        assert rec["color"] == "#0EA5C6" and rec["started"] == started
         over = {a["pid"]: a for a in commands.overview(tmp_path)}
         assert over[102]["color"] == style.AGENT_PALETTE[1] and over[102]["started"] > 0
 
@@ -88,13 +88,13 @@ class TestAgentColors:
 
     def test_dots_only_with_two_or_more(self):
         one = [{"pid": 1, "started": 1}]
-        assert style.agent_dots(one, {1: "#7C5CFF"}, 1) == []
+        assert style.agent_dots(one, {1: "#0EA5C6"}, 1) == []
         two = [{"pid": 2, "started": 2, "holding": True}, {"pid": 1, "started": 1}]
-        dots = style.agent_dots(two, {1: "#7C5CFF", 2: "#14B8A6"}, 1)
-        assert dots == [(1, "#7C5CFF", False, True), (2, "#14B8A6", True, False)]
+        dots = style.agent_dots(two, {1: "#0EA5C6", 2: "#14B8A6"}, 1)
+        assert dots == [(1, "#0EA5C6", False, True), (2, "#14B8A6", True, False)]
 
     def test_narration_shows_dots_only_for_busy_pinlets(self):
-        colors = {1: "#7C5CFF", 2: "#14B8A6", 3: "#EC4899"}
+        colors = {1: "#0EA5C6", 2: "#14B8A6", 3: "#EC4899"}
         # Three AI apps loaded Pinlet, one holds control: no dots, no mystery.
         idle = [
             {"pid": 1, "started": 1, "holding": True},

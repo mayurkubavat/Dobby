@@ -228,7 +228,7 @@ def test_topbar_shows_shared_sessions(monkeypatch):
         sessions.close_session(info)
     row = view["rows"][0]
     assert row["pid"] == 4242 and row["state"] == "working" and "click" in row["detail"]
-    assert view["icon_state"] == "working" and view["palette"]["fill"] == "#5B3FE0"
+    assert view["icon_state"] == "working" and view["palette"]["fill"] == "#0E7490"
 
 
 def test_app_is_only_used_on_macos(tmp_path):

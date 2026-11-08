@@ -162,15 +162,15 @@ private struct Countdown: View {
 /// Liquid Glass on macOS 26 (built with the macOS 26 SDK), the regular material before.
 ///
 /// The glass carries the same palette tint as the bar's regular glass (dark
-/// `#1B1826` at 34%, light `#FBFAFF` at 18%) and a thin rim in the card's colour.
+/// `#141A22` at 34%, light `#F7FAFC` at 18%) and a thin rim in the card's colour.
 struct CardBackground: ViewModifier {
     let shape: RoundedRectangle
     var dark: Bool = true
     var rim: Color = .clear
 
     private var tint: Color {
-        dark ? Color(red: 27 / 255, green: 24 / 255, blue: 38 / 255).opacity(0.34)
-             : Color(red: 251 / 255, green: 250 / 255, blue: 1).opacity(0.18)
+        dark ? Color(red: 20 / 255, green: 26 / 255, blue: 34 / 255).opacity(0.34)
+             : Color(red: 247 / 255, green: 250 / 255, blue: 252 / 255).opacity(0.18)
     }
 
     @ViewBuilder

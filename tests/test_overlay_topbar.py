@@ -24,14 +24,14 @@ def _agents():
     ]
 
 
-def test_palette_is_elf_violet_tuned():
+def test_palette_is_frost():
     p = topbar.PALETTE
-    assert (p["accent"], p["accent_dark"], p["fill"]) == ("#7C5CFF", "#9B82FF", "#5B3FE0")
+    assert (p["accent"], p["accent_dark"], p["fill"]) == ("#0EA5C6", "#67E8F9", "#0E7490")
     assert (p["caution"], p["danger"], p["ok"], p["idle"]) == (
         "#F5A524",
         "#F04438",
         "#22A365",
-        "#9A98A6",
+        "#98A1AC",
     )
 
 
@@ -149,17 +149,17 @@ def test_icons_render_and_cache(tmp_path):
     assert img.size == (36, 36) and img.mode == "RGBA"
     assert img.getpixel((10, 14))[3] > 0  # the pointer is drawn
     assert img.getpixel((28, 8))[3] > 0  # and the spark
-    row = topbar.render_row_icon("#7C5CFF", "spark", 52)
+    row = topbar.render_row_icon("#0EA5C6", "spark", 52)
     assert (
         row.size == (52, 52) and row.getpixel((1, 1))[3] == 0 and row.getpixel((26, 2))[3] > 200
     )  # rounded square
     for shape in ("spark", "moon", "pause", "stop", "alert", "hand", "clock"):
-        topbar.render_row_icon("#9A98A6", shape, 26)
+        topbar.render_row_icon("#98A1AC", shape, 26)
     p1 = topbar.bar_icon_path("idle", 36, directory=str(tmp_path))
     p2 = topbar.bar_icon_path("idle", 36, directory=str(tmp_path))
     assert p1 == p2 and os.path.isfile(p1)
     assert topbar.bar_icon_path("idle", 36, count=3, directory=str(tmp_path)) != p1
-    assert os.path.isfile(topbar.row_icon_path("#7C5CFF", "moon", directory=str(tmp_path)))
+    assert os.path.isfile(topbar.row_icon_path("#0EA5C6", "moon", directory=str(tmp_path)))
 
 
 def test_view_exports_plain_json_for_a_native_shell():
@@ -167,7 +167,7 @@ def test_view_exports_plain_json_for_a_native_shell():
     d = json.loads(json.dumps(v.to_dict()))
     assert d["subtitle"] == v.subtitle and d["icon_state"] == "attention" and d["icon_title"] == "3"
     assert d["rows"][1]["actions"] == [["Pause", "pause_toggle"], ["Stop", "stop"]]
-    assert d["palette"]["accent"] == "#7C5CFF"
+    assert d["palette"]["accent"] == "#0EA5C6"
 
 
 def test_tray_tile_icon(tmp_path):

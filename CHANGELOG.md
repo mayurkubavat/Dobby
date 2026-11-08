@@ -24,6 +24,10 @@ The first public release will be 0.1.0. It contains:
 
 ### Changed
 
+- New look, "Frost": the app icon is a white frosted tile with a pearl pointer
+  and a cyan star, and the Linux tray tile matches it. Buttons, the screen glow,
+  the glass rim and the pointer move from violet to cool cyan (fill `#0E7490`,
+  glow `#0EA5C6` / `#67E8F9` on dark). The menu bar icon keeps its shape.
 - `pinlet setup` registers the launcher instead of a venv's own `pinlet` script.
 - Renamed from Dobby to Pinlet: package and command `pinlet`, module
   `pinlet`, `PINLET_*` settings, `~/.pinlet`, Pinlet.app (`dev.pinlet.app`),

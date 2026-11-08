@@ -1,24 +1,24 @@
 import AppKit
 
 extension NSColor {
-    /// "#5B3FE0" → NSColor (sRGB). Bad input gives Pinlet violet.
+    /// "#0E7490" → NSColor (sRGB). Bad input gives Pinlet cyan.
     convenience init(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespaces)
         if s.hasPrefix("#") { s.removeFirst() }
-        var v: UInt64 = 0x7C5CFF
+        var v: UInt64 = 0x0EA5C6
         if s.count == 6, let parsed = UInt64(s, radix: 16) { v = parsed }
         self.init(srgbRed: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,
                   blue: CGFloat(v & 0xFF) / 255, alpha: 1)
     }
 }
 
-/// Palette A, "Elf Violet, tuned" (same values as pinlet/overlay/topbar.py).
+/// Palette "Frost" (same values as pinlet/overlay/topbar.py).
 enum Palette {
     static func color(_ key: String, in palette: [String: String], fallback: String) -> NSColor {
         NSColor(hex: palette[key] ?? fallback)
     }
-    static let accent = "#7C5CFF"
-    static let fill = "#5B3FE0"
+    static let accent = "#0EA5C6"
+    static let fill = "#0E7490"
     static let ok = "#22A365"
     static let caution = "#F5A524"
     static let danger = "#F04438"
@@ -119,9 +119,9 @@ enum Icons {
         return image
     }
 
-    /// The app icon (Pinlet.icns is generated from this by build.sh): the
-    /// macOS icon grid (824 of 1024 with a soft shadow), a violet tile, a
-    /// white pointer and an amber spark.
+    /// The app icon (Pinlet.icns is generated from this by build.sh), "Frost":
+    /// the macOS icon grid (824 of 1024 with a soft shadow), a white frosted
+    /// tile with a bright rim, a pearl pointer and a cyan star.
     static func appIcon(size: CGFloat) -> NSImage {
         NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
             guard let ctx = NSGraphicsContext.current else { return false }
@@ -131,33 +131,43 @@ enum Icons {
             // tile with a drop shadow
             NSGraphicsContext.saveGraphicsState()
             let shadow = NSShadow()
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
+            shadow.shadowColor = NSColor(hex: "#0B1220").withAlphaComponent(0.18)
             shadow.shadowBlurRadius = 24 * u
             shadow.shadowOffset = NSSize(width: 0, height: 10 * u)  // flipped: +y is down
             shadow.set()
-            NSColor(hex: "#4A2FC8").setFill()
+            NSColor(hex: "#DCE5EE").setFill()
             shape.fill()
             NSGraphicsContext.restoreGraphicsState()
-            NSGradient(starting: NSColor(hex: "#8E70FF"), ending: NSColor(hex: "#4A2FC8"))?.draw(in: shape, angle: 90)
-            NSGradient(colors: [NSColor.white.withAlphaComponent(0.28), NSColor.white.withAlphaComponent(0)],
-                       atLocations: [0, 0.5], colorSpace: .sRGB)?.draw(in: shape, angle: 90)
-            // glyphs, lifted with a violet-black shadow
+            NSGradient(starting: NSColor.white, ending: NSColor(hex: "#DCE5EE"))?.draw(in: shape, angle: 90)
+            NSGradient(colors: [NSColor.white.withAlphaComponent(0.55), NSColor.white.withAlphaComponent(0)],
+                       atLocations: [0, 0.45], colorSpace: .sRGB)?.draw(in: shape, angle: 90)
+            // frosted-glass edge: a bright inner rim and a faint outer hairline
+            let rim = NSBezierPath(roundedRect: tile.insetBy(dx: 4 * u, dy: 4 * u), xRadius: 182 * u, yRadius: 182 * u)
+            rim.lineWidth = 8 * u
+            NSColor.white.withAlphaComponent(0.9).setStroke()
+            rim.stroke()
+            shape.lineWidth = 2 * u
+            NSColor(hex: "#0B1220").withAlphaComponent(0.10).setStroke()
+            shape.stroke()
+            // pointer and star, lifted with a soft cool shadow
             NSGraphicsContext.saveGraphicsState()
             let lift = NSShadow()
-            lift.shadowColor = NSColor(hex: "#14082E").withAlphaComponent(0.35)
-            lift.shadowBlurRadius = 32 * u
+            lift.shadowColor = NSColor(hex: "#0B2A40").withAlphaComponent(0.28)
+            lift.shadowBlurRadius = 28 * u
             lift.shadowOffset = NSSize(width: 0, height: 14 * u)
             lift.set()
             ctx.cgContext.beginTransparencyLayer(auxiliaryInfo: nil)
             let k = 1024 / 18 * u * 0.72          // the 18-pt pointer, scaled into the tile
             let arrow = pointer(scale: k, dx: 225 * u, dy: 156 * u)
-            arrow.lineWidth = 34 * u
-            NSColor.white.setFill()
-            NSColor.white.setStroke()
-            arrow.fill()
+            arrow.lineWidth = 50 * u                  // a thin cool edge around the pearl
+            NSColor(hex: "#8EA6BA").setStroke()
             arrow.stroke()
+            arrow.lineWidth = 34 * u                  // round the corners, as before
+            NSColor(hex: "#F4F8FB").setStroke()
+            arrow.stroke()
+            NSGradient(starting: NSColor.white, ending: NSColor(hex: "#CFE0EE"))?.draw(in: arrow, angle: 90)
             let star = spark(cx: 722 * u, cy: 318 * u, r: 122 * u)
-            NSGradient(starting: NSColor(hex: "#FFD978"), ending: NSColor(hex: "#F5A524"))?.draw(in: star, angle: 45)
+            NSGradient(starting: NSColor(hex: "#8BEAFB"), ending: NSColor(hex: "#0EA5C6"))?.draw(in: star, angle: 45)
             ctx.cgContext.endTransparencyLayer()
             NSGraphicsContext.restoreGraphicsState()
             return true

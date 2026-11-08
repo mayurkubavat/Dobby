@@ -277,7 +277,7 @@ Vivado and Verdi).
 
 When Pinlet acts you see it:
 
-- a violet **agent cursor** that glides to each target and ripples on click,
+- a cyan **agent cursor** that glides to each target and ripples on click,
   with a tag saying what it is doing ("Pinlet › Click 'Run Synthesis'") until
   its next action, and numbered marks where it clicked that fade out;
 - a soft **glow** around the window it is working in;
@@ -353,7 +353,7 @@ it. Settings go in the client's `env`:
 | `PINLET_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |
 | `PINLET_ALLOW_SHELL=1` | Let the AI run shell commands (`run_terminal_command`). Off by default |
 | `PINLET_INPUT_LOCK=window` | Keep your clicks out of the window Pinlet works in; buttons are then pressed through accessibility so your pointer stays put (macOS and Linux). `PINLET_BACKGROUND_CLICKS=0` uses the real mouse instead |
-| `PINLET_OVERLAY_COLOR=#7c5cff` | Fix the colour (otherwise each Pinlet gets its own) |
+| `PINLET_OVERLAY_COLOR=#0ea5c6` | Fix the colour (otherwise each Pinlet gets its own) |
 | `PINLET_OVERLAY_CAPTURE_VISIBLE=0` | Hide the overlay from your screen recordings too |
 | `PINLET_PERSONALITY=lively` | Pinlet's lively voice on the bar: rotating lines ("Pinlet is on it!", "Pinlet is thinking hard…"), a cheer when a task ends, rare surprises. `subtle` (default) uses a few fixed words; `off` keeps the plain text |
 | `PINLET_USER_NAME=Sam` | Pinlet calls you by name instead of "sir" |

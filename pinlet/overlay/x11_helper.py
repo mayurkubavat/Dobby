@@ -6,7 +6,7 @@ python3-gi-cairo, gir1.2-gtk-3.0).
 
 What it draws:
 
-* the agent pointer (violet arrow) gliding to each target, with a ripple on
+* the agent pointer (cyan arrow) gliding to each target, with a ripple on
   clicks when a compositor is running;
 * a capsule tag next to the pointer with the label, state and current intent;
 * a glow frame around the tracked window and a thinner box around the target
@@ -72,7 +72,7 @@ from .barlock import (  # noqa: E402
 from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "color": "#7C5CFF",
+    "color": "#0EA5C6",
     "caution_color": "#F5A524",
     "danger_color": "#F04438",
     "label": "Pinlet",
@@ -107,33 +107,33 @@ def _rgb(value: str) -> tuple[float, float, float]:
     return tuple(int(v[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
 
 
-# Palette "Elf Violet, tuned": the card follows the desktop's light/dark
-# theme; filled buttons use #5B3FE0 (white text passes 4.5:1, #7C5CFF does not).
+# Palette "Frost": the card follows the desktop's light/dark
+# theme; filled buttons use #0E7490 (white text passes 4.5:1, #0EA5C6 does not).
 _CONFIRM_THEMES = {
     "light": {
-        "bg": "rgba(251,250,255,0.97)",
-        "text": "#1E1A2E",
-        "dim": "#4A4560",
-        "count": "#7A7590",
-        "border": "rgba(124,92,255,0.28)",
-        "accent": "#7C5CFF",
-        "neutral": "#ECE8FA",
-        "neutral_hover": "#E0DAF7",
-        "neutral_text": "#1E1A2E",
+        "bg": "rgba(247,250,252,0.97)",
+        "text": "#0F1720",
+        "dim": "#46525F",
+        "count": "#6B7683",
+        "border": "rgba(14,165,198,0.28)",
+        "accent": "#0EA5C6",
+        "neutral": "#E6EDF3",
+        "neutral_hover": "#D8E2EA",
+        "neutral_text": "#0F1720",
     },
     "dark": {
-        "bg": "rgba(27,24,38,0.96)",
-        "text": "#F3F0FF",
-        "dim": "#C9C3E0",
-        "count": "#8E88A8",
-        "border": "rgba(155,130,255,0.35)",
-        "accent": "#9B82FF",
-        "neutral": "#3A3550",
-        "neutral_hover": "#454060",
-        "neutral_text": "#F3F0FF",
+        "bg": "rgba(20,26,34,0.96)",
+        "text": "#F1F6FA",
+        "dim": "#C2CCD6",
+        "count": "#8A96A3",
+        "border": "rgba(103,232,249,0.35)",
+        "accent": "#67E8F9",
+        "neutral": "#2E3945",
+        "neutral_hover": "#38444F",
+        "neutral_text": "#F1F6FA",
     },
 }
-_CONFIRM_FILL, _CONFIRM_DANGER = "#5B3FE0", "#F04438"
+_CONFIRM_FILL, _CONFIRM_DANGER = "#0E7490", "#F04438"
 
 
 def _desktop_is_dark() -> bool:
@@ -384,7 +384,7 @@ _BAR_GLASSLESS = {"light": (0.72, 0.55), "dark": (0.42, 0.70)}  # fill alpha, bo
 
 
 def _bar_css(dark: bool, composited: bool = True) -> bytes:
-    """The bar in palette "Elf Violet, tuned", following the desktop theme."""
+    """The bar in palette "Frost", following the desktop theme."""
     t = style.bar_theme(dark)
     r, g, b = t["bg"]
     fill_alpha, border_alpha = _BAR_GLASSLESS["dark" if dark else "light"]
@@ -621,7 +621,7 @@ class _Tray:
         if sig != self.icon_sig:
             self.icon_sig = sig
             if self.indicator is not None:
-                # A violet tile: reads on light and dark panels. Handed over by name from an
+                # A white "Frost" tile: reads on light and dark panels. Handed over by name from an
                 # icon search path, so the panel scales it to its slot: a file path is drawn
                 # at its own size and cropped (GNOME Flashback gives it 16 px).
                 path = topbar.tray_icon_path(state, 64)
@@ -860,10 +860,13 @@ class X11Overlay:
     def _tag_color(self) -> tuple[float, float, float]:
         """Colour for the pointer tag, which carries white text.
 
-        Pinlet violet #7C5CFF is too light for that (4.3:1), so the tag uses the deeper
-        #5B3FE0.
+        Pinlet cyan #0EA5C6 is too light for that (2.9:1), so the tag uses the deeper
+        #0E7490.
         """
-        if self.risk not in ("caution", "danger") and str(self.cfg["color"]).upper() == "#7C5CFF":
+        if (
+            self.risk not in ("caution", "danger")
+            and str(self.cfg["color"]).upper() == style.AGENT_PALETTE[0]
+        ):
             return _rgb(style.FILL_COLOR)
         return self._color()
 

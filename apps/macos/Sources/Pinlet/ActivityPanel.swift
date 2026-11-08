@@ -417,7 +417,7 @@ struct GlassIconButton: ViewModifier {
     }
 }
 
-/// The one primary action: prominent glass in Pinlet's violet (macOS 26).
+/// The one primary action: prominent glass in Pinlet's cyan (macOS 26).
 struct GlassProminentButton: ViewModifier {
     let tint: Color
 
