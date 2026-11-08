@@ -135,7 +135,7 @@ private final class ActivityWindow: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        hasShadow = false  // the glass draws its own; a window shadow outlines the padding
         hidesOnDeactivate = false
         isMovableByWindowBackground = true
         isReleasedWhenClosed = false
