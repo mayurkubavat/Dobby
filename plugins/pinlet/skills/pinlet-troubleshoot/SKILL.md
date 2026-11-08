@@ -17,13 +17,14 @@ Start with `get_vision_diagnostics` (in the `advanced_vision` toolset; enable it
 | `display_server` is null in diagnostics | Server older than the review fixes (ce1a2f3) | Update the branch and restart the client |
 | OCR `available: false` | Missing extra | `uv pip install -e ".[ocr]"` (Apple Vision on macOS, RapidOCR elsewhere) |
 | Gemma unavailable or answers time out | Ollama not running, model not pulled, or cold load | `brew services list` should show Ollama; `ollama list`; the first call takes ~8 s. Ask the user before pulling a model |
-| Server marked "Failed" in Claude Desktop | Stale command path in its config | Check the command exists and is executable; fix the entry while Claude Desktop is quit |
+| Server marked "Failed" in Claude Desktop | Stale command path in its config | Run `pinlet setup --repair` while Claude Desktop is quit (it points the entry at `~/.pinlet/bin/pinlet`) |
 | Edits to a client config vanish | Claude Desktop rewrites its config when it quits | Quit the app first, then edit, then reopen |
 | Linux: clicks land in the wrong window | X11 focus was stolen by a terminal | See `references/linux-window-management.md` |
 
 ## References
 
 - `references/macos.md`: permissions, client config files and the exact registration entries.
+- `pinlet doctor` checks Python, packages, the launcher, the model, the skills and every AI tool's entry, with a fix line for each problem. Ask the user to run it first.
 - `pinlet setup --list` prints every AI tool Pinlet knows, where its MCP config and skills live, and whether each is set up.
 - `references/setup.md`: install and setup (copied from `docs/setup.md`).
 - `references/linux-window-management.md`: X11 focus and stacking fixes.

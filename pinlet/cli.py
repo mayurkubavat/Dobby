@@ -6,6 +6,7 @@
     pinlet stdio        run a private Pinlet for this client only (the old behaviour)
     pinlet setup        register Pinlet and its skills with every AI tool on this computer
                         (--dry-run to preview, --list to see each tool; pinlet setup --help)
+    pinlet doctor       check that Pinlet can run here and say how to fix what is missing
 
 Set ``PINLET_SHARED=0`` to make plain ``pinlet`` behave like ``pinlet stdio``.
 Kept free of engine imports so connecting is fast.
@@ -40,6 +41,10 @@ def main(argv: Sequence[str] | None = None) -> None:
 
         rest = argv[argv.index("setup") + 1 :]
         sys.exit(setup(rest))
+    if command == "doctor":
+        from pinlet.doctor import main as doctor
+
+        sys.exit(doctor(argv[argv.index("doctor") + 1 :]))
     if command == "stdio":
         from pinlet.hub.connector import run_in_process
 

@@ -9,8 +9,22 @@ so a minor version may still change behaviour.
 
 The first public release will be 0.1.0. It contains:
 
+### Added
+
+- `scripts/install.sh`: installs Pinlet into a folder it owns
+  (`~/Library/Application Support/Pinlet` or `~/.local/share/pinlet`) with uv,
+  on Apple silicon Macs and Linux, and runs `pinlet setup`. Running it again
+  updates Pinlet.
+- `~/.pinlet/bin/pinlet`, one launcher every AI tool runs. It tries the Python
+  it was written for, then Pinlet's own runtime, and otherwise says how to fix
+  it, so a moved checkout no longer breaks AI tool configs.
+- `pinlet doctor` (`--json`): checks Python, packages, the launcher, the model,
+  the skills, the shared Pinlet and each AI tool, with a fix for each problem.
+- `pinlet setup --repair`, `--remove` and `--json` (and `--list --json`).
+
 ### Changed
 
+- `pinlet setup` registers the launcher instead of a venv's own `pinlet` script.
 - Renamed from Dobby to Pinlet: package and command `pinlet`, module
   `pinlet`, `PINLET_*` settings, `~/.pinlet`, Pinlet.app (`dev.pinlet.app`),
   `pinlet*` skills and the `Pinlet` MCP server. For one release the old names

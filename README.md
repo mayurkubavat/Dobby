@@ -40,6 +40,28 @@ Windows window listing is not finished yet.
 
 ## Install
 
+Pinlet installs itself into a folder it owns, so it keeps working when you
+move or delete a checkout. Apple silicon Macs and Linux (x86_64, arm64):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mayurkubavat/Pinlet/master/scripts/install.sh | sh
+```
+
+The installer gets [uv](https://docs.astral.sh/uv/) if you do not have it, a
+Python, and Pinlet's packages, then runs `pinlet setup` to connect your AI
+tools. Everything goes into `~/Library/Application Support/Pinlet` (macOS) or
+`~/.local/share/pinlet` (Linux), and every AI tool runs one command,
+`~/.pinlet/bin/pinlet` (Linux also links `~/.local/bin/pinlet`). Run it again
+to update. From a checkout, `sh scripts/install.sh` installs a copy of that
+checkout; `--dev` installs the checkout itself, editable. On Linux, install
+the system packages listed below first.
+
+`pinlet doctor` checks everything Pinlet needs and prints a fix for anything
+missing. `pinlet setup --repair` points AI tools whose Pinlet command moved
+back at the launcher, and `pinlet setup --remove` takes Pinlet out of them.
+
+### From a checkout (for working on Pinlet)
+
 You need Python 3.10 or newer and git.
 
 ```bash
@@ -49,7 +71,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### macOS
+#### macOS
 
 ```bash
 pip install -e ".[macos,ocr]"
@@ -60,7 +82,7 @@ starts Pinlet (Terminal, your IDE, Claude Desktop, Antigravity...) both
 **Accessibility** and **Screen Recording**. Without them Pinlet can neither
 read the screen nor click.
 
-### Linux (X11 or XWayland)
+#### Linux (X11 or XWayland)
 
 ```bash
 sudo apt install python3-gi python3-gi-cairo gir1.2-atspi-2.0 gir1.2-gtk-3.0 \
@@ -79,7 +101,8 @@ to expose their accessibility tree. Details: [docs/linux.md](docs/linux.md).
 ### Check it
 
 ```bash
-python scripts/smoke_local.py
+pinlet doctor                    # what is installed, what is missing, how to fix it
+python scripts/smoke_local.py    # from a checkout: screen capture, accessibility, OCR, timings
 ```
 
 This only reads: it reports screen capture, accessibility, OCR and the local
@@ -143,15 +166,16 @@ when the target is not there.
 One command sets Pinlet up for every AI tool on this computer:
 
 ```bash
-/path/to/Pinlet/.venv/bin/pinlet setup --dry-run   # show what it would change
-/path/to/Pinlet/.venv/bin/pinlet setup             # do it
+pinlet setup --dry-run   # show what it would change
+pinlet setup             # do it
 ```
 
 It finds Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, Antigravity,
 GitHub Copilot (CLI and VS Code) and OpenCode, adds Pinlet to each one's MCP
 config (other servers are kept, each file is backed up once as
 `<file>.pinlet-backup`, an existing Pinlet entry is left alone unless `--force`),
-and links the Pinlet skills into the folders those tools read skills from:
+points it at the stable launcher `~/.pinlet/bin/pinlet` (rewritten for the
+Python that runs setup), and links the Pinlet skills into the folders those tools read skills from:
 `~/.agents/skills` (shared by Codex, Cursor, Gemini CLI, Copilot, OpenCode and
 Antigravity) and `~/.claude/skills`. `pinlet setup --list` shows every tool and
 its state; `--only cursor,codex`, `--no-mcp` and `--no-skills` narrow it.
