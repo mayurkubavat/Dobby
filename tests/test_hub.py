@@ -277,6 +277,24 @@ def test_fallback_engine_is_a_standin_when_the_app_would_not_open(tmp_path, monk
     assert "PINLET_STANDIN" not in seen["env"]
 
 
+def test_engine_without_the_app_is_a_standin_only_when_the_app_is_installed(tmp_path, monkeypatch):
+    from pinlet.hub import control
+
+    app = tmp_path / "Pinlet.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    for k in ("PINLET_APP_OWNED", "PINLET_STANDIN"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("PINLET_APP", str(app))
+    assert control.is_standin(platform="darwin") is True  # started by an older connector
+    assert control.is_standin(platform="linux") is False
+    monkeypatch.setenv("PINLET_APP", "0")
+    assert control.is_standin(platform="darwin") is False  # a `pinlet serve` kept on purpose
+    monkeypatch.setenv("PINLET_STANDIN", "1")
+    assert control.is_standin(platform="darwin") is True
+    monkeypatch.setenv("PINLET_APP_OWNED", "1")
+    assert control.is_standin(platform="darwin") is False
+
+
 def test_app_config_keeps_pinlet_settings_not_secrets():
     cfg = connector.app_config(
         {

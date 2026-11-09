@@ -23,6 +23,7 @@ final class Engine {
     private var process: Process?
     private var quitting = false
     private var restarts = 0
+    private var lastStandinCheck = Date.distantPast
     private let socketPath: String
     private let queue = DispatchQueue(label: "dev.pinlet.engine")
 
@@ -79,7 +80,7 @@ final class Engine {
     /// engine after an update) is asked to quit, so this app runs the current engine.
     /// So is a stand-in a connector started while this app would not open (`standin: true`,
     /// e.g. during a reinstall): left running, it would draw a second menu bar icon and
-    /// keep old code alive. One a terminal started on purpose (`pinlet serve`) is left alone.
+    /// keep old code alive. A `pinlet serve` started with PINLET_APP=0 is left alone.
     private func replaceLeftoverEngine() -> Bool {
         let client = ControlClient(path: socketPath)
         defer { client.close() }
@@ -123,6 +124,14 @@ final class Engine {
             case .external where !reachable:
                 self.state = .stopped
                 self.launch()
+            case .external where Date().timeIntervalSince(self.lastStandinCheck) > 10:
+                // A connector may start a stand-in in the moment before this app is back
+                // (e.g. while build.sh reinstalls it): take over from it once it shows up.
+                self.lastStandinCheck = Date()
+                if self.replaceLeftoverEngine() {
+                    self.state = .stopped
+                    self.launch()
+                }
             default:
                 break
             }

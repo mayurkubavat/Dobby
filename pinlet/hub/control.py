@@ -94,13 +94,29 @@ def agents() -> list[dict[str, Any]]:
         return []
 
 
+def is_standin(platform: str = sys.platform) -> bool:
+    """True for an engine Pinlet.app should replace: one it did not start, on a Mac where it is installed.
+
+    That is an engine a connector started while the app would not open (it sets
+    ``PINLET_STANDIN=1``), including one started by an older connector that does not.
+    ``PINLET_APP=0`` keeps a ``pinlet serve`` you started yourself.
+    """
+    if os.environ.get("PINLET_APP_OWNED") == "1":
+        return False
+    if os.environ.get("PINLET_STANDIN") == "1":
+        return True
+    from . import connector
+
+    return connector.find_app(platform=platform) is not None
+
+
 def status() -> dict[str, Any]:
     """Server pid, open sessions and every agent, for the menu."""
     return {
         "server_pid": os.getpid(),
         "python": sys.executable,
         "app_owned": os.environ.get("PINLET_APP_OWNED") == "1",
-        "standin": os.environ.get("PINLET_STANDIN") == "1",
+        "standin": is_standin(),
         "sessions": sessions.snapshot(),
         "agents": agents(),
     }
