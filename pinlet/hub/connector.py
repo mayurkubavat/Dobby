@@ -171,22 +171,33 @@ def write_app_config(env: dict[str, str] | None = None) -> Path:
     return path
 
 
-def start_app(app: Path) -> bool:
+APP_OPEN_TRIES = 4  # `open` fails for a few seconds while build.sh swaps the bundle
+APP_OPEN_RETRY_S = 1.5
+
+
+def start_app(app: Path, tries: int = APP_OPEN_TRIES) -> bool:
     """Opens Pinlet.app in the background.
 
     The app starts ``pinlet serve`` as its own child, so macOS asks for Screen Recording
-    and Accessibility permission for Pinlet rather than for the terminal.
+    and Accessibility permission for Pinlet rather than for the terminal. A failed
+    ``open`` is retried: during a reinstall the bundle is briefly missing or quitting.
     """
     try:
         write_app_config()
-        return (
-            subprocess.run(
-                ["open", "-g", "-a", str(app)], capture_output=True, timeout=10
-            ).returncode
-            == 0
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
+    except OSError:
+        pass
+    for attempt in range(max(1, tries)):
+        if attempt:
+            time.sleep(APP_OPEN_RETRY_S)
+        if not (app / "Contents" / "MacOS").is_dir():
+            continue
+        try:
+            done = subprocess.run(["open", "-g", "-a", str(app)], capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if done.returncode == 0:
+            return True
+    return False
 
 
 def start_daemon(env: dict[str, str] | None = None) -> subprocess.Popen | None:
@@ -198,6 +209,11 @@ def start_daemon(env: dict[str, str] | None = None) -> subprocess.Popen | None:
     app = find_app(env)
     if app is not None and start_app(app):
         return None
+    child_env = daemon_env(dict(os.environ if env is None else env))
+    if app is not None:
+        # Pinlet.app is installed but would not open (mid-reinstall). Run a stand-in
+        # the app replaces as soon as it starts, so it never outlives the app.
+        child_env["PINLET_STANDIN"] = "1"
     log = paths.daemon_log()
     log.parent.mkdir(parents=True, exist_ok=True)
     out = open(log, "ab", buffering=0)
@@ -206,7 +222,7 @@ def start_daemon(env: dict[str, str] | None = None) -> subprocess.Popen | None:
         stdin=subprocess.DEVNULL,
         stdout=out,
         stderr=out,
-        env=daemon_env(os.environ if env is None else env),
+        env=child_env,
         start_new_session=True,
         close_fds=True,
     )

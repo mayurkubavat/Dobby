@@ -239,6 +239,44 @@ def test_app_is_only_used_on_macos(tmp_path):
     assert connector.find_app({"PINLET_APP": "0"}, platform="darwin") is None
 
 
+def test_start_app_retries_while_the_bundle_is_being_replaced(tmp_path, monkeypatch):
+    app = tmp_path / "Pinlet.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    codes = iter([1, 1, 0])
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, next(codes))
+
+    monkeypatch.setattr(connector, "write_app_config", lambda *a, **k: None)
+    monkeypatch.setattr(connector.subprocess, "run", fake_run)
+    monkeypatch.setattr(connector.time, "sleep", lambda s: None)
+    assert connector.start_app(app) is True
+    assert len(calls) == 3
+
+
+def test_fallback_engine_is_a_standin_when_the_app_would_not_open(tmp_path, monkeypatch):
+    app = tmp_path / "Pinlet.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    seen = {}
+
+    class FakePopen:
+        def __init__(self, cmd, env=None, **kw):
+            seen["env"] = env
+
+    monkeypatch.setattr(connector, "find_app", lambda env=None: app)
+    monkeypatch.setattr(connector, "start_app", lambda a: False)
+    monkeypatch.setattr(connector.paths, "daemon_log", lambda: tmp_path / "d.log")
+    monkeypatch.setattr(connector.subprocess, "Popen", FakePopen)
+    connector.start_daemon({"PATH": "/bin"})
+    assert seen["env"]["PINLET_STANDIN"] == "1"
+
+    monkeypatch.setattr(connector, "find_app", lambda env=None: None)
+    connector.start_daemon({"PATH": "/bin"})
+    assert "PINLET_STANDIN" not in seen["env"]
+
+
 def test_app_config_keeps_pinlet_settings_not_secrets():
     cfg = connector.app_config(
         {

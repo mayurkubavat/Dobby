@@ -100,6 +100,7 @@ def status() -> dict[str, Any]:
         "server_pid": os.getpid(),
         "python": sys.executable,
         "app_owned": os.environ.get("PINLET_APP_OWNED") == "1",
+        "standin": os.environ.get("PINLET_STANDIN") == "1",
         "sessions": sessions.snapshot(),
         "agents": agents(),
     }

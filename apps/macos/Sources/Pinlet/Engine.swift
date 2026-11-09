@@ -77,12 +77,15 @@ final class Engine {
 
     /// A shared Pinlet an earlier Pinlet.app started (one that outlived it, or an old
     /// engine after an update) is asked to quit, so this app runs the current engine.
-    /// One an AI client or terminal started itself (`app_owned: false`) is left alone.
+    /// So is a stand-in a connector started while this app would not open (`standin: true`,
+    /// e.g. during a reinstall): left running, it would draw a second menu bar icon and
+    /// keep old code alive. One a terminal started on purpose (`pinlet serve`) is left alone.
     private func replaceLeftoverEngine() -> Bool {
         let client = ControlClient(path: socketPath)
         defer { client.close() }
         guard let status = client.request("status"), (status["ok"] as? Bool) != false else { return false }
-        if (status["app_owned"] as? Bool) == false { return false }  // older engines lack the key
+        let standin = (status["standin"] as? Bool) == true
+        if (status["app_owned"] as? Bool) == false && !standin { return false }  // older engines lack the key
         NSLog("Pinlet: replacing the leftover engine (pid \(status["server_pid"] ?? "?"))")
         _ = client.request("quit")
         client.close()
