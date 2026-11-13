@@ -14,6 +14,14 @@ The first public release will be 0.1.0. It contains:
 - `pinlet://settings/permissions` (or `/appearance`, `/ai-tools`…) opens
   Settings on that tab, and Settings > Appearance can let screenshots and
   recordings show the bar.
+- A companion, off by default (Settings > Appearance > Show the companion, or
+  `PINLET_COMPANION=1`): Rime, a small animated character in a corner of the
+  screen that shows what Pinlet is doing (asleep, awake, thinking, working,
+  asking, paused, done, in trouble, locked). Click it or press ⌃⌥Space to
+  tell your AI something; drag it anywhere. It only mirrors state: Allow and
+  Deny stay on the card, clicks pass through it while an AI works, and it is
+  left out of screen sharing. `Pinlet --companion-sheet out.png` draws every
+  mood.
 - Settings > Appearance: light or dark look, bar glass, one colour for every AI
   from macOS's palette, minimal text, and the click trail.
 - Return in a chat, reply or comment box asks like the Send button does.

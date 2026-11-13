@@ -34,6 +34,9 @@ final class AppSettings: ObservableObject {
     @Published var color: String = "" { didSet { store("color", color) } }
     @Published var minimalText: Bool = false { didSet { store("minimalText", minimalText) } }
     @Published var clickTrail: Bool = true { didSet { store("clickTrail", clickTrail) } }
+    // The companion (read live by CompanionPanel, no relaunch).
+    @Published var companion: Bool = false { didSet { store("companion", companion) } }
+    @Published var companionSize: Int = CompanionSettings.defaultSize { didSet { store("companionSize", companionSize) } }
 
     /// The values as `pinlet serve` reads them. Only what was changed here.
     func engineEnvironment() -> [String: String] {
@@ -77,6 +80,8 @@ final class AppSettings: ObservableObject {
         color = defaults.string(forKey: "color") ?? ""
         minimalText = defaults.object(forKey: "minimalText") as? Bool ?? false
         clickTrail = defaults.object(forKey: "clickTrail") as? Bool ?? true
+        companion = defaults.object(forKey: "companion") as? Bool ?? false
+        companionSize = CompanionSettings.size(defaults: defaults)
     }
 
     /// One colour for every AI, in macOS's own palette. Frost is Pinlet's icon colour.
@@ -227,6 +232,18 @@ struct SettingsView: View {
                         .onChange(of: settings.clickTrail) { _ in changed = true }
                 } footer: {
                     SettingsFooter("Colour tints the pointer, its label, the glow and the bar. Minimal text drops “Pinlet is working” and shows each action only briefly. On macOS 26 and later the bar and Pinlet's cards are Liquid Glass.")
+                }
+                Section {
+                    Toggle("Show the companion", isOn: $settings.companion)
+                    Picker("Size", selection: $settings.companionSize) {
+                        Text("Small").tag(56)
+                        Text("Medium").tag(72)
+                        Text("Large").tag(96)
+                        Text("Extra large").tag(128)
+                    }
+                    .disabled(!settings.companion)
+                } footer: {
+                    SettingsFooter("Rime sits in a corner and shows what Pinlet is doing: asleep, thinking, working, asking, paused or done. Click it or press ⌃⌥Space to tell your AI something, and drag it anywhere. Allow and Deny stay on the card. Applies right away.")
                 }
             }
             .modifier(SettingsForm())

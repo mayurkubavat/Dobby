@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settingsWindow = SettingsWindowController()
     private let welcome = WelcomeWindowController()
     private let activity = ActivityPanel()
+    private let companion = CompanionPanel()
     private var hotKey: HotKey?
     private var timer: Timer?
     private var polling = false
@@ -31,7 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async { done(reply) }
             }
         }
-        hotKey = HotKey { [weak self] in self?.activity.toggle() }
+        companion.onTell = { [weak self] pid, text, done in self?.tell(pid, text, done: done) }
+        // Control-Option-Space: the companion's ask bubble when it is on screen, else the activity panel.
+        hotKey = HotKey { [weak self] in
+            guard let self else { return }
+            if self.companion.isShown && !self.activity.isShown { self.companion.toggleAsk() } else { self.activity.toggle() }
+        }
         NotificationCenter.default.addObserver(forName: ActivityPanel.showRequest, object: nil, queue: .main) {
             [weak self] _ in self?.activity.show()
         }
@@ -158,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menu.update(view: view ?? TopbarView.empty, engineNote: note,
                                  waiting: prompts.filter(\.missed))
                 self.activity.update(view ?? TopbarView.empty, reachable: view != nil)
+                self.companion.update(view: view ?? TopbarView.empty, prompts: prompts, reachable: view != nil)
                 // One card at a time, the oldest question first; the rest wait their turn.
                 self.lastPrompts = prompts
                 self.confirming.formIntersection(prompts.map(\.id))

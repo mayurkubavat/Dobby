@@ -164,3 +164,109 @@ import Testing
     #expect(settings.engineEnvironment()["PINLET_BACKGROUND_POINTER"] == "idle")
     defaults.removePersistentDomain(forName: "pinlet.tests.background")
 }
+
+// ------------------------------------------------------------- the companion
+private func companionView(_ rows: [(Int, String, String, Int)]) -> TopbarView {
+    TopbarView(header: "Pinlet", subtitle: "", rows: rows.map { r in
+        TopbarView.Row(pid: r.0, name: "Claude Code", state: r.1, title: "Tibble · Claude Code", detail: r.2,
+                       color: "#0E7490", shape: "spark", actions: [], failures: r.3)
+    }, running: rows.count, working: 0, attention: false, allActions: [], iconState: "idle", iconTitle: "",
+    tooltip: "", palette: [:])
+}
+
+@Test func companionMoodFollowsPinlet() throws {
+    func mood(_ rows: [(Int, String, String, Int)], prompts: [Prompt] = [], reachable: Bool = true,
+              locked: Bool = false) -> CompanionMood {
+        CompanionTracker.steady(view: companionView(rows), prompts: prompts, reachable: reachable, locked: locked)
+    }
+    #expect(mood([]) == .sleep)
+    #expect(mood([(1, "ready", "Sleeping", 0)]) == .sleep)
+    #expect(mood([(1, "listening", "Waiting for you", 0)]) == .awake)
+    #expect(mood([(1, "working", "Working", 0)]) == .think)
+    #expect(mood([(1, "working", "Working · Click ‘Send’ · in Mail · step 7 · 0:42", 0)]) == .act)
+    #expect(mood([(1, "working", "Working · Click ‘Send’", 3)]) == .error)
+    #expect(mood([(1, "awake", "Awake", 0)]) == .think)
+    #expect(mood([(1, "paused", "Paused", 0)]) == .pause)
+    #expect(mood([(1, "takeover", "You're in control", 0)]) == .pause)
+    #expect(mood([(1, "confirm", "Needs you", 0)]) == .ask)
+    #expect(mood([(1, "working", "Working · Click", 0)], reachable: false) == .sleep)
+    #expect(mood([(1, "working", "Working · Click", 0)], locked: true) == .lock)
+    let prompt = try #require(Prompt(json: ["id": 1, "text": "Send?"]))
+    #expect(mood([(1, "working", "Working · Click", 0)], prompts: [prompt]) == .ask)
+    let missed = try #require(Prompt(json: ["id": 2, "text": "Send?", "missed": true]))
+    #expect(mood([(1, "listening", "", 0)], prompts: [missed]) == .awake)
+}
+
+@Test func companionCheersOnlyWhenWorkEndsByItself() {
+    let t0 = Date(timeIntervalSince1970: 1000)
+    let working = companionView([(1, "working", "Working · Click ‘Send’", 0)])
+    var tracker = CompanionTracker()
+    #expect(tracker.update(view: working, prompts: [], reachable: true, locked: false, now: t0) == .act)
+    let resting = companionView([(1, "listening", "", 0)])
+    #expect(tracker.update(view: resting, prompts: [], reachable: true, locked: false, now: t0 + 1) == .done)
+    #expect(tracker.update(view: resting, prompts: [], reachable: true, locked: false, now: t0 + 3) == .done)
+    #expect(tracker.update(view: resting, prompts: [], reachable: true, locked: false, now: t0 + 6) == .awake)
+
+    // Stopped by the person, or its row gone: no cheer.
+    var stopped = CompanionTracker()
+    stopped.update(view: working, prompts: [], reachable: true, locked: false, now: t0)
+    #expect(stopped.update(view: companionView([(1, "stopped", "Stopped", 0)]), prompts: [], reachable: true,
+                           locked: false, now: t0 + 1) == .sleep)
+    var gone = CompanionTracker()
+    gone.update(view: working, prompts: [], reachable: true, locked: false, now: t0)
+    #expect(gone.update(view: companionView([]), prompts: [], reachable: true, locked: false, now: t0 + 1) == .sleep)
+    // Paused in between: resting afterwards is not "done".
+    var paused = CompanionTracker()
+    paused.update(view: working, prompts: [], reachable: true, locked: false, now: t0)
+    #expect(paused.update(view: companionView([(1, "paused", "Paused", 0)]), prompts: [], reachable: true,
+                          locked: false, now: t0 + 1) == .pause)
+    #expect(paused.update(view: resting, prompts: [], reachable: true, locked: false, now: t0 + 2) == .awake)
+}
+
+@Test func companionWordsAndSettings() throws {
+    let working = companionView([(1, "working", "Working · Click ‘Send’ · in Mail · step 7 · 0:42", 0)])
+    #expect(CompanionTracker.line(for: .act, view: working) == "Click ‘Send’ · in Mail")
+    #expect(CompanionTracker.line(for: .sleep, view: working).isEmpty)
+    #expect(CompanionTracker.line(for: .lock, view: working).isEmpty)
+    #expect(!CompanionTracker.line(for: .ask, view: working).isEmpty)
+
+    let suite = "pinlet.tests.companion"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defaults.removePersistentDomain(forName: suite)
+    #expect(!CompanionSettings.enabled(defaults: defaults, env: [:]))          // off unless switched on
+    #expect(CompanionSettings.enabled(defaults: defaults, env: ["PINLET_COMPANION": "1"]))
+    defaults.set(true, forKey: "companion")
+    #expect(CompanionSettings.enabled(defaults: defaults, env: [:]))
+    #expect(!CompanionSettings.enabled(defaults: defaults, env: ["PINLET_COMPANION": "off"]))
+    #expect(CompanionSettings.size(defaults: defaults) == 72)
+    defaults.set(96, forKey: "companionSize")
+    #expect(CompanionSettings.size(defaults: defaults) == 96)
+    defaults.set(77, forKey: "companionSize")
+    #expect(CompanionSettings.size(defaults: defaults) == 72)
+    #expect(CompanionSettings.speaks(defaults: defaults))
+    defaults.set("off", forKey: "personality")
+    #expect(!CompanionSettings.speaks(defaults: defaults))
+    defaults.removePersistentDomain(forName: suite)
+}
+
+@Test func companionPosesAndSpring() throws {
+    // Every mood has its own pose, and each pose has every dial.
+    let poses = CompanionMood.allCases.map { CompanionPose.target($0) }
+    #expect(Set(poses.map { $0.values.map { String($0) }.joined(separator: ",") }).count == CompanionMood.allCases.count)
+    #expect(poses.allSatisfy { $0.values.count == CompanionDial.allCases.count })
+    #expect(CompanionPose.target(.sleep)[.eyeOpen] == 0)
+    #expect(CompanionPose.target(.lock)[.dim] < 1)
+
+    var spring = CompanionSpring(x: 0)
+    var peak = 0.0
+    for _ in 0..<180 {
+        spring.step(to: 1, dt: 1.0 / 60)
+        peak = max(peak, spring.x)
+    }
+    #expect(spring.settled(at: 1))
+    #expect(peak > 1 && peak < 1.3)   // a little overshoot, not a wobble
+
+    // The art draws: a PNG with all nine moods.
+    let png = try #require(CompanionArt.sheet(scale: 1))
+    #expect(png.count > 2000)
+}
