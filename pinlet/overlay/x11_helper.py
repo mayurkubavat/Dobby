@@ -1448,6 +1448,7 @@ class X11Overlay:
         now = time.monotonic()
         if now - self.last_action > float(self.cfg["active_secs"]):
             self.task_started = now  # a new task: step count and timer start over
+            self.goal = ""
             self.task_steps = 0
             self.current_step = ""
         self.last_action = now
@@ -1698,6 +1699,8 @@ class X11Overlay:
             self.box.place(None)
             self.ack(msg_id)
         elif op == "goal":
+            if msg["text"]:
+                self._mark_active()
             self.goal = msg["text"]
             self._refresh_bar()
             self.ack(msg_id)
@@ -1747,7 +1750,6 @@ class X11Overlay:
             self._apply_visibility()
             self.ack(msg_id)
         elif op == "sleep.wait":
-            self.goal = ""  # that task is over
             self._ai_wait(True)
             self.ack(msg_id)
         elif op == "sleep.done":

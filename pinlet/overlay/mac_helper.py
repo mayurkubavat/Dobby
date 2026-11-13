@@ -958,6 +958,7 @@ class OverlayController:
             self._refresh_tag()
             self._refresh_pill()  # also refreshes the glow
         if hide_pointer:
+            self.goal = ""  # that task is over; the next one states its own goal
             self._set_pointer_visible(False)
             self.cursor = None  # the next task glides in from the real mouse
             self._clear_box()
@@ -1932,6 +1933,8 @@ class OverlayController:
             self.ack(msg_id)
         elif op == "goal":
             self.goal = msg["text"]
+            if self.goal:
+                self._mark_active()  # a task is starting: the bar comes up with its goal
             self._refresh_tag()
             self._refresh_pill()
             self.ack(msg_id)
@@ -1991,7 +1994,6 @@ class OverlayController:
             self._apply_alpha()
             self.ack(msg_id)
         elif op == "sleep.wait":
-            self.goal = ""  # that task is over
             self._ai_wait(True, str(msg.get("reason") or ""))
             self.ack(msg_id)
         elif op == "sleep.done":

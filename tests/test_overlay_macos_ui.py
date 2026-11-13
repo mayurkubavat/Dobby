@@ -737,7 +737,11 @@ def test_modern_tag_keeps_the_action_until_idle(make):
     c.handle({"op": "intent", "text": "Click ‘Send’"})
     assert c.intent_until == float("inf") and c._tag_parts()[1] == "Click ‘Send’"
     c.cursor_state = "thinking"
+    assert c._tag_parts()[1] == "Click ‘Send’"  # held long enough to read
+    c.intent_at = time.monotonic() - 3
     assert c._tag_parts()[1] == "Thinking…"
+    c.handle({"op": "goal", "text": "Reply to Sam"})
+    assert c._tag_parts()[1] == "Thinking… · Reply to Sam"
     c.cursor_state = "idle"
     c.last_action = time.monotonic() - float(c.cfg["active_secs"]) - 1
     c.on_tick()

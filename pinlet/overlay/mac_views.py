@@ -1249,6 +1249,17 @@ class _Pill:
             btn.setFrameOrigin_((x, (H - f.size.height) / 2))
             x += f.size.width + (gaps[min(i, len(gaps) - 1)] if i < len(visible) - 1 else 0.0)
         w = x + (12.0 if visible else (15.0 if spec.compact else 14.0))
+        # While a task runs the bar only grows: a bar that shrinks and re-centres
+        # at every step makes its text and its Pause button jump about.
+        if spec.mode == "working":
+            held = max(getattr(self, "_work_w", 0.0), w)
+            self._work_w = held
+            for btn in visible:
+                o = btn.frame().origin
+                btn.setFrameOrigin_((o.x + (held - w), o.y))
+            w = held
+        else:
+            self._work_w = 0.0
         screens = NSScreen.screens() or []
         if screens:
             vf = screens[0].visibleFrame()

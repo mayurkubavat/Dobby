@@ -2379,6 +2379,13 @@ def release_control() -> dict[str, Any]:
     if ctl is None:
         return dict(_CONTROL_OFF)
     released = ctl.release()
+    from pinlet.overlay import find_overlay_hal
+
+    ov_hal = find_overlay_hal(hal)
+    if ov_hal is not None:  # done for now: the pointer label stops saying "Thinking…"
+        with contextlib.suppress(Exception):
+            ov_hal.overlay.state("idle")
+            ov_hal.overlay.goal("")
     return {"ok": True, "released": released, **ctl.status()}
 
 
