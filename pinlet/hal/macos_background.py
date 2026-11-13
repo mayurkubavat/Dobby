@@ -305,7 +305,9 @@ class BackgroundMacHAL(MacHAL):
         ax = self._ax_api()
         done: Any
         if button == "right":
-            done = ax_action_at(ax, chosen.pid, x, y, "AXShowMenu")
+            # AXShowMenu would open the context menu, but macOS then draws the
+            # window and its menu over whatever the person is doing.
+            done = False
         elif click_count >= 2:
             done = ax_action_at(ax, chosen.pid, x, y, "AXOpen")
         else:

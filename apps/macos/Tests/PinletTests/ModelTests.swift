@@ -147,3 +147,16 @@ import Testing
         verb: "Connected", labels: ["cursor": "Cursor", "codex": "OpenAI Codex"])
     #expect(summary.hasPrefix("Connected Cursor and OpenAI Codex."))
 }
+
+@Test func backgroundModeReachesTheEngineOnlyWhenSwitchedOn() throws {
+    let defaults = try #require(UserDefaults(suiteName: "pinlet.tests.background"))
+    defaults.removePersistentDomain(forName: "pinlet.tests.background")
+    let settings = AppSettings(defaults: defaults)
+    #expect(settings.engineEnvironment()["PINLET_BACKGROUND"] == nil)
+    defaults.set(true, forKey: "borrowWhenIdle")
+    #expect(settings.engineEnvironment()["PINLET_BACKGROUND_POINTER"] == nil)
+    defaults.set(true, forKey: "background")
+    #expect(settings.engineEnvironment()["PINLET_BACKGROUND"] == "1")
+    #expect(settings.engineEnvironment()["PINLET_BACKGROUND_POINTER"] == "idle")
+    defaults.removePersistentDomain(forName: "pinlet.tests.background")
+}

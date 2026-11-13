@@ -273,13 +273,23 @@ def test_click_selects_a_table_row_through_its_cell():
     assert ("Row 3", "AXSelected", True) in ax.set_calls
 
 
-def test_right_click_opens_the_context_menu_through_accessibility():
+def test_right_click_is_refused_because_its_menu_would_show_on_the_persons_screen():
     item = _el("AXStaticText", AXTitle="File.txt", actions=["AXShowMenu"])
     ax = AX({MINE: {"pid": MINE}}, at={(MINE, 120, 80): item})
     hal, _, _ = _hal(ax=ax)
     hal.focus_window("2")
-    hal.mouse_click(120, 80, button="right")
-    assert ax.performed == [("File.txt", "AXShowMenu")]
+    with pytest.raises(NeedsPointer, match="right-click"):
+        hal.mouse_click(120, 80, button="right")
+    assert ax.performed == []
+
+
+def test_double_click_opens_through_accessibility():
+    item = _el("AXStaticText", AXTitle="File.txt", actions=["AXOpen"])
+    ax = AX({MINE: {"pid": MINE}}, at={(MINE, 120, 80): item})
+    hal, _, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    hal.mouse_click(120, 80, click_count=2)
+    assert ax.performed == [("File.txt", "AXOpen")]
 
 
 def test_a_click_that_needs_the_pointer_is_refused_by_default():

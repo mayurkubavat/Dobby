@@ -19,6 +19,8 @@ final class AppSettings: ObservableObject {
     @Published var hideIdleMinutes: Int = -1 { didSet { store("hideIdleMinutes", hideIdleMinutes) } }  // -1 = default
     @Published var appPrompts: Bool = true { didSet { store("appPrompts", appPrompts) } }
     @Published var restingBar: Bool = false { didSet { store("restingBar", restingBar) } }  // keep the bar while resting
+    @Published var background: Bool = false { didSet { store("background", background) } }  // work in one window, leave the screen alone
+    @Published var borrowWhenIdle: Bool = false { didSet { store("borrowWhenIdle", borrowWhenIdle) } }
 
     /// The values as `pinlet serve` reads them. Only what was changed here.
     func engineEnvironment() -> [String: String] {
@@ -30,6 +32,10 @@ final class AppSettings: ObservableObject {
         if hideIdleMinutes >= 0 { env["PINLET_MENU_HIDE_IDLE"] = String(hideIdleMinutes * 60) }
         if !appPrompts { env["PINLET_APP_PROMPTS"] = "0" }
         if restingBar { env["PINLET_OVERLAY_PILL"] = "always" }
+        if background {
+            env["PINLET_BACKGROUND"] = "1"
+            if borrowWhenIdle { env["PINLET_BACKGROUND_POINTER"] = "idle" }
+        }
         return env
     }
 
@@ -44,6 +50,8 @@ final class AppSettings: ObservableObject {
         hideIdleMinutes = defaults.object(forKey: "hideIdleMinutes") as? Int ?? -1
         appPrompts = defaults.object(forKey: "appPrompts") as? Bool ?? true
         restingBar = defaults.object(forKey: "restingBar") as? Bool ?? false
+        background = defaults.object(forKey: "background") as? Bool ?? false
+        borrowWhenIdle = defaults.object(forKey: "borrowWhenIdle") as? Bool ?? false
     }
 
     /// The look of Pinlet's own windows (the Allow/Deny card): dark unless the
@@ -131,6 +139,15 @@ struct SettingsView: View {
                         .onChange(of: settings.restingBar) { _ in changed = true }
                 } footer: {
                     SettingsFooter("Default glass is clear at rest and regular with text. With the bar off at rest, wake Pinlet from the menu or with ⌃⌥Space.")
+                }
+                Section {
+                    Toggle("Work in the background", isOn: $settings.background)
+                        .onChange(of: settings.background) { _ in changed = true }
+                    Toggle("Borrow the pointer when I am idle", isOn: $settings.borrowWhenIdle)
+                        .onChange(of: settings.borrowWhenIdle) { _ in changed = true }
+                        .disabled(!settings.background)
+                } footer: {
+                    SettingsFooter("In the background, each AI works in one window through accessibility and leaves your pointer, keyboard and front app alone. Keep its apps on another Desktop. Steps that need a real click are refused, or done while you are idle.")
                 }
             }
             .modifier(SettingsForm())
