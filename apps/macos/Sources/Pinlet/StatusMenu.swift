@@ -6,7 +6,7 @@ import AppKit
 final class StatusMenu: NSObject, NSMenuDelegate {
     struct Callbacks {
         var action: (_ key: String, _ pid: Int?) -> Void
-        var answer: (_ promptID: Int, _ ok: Bool, _ always: Bool) -> Void
+        var answer: (_ promptID: Int, _ answer: PromptAnswer) -> Void
         var restartEngine: () -> Void
         var openLog: () -> Void
         var openSettings: () -> Void
@@ -165,7 +165,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     @objc private func answerPrompt(_ sender: NSMenuItem) {
         guard let info = sender.representedObject as? [String: Any], let id = info["id"] as? Int else { return }
-        callbacks.answer(id, info["ok"] as? Bool ?? false, info["always"] as? Bool ?? false)
+        callbacks.answer(id, PromptAnswer(ok: info["ok"] as? Bool ?? false, always: info["always"] as? Bool ?? false))
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

@@ -32,6 +32,7 @@ _lock = threading.Lock()
 _pending: dict[int, Prompt] = {}
 _last_poll = 0.0
 MAX_REASON = 500
+MAX_IMAGE = 400_000  # base64 characters of the target's picture
 # The Deny reason of the last question asked from this thread: the tool that
 # asked raises OverlayDenied right after, in the same thread, and
 # pinlet.handoff hands the reason to the AI.
@@ -57,6 +58,12 @@ class Prompt:
     answer: bool | None = None
     always: bool = False
     reason: str = ""  # what the person typed with a Deny ("use the test account")
+    # A risky step the person can stop being asked about (pinlet.overlay.rules):
+    action: str = ""  # its kind: "send", "delete", "quit"…
+    agent: str = ""  # the asking client's key ("claude"), for the rule's "who"
+    client: str = ""  # "Claude Code"
+    image: str = ""  # a small PNG of the target, base64 ("" when there is none)
+    remembered: str = ""  # the saved rule's id, once the person ticked "don't ask again"
     done: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def as_dict(self, now: float | None = None) -> dict[str, Any]:
@@ -75,7 +82,30 @@ class Prompt:
             "secs_left": round(max(0.0, self.card_deadline - now), 1),
             "missed": now >= self.card_deadline,
             "hold_left": round(max(0.0, self.deadline - now), 1),
+            "action": self.action,
+            "action_label": _action_label(self.action),
+            "client": self.client,
+            "can_save": _can_save() if self.action else False,
+            "image": self.image,
         }
+
+
+def _action_label(action: str) -> str:
+    if not action:
+        return ""
+    from pinlet.overlay.rules import kind_label
+
+    return kind_label(action)
+
+
+def _can_save() -> bool:
+    """True when a rule that outlives the task can be saved (the app handed over its key)."""
+    try:
+        from pinlet.overlay.rules import book
+
+        return book().can_save
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def enabled() -> bool:
@@ -126,14 +156,25 @@ def ask(
     deny: str = "Deny",
     kind: str = "danger",
     app: str = "",
+    action: str = "",
+    image: str = "",
 ) -> bool:
     """Show the question in the app and wait for it. False on Deny or timeout.
 
     The card counts down ``secs``; after that the question waits in the menu
-    until :func:`hold_seconds` have passed since it was asked.
+    until :func:`hold_seconds` have passed since it was asked. ``action`` is
+    the kind of risky step (see :mod:`pinlet.overlay.rules`): with it the card
+    offers "Don't ask again", and :func:`answer` saves the rule.
     """
     secs = max(1.0, float(secs))
     total = max(secs, hold_seconds())
+    who = _who()
+    agent = client = ""
+    if action and kind != "access":
+        from pinlet.overlay.rules import asker
+
+        pid, agent, client = asker()
+        who.setdefault("pid", pid)
     p = Prompt(
         id=next(_ids),
         text=text,
@@ -142,7 +183,11 @@ def ask(
         deny=deny or "Deny",
         kind=kind or "danger",
         app=app or "",
-        **_who(),
+        action=action if kind != "access" else "",
+        agent=agent,
+        client=client,
+        image=image if len(image) <= MAX_IMAGE else "",
+        **who,
     )
     p.card_deadline = p.created + secs
     p.deadline = p.created + total
@@ -166,12 +211,24 @@ def take_reason() -> str:
     return reason
 
 
-def answer(prompt_id: int, ok: bool, always: bool = False, reason: str = "") -> bool:
+def answer(
+    prompt_id: int,
+    ok: bool,
+    always: bool = False,
+    reason: str = "",
+    remember: str = "",
+    wide: bool = False,
+) -> bool:
     """The app's answer. False when that prompt is no longer waiting.
 
     ``always`` with Allow on an "access" question also saves the app as allowed
     from now on (``~/.pinlet/apps.json``). ``reason`` with a Deny is what the
     person typed for the AI; it reaches the AI as ``person_said``.
+
+    ``remember`` with Allow on a risky step saves a "don't ask again" rule for
+    that kind of step in that app by that AI: ``task``, ``hour``, ``day`` or
+    ``always``. ``wide`` is "Run this task without asking": every risky step
+    by that AI, in any app, until its task ends.
     """
     with _lock:
         p = _pending.get(int(prompt_id))
@@ -188,8 +245,29 @@ def answer(prompt_id: int, ok: bool, always: bool = False, reason: str = "") -> 
             remember(p.app)
         except OSError:
             p.always = False
+    if ok and p.action and p.kind != "access" and (wide or remember):
+        p.remembered = _remember(p, "task" if wide else remember, wide)
     p.done.set()
     return True
+
+
+def _remember(p: Prompt, scope: str, wide: bool) -> str:
+    """Save the person's "don't ask again" for ``p``; the rule's id, or "" when not saved."""
+    try:
+        from pinlet.overlay import rules
+
+        rule = rules.book().add(
+            kind=rules.ANY if wide else p.action,
+            app=rules.ANY if wide or not p.app else p.app,
+            agent=p.agent or "unknown",
+            scope=scope,
+            pid=p.pid,
+            app_label="" if wide else p.app,
+            agent_label=p.client or p.name,
+        )
+    except Exception:  # noqa: BLE001 - the Allow itself still counts
+        return ""
+    return rule.id if rule is not None else ""
 
 
 def deny_all() -> int:

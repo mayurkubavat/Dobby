@@ -86,13 +86,48 @@ def app_pid(env: Mapping[str, str] | None = None) -> int | None:
         return None
 
 
-def window_under(records: Iterable[Mapping[str, Any]], x: float, y: float, helper_pid: int | None):
-    """The window a click at global point (x, y) would land on, or None.
+def _owner(w: Mapping[str, Any]) -> str:
+    return " ".join(str(w.get("kCGWindowOwnerName", "") or "").split())
 
-    ``records`` are Quartz window records, front to back (every layer, so the
-    card and the menu bar count). Invisible windows and the overlay's own
-    click-through drawing layers are skipped.
+
+def _why(owner: str, title: str, pid: int, overlay: bool, own: set[int]) -> str | None:
+    low, title = owner.lower(), title.lower()
+    if overlay or pid in own:
+        return (
+            "That is Pinlet's own window. An AI cannot press Pinlet's buttons or answer its "
+            "questions: only the person can. Carry on with the task, or wait for the person."
+        )
+    if low in SECURITY_OWNERS:
+        return (
+            "That is a macOS security prompt. Pinlet never answers those: ask the person to "
+            "do it, then carry on."
+        )
+    for app, word in SECURITY_PANES:
+        if low == app and word in title:
+            return (
+                "That is the macOS privacy and security settings. Pinlet does not change "
+                "those: ask the person to do it."
+            )
+    return None
+
+
+def refusal_at(
+    records: Iterable[Mapping[str, Any]],
+    x: float,
+    y: float,
+    own_pids: Iterable[int | None] = (),
+    helper_pid: int | None = None,
+) -> tuple[str, str] | None:
+    """Why a click at global point (x, y) is refused, with the window's owner; None when it may go.
+
+    ``records`` are Quartz window records, front to back, on every layer (so
+    the card and the menu count). The walk stops at the first ordinary app
+    window under the point: a Pinlet window hidden behind it is not in the
+    way. System layers that cover the screen without taking the click (the
+    menu bar agent, widgets) and the overlay's own click-through drawing
+    layers are passed over.
     """
+    own = {int(p) for p in own_pids if p}
     for w in records:
         b = w.get("kCGWindowBounds") or {}
         try:
@@ -100,6 +135,7 @@ def window_under(records: Iterable[Mapping[str, Any]], x: float, y: float, helpe
             ww, wh = float(b.get("Width", 0)), float(b.get("Height", 0))
             alpha = float(w.get("kCGWindowAlpha", 1.0))
             pid = int(w.get("kCGWindowOwnerPID", -1))
+            layer = int(w.get("kCGWindowLayer", 0))
         except (TypeError, ValueError):
             continue
         if alpha <= 0 or ww <= 0 or wh <= 0:
@@ -112,39 +148,30 @@ def window_under(records: Iterable[Mapping[str, Any]], x: float, y: float, helpe
         )
         if drawing and wh > _DRAWING_LAYER_MIN_H:
             continue
-        return {
-            "pid": pid,
-            "owner": str(w.get("kCGWindowOwnerName", "") or ""),
-            "title": title,
-            "overlay": drawing,
-        }
+        owner = _owner(w)
+        why = _why(owner, title, pid, drawing, own)
+        if why:
+            return why, owner
+        if layer == 0:
+            return None  # an ordinary window takes the click
     return None
 
 
 def refusal(window: Mapping[str, Any] | None, own_pids: Iterable[int | None] = ()) -> str | None:
-    """Why Pinlet will not act on ``window`` (from :func:`window_under`), or None when it may."""
+    """Why Pinlet will not act on an app (``{"pid", "owner", "title"}``), or None when it may."""
     if not window:
         return None
-    owner = " ".join(str(window.get("owner") or "").split()).lower()
-    title = str(window.get("title") or "").lower()
-    pid = window.get("pid")
-    if window.get("overlay") or (pid is not None and pid in {p for p in own_pids if p}):
-        return (
-            "That is Pinlet's own window. An AI cannot press Pinlet's buttons or answer its "
-            "questions: only the person can. Carry on with the task, or wait for the person."
-        )
-    if owner in SECURITY_OWNERS:
-        return (
-            "That is a macOS security prompt. Pinlet never answers those: ask the person to "
-            "do it, then carry on."
-        )
-    for app, word in SECURITY_PANES:
-        if owner == app and word in title:
-            return (
-                "That is the macOS privacy and security settings. Pinlet does not change "
-                "those: ask the person to do it."
-            )
-    return None
+    try:
+        pid = int(window.get("pid") or -1)
+    except (TypeError, ValueError):
+        pid = -1
+    return _why(
+        " ".join(str(window.get("owner") or "").split()),
+        str(window.get("title") or ""),
+        pid,
+        bool(window.get("overlay")),
+        {int(p) for p in own_pids if p},
+    )
 
 
 PAYMENT_REFUSAL = (

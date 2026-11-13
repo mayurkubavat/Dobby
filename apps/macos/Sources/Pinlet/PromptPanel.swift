@@ -12,7 +12,7 @@ import SwiftUI
 /// Pinlet's dark tint; earlier systems get the regular material. It takes the
 /// Look setting (dark by default, like the bar).
 final class PromptPanel {
-    var onAnswer: (_ promptID: Int, _ ok: Bool, _ always: Bool, _ reason: String) -> Void = { _, _, _, _ in }
+    var onAnswer: (_ promptID: Int, _ answer: PromptAnswer) -> Void = { _, _ in }
 
     private var panel: KeyPanel?
     private(set) var shown: Prompt?
@@ -47,10 +47,10 @@ final class PromptPanel {
                               danger: Color(nsColor: Palette.color("danger", in: palette, fallback: Palette.danger)),
                               dark: dark,
                               resized: { [weak self] in self?.fitToContent() }) {
-            [weak self] ok, always, reason in
+            [weak self] answer in
             guard let self, let shown = self.shown, shown.id == prompt.id else { return }
             self.hide()
-            self.onAnswer(prompt.id, ok, always, reason)
+            self.onAnswer(prompt.id, answer)
         }
         let host = FirstClickHost(rootView: card)
         let size = host.fittingSize
@@ -97,7 +97,7 @@ private final class FirstClickHost<Content: View>: NSHostingView<Content> {
 /// Borderless panels refuse key status by default; this one needs Return / Esc.
 private final class KeyPanel: NSPanel {
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 420, height: 120),
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 440, height: 120),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isFloatingPanel = true
         level = .statusBar
@@ -147,8 +147,11 @@ struct PromptCard: View {
     var danger: Color = .red
     var dark: Bool = true
     var resized: () -> Void = {}
-    let answer: (_ ok: Bool, _ always: Bool, _ reason: String) -> Void
+    let answer: (PromptAnswer) -> Void
     @State private var always = false
+    /// A risky step: "Don't ask again", and for how long.
+    @State private var remember = false
+    @State private var scope = "task"
     /// "Tell the AI why": the person's words go back to the AI with the Deny.
     @State private var explaining = false
     @State private var reason = ""
@@ -157,6 +160,14 @@ struct PromptCard: View {
     @State private var armed = false
 
     private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+
+    /// The card can offer "Don't ask again" for this question.
+    private var canRemember: Bool { !prompt.isAccess && !prompt.action.isEmpty }
+    private var needsTouchID: Bool { (prompt.isAccess && always) || (remember && scope == "always") }
+    private var target: NSImage? {
+        guard !prompt.image.isEmpty, let data = Data(base64Encoded: prompt.image) else { return nil }
+        return NSImage(data: data)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -171,6 +182,17 @@ struct PromptCard: View {
                 Text(prompt.text)
                     .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
+                if let target {
+                    // The control itself, so the person sees what is about to be pressed.
+                    Image(nsImage: target)
+                        .resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 84, alignment: .leading)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.12)))
+                        .padding(.vertical, 2)
+                        .accessibilityLabel("Picture of what Pinlet is about to press")
+                }
                 if !prompt.detail.isEmpty {
                     Text(prompt.detail)
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -180,20 +202,43 @@ struct PromptCard: View {
                     Toggle("Always allow in \(prompt.app)", isOn: $always)
                         .toggleStyle(.checkbox)
                         .font(.subheadline)
-                        .onChange(of: always) { _ in DispatchQueue.main.async { resized() } }
-                    if always {
-                        Label("Needs Touch ID or your password. Pinlet asks again after a month.",
-                              systemImage: "touchid")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        .onChange(of: always) { _ in grow() }
+                }
+                if canRemember && !explaining {
+                    HStack(spacing: 6) {
+                        Toggle(rememberTitle, isOn: $remember)
+                            .toggleStyle(.checkbox)
+                            .font(.subheadline)
+                            .onChange(of: remember) { _ in grow() }
+                        if remember {
+                            Picker("How long", selection: $scope) {
+                                Text("for this task").tag("task")
+                                if prompt.canSave {
+                                    Text("for 1 hour").tag("hour")
+                                    Text("today").tag("day")
+                                    Text("always").tag("always")
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .controlSize(.small)
+                            .fixedSize()
+                            .onChange(of: scope) { _ in grow() }
+                        }
                     }
+                }
+                if needsTouchID && !explaining {
+                    Label("Needs Touch ID or your password. Pinlet asks again after a month.",
+                          systemImage: "touchid")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if explaining {
                     // Return here denies with the reason; it never allows.
                     TextField("Tell the AI why, or what to do instead", text: $reason)
                         .textFieldStyle(.roundedBorder)
                         .focused($reasonFocused)
-                        .onSubmit { answer(false, false, reason) }
+                        .onSubmit { answer(PromptAnswer(ok: false, reason: reason)) }
                         .onAppear { reasonFocused = true }
                 }
                 HStack(spacing: 8) {
@@ -202,17 +247,20 @@ struct PromptCard: View {
                     if !explaining {
                         Button("Deny and say why…") {
                             explaining = true
-                            DispatchQueue.main.async { resized() }
+                            grow()
                         }
                             .buttonStyle(.link)
                             .font(.subheadline)
                     }
-                    Button(prompt.deny) { answer(false, false, reason) }
+                    Button(prompt.deny) { answer(PromptAnswer(ok: false, reason: reason)) }
                         .keyboardShortcut(.cancelAction)
                         .controlSize(.large)
                     // A risky step never goes through on a stray Return: it takes Cmd+Return.
                     // While the person types a reason, Return belongs to the text field.
-                    Button(prompt.allow) { answer(true, always, "") }
+                    Button(prompt.allow) {
+                        answer(PromptAnswer(ok: true, always: prompt.isAccess && always,
+                                            remember: canRemember && remember ? scope : ""))
+                    }
                         .keyboardShortcut(prompt.isAccess && !explaining ? .defaultAction : KeyboardShortcut(.return, modifiers: .command))
                         .buttonStyle(.borderedProminent)
                         .tint(prompt.isAccess ? accent : danger)
@@ -220,10 +268,24 @@ struct PromptCard: View {
                         .disabled(!armed)
                 }
                 .padding(.top, 4)
+                if canRemember && !explaining {
+                    Divider().opacity(0.5)
+                    // Every risky step by this AI until its task ends or Stop. Never payments,
+                    // passwords or security prompts: those are refused before any rule is read.
+                    Button {
+                        answer(PromptAnswer(ok: true, wide: true))
+                    } label: {
+                        Label("Allow, and run this task without asking…", systemImage: "forward.end.fill")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.link)
+                    .disabled(!armed)
+                    .help("Every risky step by \(prompt.client.isEmpty ? "this AI" : prompt.client) goes ahead until its task ends or you press Stop. Payments, passwords and macOS security prompts are never included. Takes Touch ID.")
+                }
             }
         }
         .padding(16)
-        .frame(width: 420, alignment: .leading)
+        .frame(width: 440, alignment: .leading)
         .modifier(CardBackground(shape: shape, dark: dark, rim: prompt.isAccess ? accent : danger))
         .padding(10)  // room for the shadow
         .accessibilityElement(children: .contain)
@@ -234,6 +296,14 @@ struct PromptCard: View {
     }
 
     static let armDelay: TimeInterval = 0.6
+
+    /// "Don't ask again for Send in Mail"
+    private var rememberTitle: String {
+        let what = prompt.actionLabel.isEmpty ? "this" : "“\(prompt.actionLabel)”"
+        return "Don’t ask again for \(what)" + (prompt.app.isEmpty ? "" : " in \(prompt.app)")
+    }
+
+    private func grow() { DispatchQueue.main.async { resized() } }
 }
 
 /// "Denies in 0:24", ticking.

@@ -155,6 +155,7 @@ def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> di
             p = int(agent["pid"])
             if key == "stop_all":
                 commands.request_stop(root, p)
+                _end_task_rules(p)
             else:
                 commands.set_paused(root, p, key == "pause_all")
         if key == "stop_all":
@@ -172,6 +173,7 @@ def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> di
         tb.Hiding.load().hide([pid])
     elif key == "stop":
         commands.request_stop(root, pid)
+        _end_task_rules(pid)
         tb.Hiding.load().hide([pid])
     elif key == "pause_toggle":
         commands.set_paused(root, pid, not commands.read(root, pid)["paused"])
@@ -180,6 +182,16 @@ def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> di
     if key in ("stop", "hide"):
         return {"done": key, "pid": pid}
     return {"done": key, "pid": pid, "paused": commands.read(root, pid)["paused"]}
+
+
+def _end_task_rules(pid: int) -> None:
+    """Stop also ends that AI's "for this task" rules."""
+    try:
+        from pinlet.overlay import rules
+
+        rules.book().end_task(pid)
+    except Exception:  # noqa: BLE001 - Stop itself must never fail
+        log.debug("could not end task rules for %s", pid, exc_info=True)
 
 
 def tell(pid: int | None, text: str) -> dict[str, Any]:
@@ -286,7 +298,7 @@ def from_app(peer_pid: int | None, env: Mapping[str, str] | None = None) -> bool
 
 def _needs_person(request: Mapping[str, Any]) -> bool:
     op = request.get("op")
-    if op in ("answer", "tell"):
+    if op in ("answer", "tell", "rules_key"):
         return True
     return op == "action" and str(request.get("key") or "") in _PERSON_ACTIONS
 
@@ -342,8 +354,36 @@ def handle(
                     bool(request.get("ok")),
                     always=bool(request.get("always")),
                     reason=str(request.get("reason") or ""),
+                    remember=str(request.get("remember") or ""),
+                    wide=bool(request.get("wide")),
                 )
             }
+        elif op == "rules":
+            from pinlet.overlay import grants, rules
+
+            body = {
+                "rules": rules.book().listing(),
+                "apps": grants.remembered(),
+                "can_save": rules.book().can_save,
+            }
+        elif op == "rules_key":
+            from pinlet.overlay import rules
+
+            try:
+                key = bytes.fromhex(str(request.get("key") or ""))
+            except ValueError:
+                key = b""
+            rules.book().set_key(key)
+            body = {"can_save": rules.book().can_save}
+        elif op == "revoke":
+            from pinlet.overlay import grants, rules
+
+            if request.get("all"):
+                body = {"revoked": rules.book().revoke_all() + grants.forget_all()}
+            elif request.get("app"):
+                body = {"revoked": int(grants.forget(str(request.get("app"))))}
+            else:
+                body = {"revoked": int(rules.book().revoke(str(request.get("rule") or "")))}
         elif op == "action":
             body = action(
                 str(request.get("key") or ""), request.get("pid"), request.get("prompt_id")

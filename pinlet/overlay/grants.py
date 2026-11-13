@@ -334,3 +334,65 @@ def access_detail(app: str) -> str:
     if _TYPING_RUNS.search(normalize(app)):
         return f"Typing in {app} runs commands on this computer. " + base
     return base
+
+
+def remembered(path: Path | None = None, now: float | None = None) -> list[dict[str, object]]:
+    """The apps saved with "Always allow", for the app's Permissions list, newest first."""
+    path = Path(path) if path is not None else DEFAULT_PATH
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return []
+    apps = data.get("apps") if isinstance(data, dict) and isinstance(data.get("apps"), dict) else {}
+    stamps = _stamps(data)
+    now = time.time() if now is None else now
+    life = always_seconds()
+    out: list[dict[str, object]] = []
+    for name, tier in apps.items():
+        saved_at = stamps.get(normalize(name))
+        if saved_at is None or lapsed(saved_at, now, life):
+            continue  # written by hand, or over: not a saved "Always allow"
+        out.append(
+            {
+                "app": name,
+                "tier": str(tier),
+                "saved": saved_at,
+                "expires": saved_at + life if life > 0 else None,
+            }
+        )
+    return sorted(out, key=lambda row: -float(row["saved"]))  # type: ignore[arg-type]
+
+
+def forget(app: str, path: Path | None = None) -> bool:
+    """Take back an "Always allow" (rules written by hand are left alone). False when there was none."""
+    path = Path(path) if path is not None else DEFAULT_PATH
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict) or not isinstance(data.get("remembered"), dict):
+        return False
+    key = normalize(app)
+    names = [k for k in data["remembered"] if normalize(k) == key]
+    if not names:
+        return False
+    apps = data.get("apps") if isinstance(data.get("apps"), dict) else {}
+    for name in names:
+        del data["remembered"][name]
+    for name in [k for k in apps if normalize(k) == key]:
+        del apps[name]
+    tmp = path.with_name(f".{path.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+    return True
+
+
+def forget_all(path: Path | None = None) -> int:
+    """Take back every "Always allow"; returns how many there were."""
+    target = Path(path) if path is not None else DEFAULT_PATH
+    try:
+        names = list(_stamps(json.loads(target.read_text())))
+    except (OSError, ValueError):
+        return 0
+    return sum(1 for name in names if forget(name, target))

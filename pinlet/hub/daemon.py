@@ -164,6 +164,10 @@ class Hub:
             pass
         finally:
             if info is not None:
+                with contextlib.suppress(Exception):  # its "for this task" rules end with it
+                    from pinlet.overlay import rules
+
+                    rules.book().end_task(info.pid)
                 sessions.close_session(info)
                 log.info("client %s disconnected", info.id)
             if ctl is not None:

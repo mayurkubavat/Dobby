@@ -231,6 +231,9 @@ struct SettingsView: View {
             .modifier(SettingsForm())
             .tabItem { Label("AI Tools", systemImage: "sparkles") }
 
+            PermissionsTab(model: PermissionsModel.shared)
+                .tabItem { Label("Permissions", systemImage: "hand.raised") }
+
             DiagnosticsView(model: diagnostics)
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
         }
@@ -250,7 +253,7 @@ struct SettingsView: View {
 
 /// One look for every tab: grouped rows (macOS 13+) at a fixed height, so no
 /// tab jumps or squeezes its text.
-private struct SettingsForm: ViewModifier {
+struct SettingsForm: ViewModifier {
     func body(content: Content) -> some View {
         content
             .formStyle(.grouped)
@@ -259,7 +262,7 @@ private struct SettingsForm: ViewModifier {
 }
 
 /// A section's explanation: secondary, wrapping onto as many lines as it needs.
-private struct SettingsFooter: View {
+struct SettingsFooter: View {
     let text: String
     init(_ text: String) { self.text = text }
 

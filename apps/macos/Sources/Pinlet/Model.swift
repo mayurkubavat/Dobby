@@ -196,6 +196,67 @@ enum PinletURL {
     }
 }
 
+/// The person's answer to a question, as the engine takes it (control op "answer").
+struct PromptAnswer: Equatable {
+    var ok: Bool
+    var always = false        // an app question: save the app ("Always allow in …")
+    var reason = ""           // with a Deny: what to tell the AI
+    var remember = ""         // a risky step: "task", "hour", "day" or "always" ("" = just this once)
+    var wide = false          // "Run this task without asking"
+
+    /// A standing permission, which takes Touch ID before it is saved.
+    var needsPerson: Bool { ok && (always || wide || remember == "always") }
+
+    var fields: [String: Any] {
+        ["ok": ok, "always": always, "reason": reason, "remember": remember, "wide": wide]
+    }
+}
+
+/// A saved "don't ask again" (pinlet/overlay/rules.py), for Settings > Permissions.
+struct SavedRule: Identifiable, Equatable {
+    var id: String
+    var what: String          // "Send in Mail"
+    var agent: String         // "Claude Code"
+    var scope: String         // task | hour | day | always
+    var expires: Date?
+    var usesToday: Int
+
+    init?(json: [String: Any]) {
+        guard let id = json["id"] as? String, let what = json["what"] as? String else { return nil }
+        self.id = id
+        self.what = what
+        agent = json["agent"] as? String ?? ""
+        scope = json["scope"] as? String ?? "task"
+        expires = (json["expires"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue) }
+        usesToday = (json["uses_today"] as? NSNumber)?.intValue ?? 0
+    }
+
+    /// "Until this task ends", "Until 5:40 PM", "Until Dec 12".
+    func until(now: Date = Date()) -> String {
+        guard let expires else { return "Until this task ends" }
+        let f = DateFormatter()
+        if Calendar.current.isDate(expires, inSameDayAs: now) || expires.timeIntervalSince(now) < 12 * 3600 {
+            f.dateStyle = .none; f.timeStyle = .short
+        } else {
+            f.setLocalizedDateFormatFromTemplate("MMMd")
+        }
+        return "Until " + f.string(from: expires)
+    }
+}
+
+/// An app saved with "Always allow in …" (pinlet/overlay/grants.py).
+struct SavedApp: Identifiable, Equatable {
+    var app: String
+    var expires: Date?
+    var id: String { app }
+
+    init?(json: [String: Any]) {
+        guard let app = json["app"] as? String else { return nil }
+        self.app = app
+        expires = (json["expires"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue) }
+    }
+}
+
 /// An Allow/Deny question waiting for the app's card (pinlet/hub/prompts.py).
 struct Prompt: Equatable, Identifiable {
     var id: Int
@@ -210,6 +271,11 @@ struct Prompt: Equatable, Identifiable {
     var app: String           // "access": the app Pinlet asks to use
     var missed: Bool          // the card ran out; it waits in the menu now
     var holdLeft: Double      // until it is a Deny
+    var action = ""           // a risky step's kind ("send"): the card can offer "Don't ask again"
+    var actionLabel = ""      // "Send"
+    var client = ""           // "Claude Code"
+    var canSave = false       // rules that outlive the task can be saved
+    var image = ""            // a PNG of the target, base64
 
     var isAccess: Bool { kind == "access" }
 
@@ -227,6 +293,11 @@ struct Prompt: Equatable, Identifiable {
         app = json["app"] as? String ?? ""
         missed = json["missed"] as? Bool ?? false
         holdLeft = (json["hold_left"] as? NSNumber)?.doubleValue ?? secsLeft
+        action = json["action"] as? String ?? ""
+        actionLabel = json["action_label"] as? String ?? ""
+        client = json["client"] as? String ?? ""
+        canSave = json["can_save"] as? Bool ?? false
+        image = json["image"] as? String ?? ""
     }
 
     static func list(_ raw: Any?) -> [Prompt] {

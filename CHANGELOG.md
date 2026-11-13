@@ -25,6 +25,17 @@ The first public release will be 0.1.0. It contains:
   web and Electron text fields. With "borrow the pointer when idle", a
   right-click keeps its menu open for up to 15 seconds so the AI can pick from
   it, then closes it and gives the front back.
+- "Don't ask again" on the Allow card for a risky step. The tick covers one
+  kind of step (send, delete, install, account, quit, close) in one app for
+  one AI, for this task, an hour, today, or always (a month). "Allow, and run
+  this task without asking" covers every kind until that task ends. Standing
+  choices take Touch ID or the password. Rules live in `~/.pinlet/rules.json`,
+  signed with a key the app keeps in the Keychain, so an edited file is
+  ignored; each rule works at most 50 times a day (`PINLET_RULE_CEILING`).
+  The card shows a picture of what will be clicked. Settings > Permissions
+  lists every rule and always-allowed app, each with Remove, and "Ask About
+  Everything Again". Passwords, payments, security prompts and Pinlet's own
+  windows are never covered.
 - Background mode on macOS (`PINLET_BACKGROUND=1`): the AI works in one window
   without taking the screen. `focus_window` picks the window without bringing
   it forward, screenshots show that window alone (even when it is covered or

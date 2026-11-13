@@ -395,12 +395,13 @@ class OverlayHAL:
             return  # background mode acts on the agent's own window only, through accessibility
         try:
             px, py = self._to_points(x, y)
-            window = offlimits.window_under(lister(), px, py, getattr(self.overlay, "pid", None))
-            why = offlimits.refusal(window, self._own_pids())
+            found = offlimits.refusal_at(
+                lister(), px, py, self._own_pids(), getattr(self.overlay, "pid", None)
+            )
         except Exception:  # noqa: BLE001 - a listing error must not stop ordinary work
             return
-        if why:
-            self._refuse(why, app=(window or {}).get("owner"))
+        if found:
+            self._refuse(found[0], app=found[1])
 
     def _guard_keys(self) -> None:
         """Refuse keys while Pinlet.app or a macOS security prompt is the frontmost app."""
@@ -466,19 +467,75 @@ class OverlayHAL:
         label = consequential_label(hit.get("role"), hit.get("name"))
         if label is None:
             return
+        from . import rules
+
+        kind = rules.kind_of(label)
+        if self._allowed_by_rule(kind, app):
+            return
         where = app_label(app)
         text = f"{verb.lower()} ‘{label}’" + (f" in {where}" if where else "")
         self.overlay.risk("danger")
         self.overlay.intent(action_text(verb, label, app), ms=60000)
         try:
-            if not self.overlay.confirm(
+            if not self._ask(
                 f"Allow Pinlet to {text}?",
-                detail="This step may send, pay, publish or delete something.",
+                detail="This step may send, publish or delete something.",
+                app=where or app or "",
+                action=kind,
+                image=self._target_picture(hit),
             ):
                 raise OverlayDenied(f"The user denied: {text}")
         finally:
             self.overlay.risk("ok")
             self.overlay.intent("", ms=0)
+
+    def _allowed_by_rule(self, kind: str, app: str | None) -> bool:
+        """True when the person's saved "don't ask again" covers this step; says so on the bar."""
+        from . import rules
+
+        try:
+            pid, agent, _client = rules.asker()
+            rule = rules.book().match(kind, app_label(app) or app, agent, pid)
+        except Exception:  # noqa: BLE001 - when in doubt, ask
+            return False
+        if rule is None:
+            return False
+        self.overlay.intent(f"Allowed by your rule: {rule.describe()}", ms=3000)
+        return True
+
+    def _ask(self, text: str, **extra: Any) -> bool:
+        """``overlay.confirm`` with the extras this overlay understands (older ones take fewer)."""
+        try:
+            params = inspect.signature(self.overlay.confirm).parameters
+        except (TypeError, ValueError):
+            params = {}
+        if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            extra = {k: v for k, v in extra.items() if k in params}
+        return self.overlay.confirm(text, **extra)
+
+    def _target_picture(self, hit: dict | None) -> str:
+        """A small PNG of the control about to be pressed, base64, for the card ("" when none)."""
+        box = (hit or {}).get("bbox")
+        try:
+            if isinstance(box, dict):
+                x, y, w, h = (int(box[k]) for k in ("x", "y", "width", "height"))
+            else:
+                x, y, w, h = (int(v) for v in box)  # type: ignore[union-attr]
+            if w <= 0 or h <= 0:
+                return ""
+            pad_x, pad_y = max(40, (320 - w) // 2), max(24, (120 - h) // 2)
+            region = (max(0, x - pad_x), max(0, y - pad_y), w + 2 * pad_x, h + 2 * pad_y)
+            image = self._inner.capture_screen(region=region)
+            if image.width > 640:
+                image = image.resize((640, max(1, image.height * 640 // image.width)))
+            import base64
+            import io
+
+            out = io.BytesIO()
+            image.convert("RGB").save(out, format="PNG", optimize=True)
+            return base64.b64encode(out.getvalue()).decode()
+        except Exception:  # noqa: BLE001 - the picture is a nicety
+            return ""
 
     def _type_target(self) -> dict | None:
         """The field Pinlet clicked last, if it takes text."""
@@ -796,10 +853,23 @@ class OverlayHAL:
                     return self._inner.keyboard_hotkey(keys, *args, **kwargs)
             finally:
                 self._after_keys()
+        from . import rules
+
+        kind = rules.kind_of_hotkey(reason)
+        if self._allowed_by_rule(kind, app):
+            try:
+                with self._passing():
+                    return self._inner.keyboard_hotkey(keys, *args, **kwargs)
+            finally:
+                self._after_keys()
         self.overlay.risk("danger")
         self.overlay.intent(f"Press {label} ({reason})", ms=60000)
         try:
-            if not self.overlay.confirm(f"Allow Pinlet to press {label} and {reason}?"):
+            if not self._ask(
+                f"Allow Pinlet to press {label} and {reason}?",
+                app=app_label(app) or app or "",
+                action=kind,
+            ):
                 raise OverlayDenied(f"The user denied {label} ({reason})")
             with self._passing():
                 return self._inner.keyboard_hotkey(keys, *args, **kwargs)

@@ -310,6 +310,12 @@ Pinlet.app that takes Touch ID or your password, and the saved rule lapses
 after 30 days (`PINLET_ALWAYS_DAYS`), so Pinlet asks again. Rules you write
 by hand do not lapse.
 
+When a risky step asks (see below), the card also offers **Don't ask again**
+for that kind of step in that app, for that AI: for this task, an hour, today,
+or always (a month, with Touch ID). Settings > Permissions lists what you have
+saved and takes any of it back. Saved rules never cover passwords, payments,
+macOS security prompts or Pinlet's own windows.
+
 In secure mode, risky steps (quit, close, delete, log out, and clicking buttons such as
 **Send**, **Delete**, **Pay** or **Publish**) turn red and ask you to
 **Allow** or **Deny** first, and if you click, scroll or type while Pinlet works,

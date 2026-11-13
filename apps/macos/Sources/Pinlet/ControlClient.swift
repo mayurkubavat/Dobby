@@ -94,8 +94,14 @@ final class ControlClient {
             close()
             return false
         }
+        // The engine signs saved rules with this key and honours no rule without it
+        // (pinlet/overlay/rules.py). It is handed over on every new connection.
+        if let key = rulesKey, send(["id": 0, "op": "rules_key", "key": key]) { _ = readLine() }
         return true
     }
+
+    /// The rule-signing key from the Keychain, as hex (`RulesKey`).
+    var rulesKey: String?
 
     /// One request, its reply (`nil` when the shared Pinlet is not reachable).
     func request(_ op: String, _ fields: [String: Any] = [:]) -> [String: Any]? {
@@ -129,8 +135,26 @@ final class ControlClient {
 
     /// The card's (or a notification's) answer. False when the question is gone.
     @discardableResult
-    func answer(_ promptID: Int, ok: Bool, always: Bool = false, reason: String = "") -> Bool {
-        request("answer", ["prompt_id": promptID, "ok": ok, "always": always, "reason": reason])?["answered"] as? Bool == true
+    func answer(_ promptID: Int, _ answer: PromptAnswer) -> Bool {
+        var fields = answer.fields
+        fields["prompt_id"] = promptID
+        return request("answer", fields)?["answered"] as? Bool == true
+    }
+
+    /// The saved "don't ask again" rules and "Always allow" apps (control op "rules").
+    func permissions() -> (rules: [SavedRule], apps: [SavedApp])? {
+        guard let reply = request("rules"), reply["ok"] as? Bool == true else { return nil }
+        let rules = (reply["rules"] as? [[String: Any]] ?? []).compactMap(SavedRule.init(json:))
+        let apps = (reply["apps"] as? [[String: Any]] ?? []).compactMap(SavedApp.init(json:))
+        return (rules, apps)
+    }
+
+    /// Take back one rule, one app, or (with neither) everything.
+    @discardableResult
+    func revoke(rule: String? = nil, app: String? = nil) -> Bool {
+        var fields: [String: Any] = [:]
+        if let rule { fields["rule"] = rule } else if let app { fields["app"] = app } else { fields["all"] = true }
+        return request("revoke", fields)?["ok"] as? Bool == true
     }
 
     /// Sends the person's instruction to the Pinlet with `pid` (control op "tell").

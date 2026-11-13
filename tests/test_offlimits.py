@@ -13,8 +13,9 @@ from pinlet.overlay.hal import OverlayHAL
 from pinlet.overlay.protocol import OVERLAY_WINDOW_TITLE
 
 
-def _w(pid, owner, title, x, y, w, h, alpha=1.0):
+def _w(pid, owner, title, x, y, w, h, alpha=1.0, layer=0):
     return {
+        "kCGWindowLayer": layer,
         "kCGWindowOwnerPID": pid,
         "kCGWindowOwnerName": owner,
         "kCGWindowName": title,
@@ -25,38 +26,51 @@ def _w(pid, owner, title, x, y, w, h, alpha=1.0):
 
 APP, HELPER = 500, 600
 SCREEN = [
-    _w(HELPER, "Python", OVERLAY_WINDOW_TITLE, 0, 0, 1728, 1117),  # glow / pointer layer
-    _w(HELPER, "Python", OVERLAY_WINDOW_TITLE, 700, 30, 320, 34),  # the bar
-    _w(APP, "Pinlet", "", 650, 40, 440, 160),  # the Allow/Deny card
-    _w(77, "SecurityAgent", "", 500, 400, 400, 300),
+    _w(1134, "MenuBarAgent", "", 0, 0, 1728, 1117, layer=26),  # covers the screen, takes no clicks
+    _w(HELPER, "Python", OVERLAY_WINDOW_TITLE, 0, 0, 1728, 1117, layer=1000),  # glow / pointer
+    _w(HELPER, "Python", OVERLAY_WINDOW_TITLE, 700, 30, 320, 34, layer=1000),  # the bar
+    _w(APP, "Pinlet", "", 650, 40, 440, 160, layer=25),  # the Allow/Deny card
+    _w(615, "Window Server", "Menubar", 0, 0, 1728, 25, layer=24),
+    _w(77, "SecurityAgent", "", 500, 400, 400, 300, layer=2000),
     _w(88, "System Settings", "Privacy & Security", 100, 300, 300, 300),
     _w(99, "Mail", "Inbox", 0, 25, 1728, 1090),
+    _w(APP, "Pinlet", "Pinlet Settings", 1200, 600, 400, 400),  # behind Mail: not in the way
 ]
 
 
 @pytest.mark.parametrize(
     ("point", "word"),
     [
-        ((720, 40), "Pinlet's own window"),  # the bar, though the drawing layer is above it
+        (
+            (720, 40),
+            "Pinlet's own window",
+        ),  # the bar, though drawing and system layers are above it
         ((660, 150), "Pinlet's own window"),  # the card
         ((600, 500), "security prompt"),
         ((150, 350), "privacy and security"),
-        ((1500, 900), None),  # Mail, through the click-through layer
+        ((1500, 900), None),  # Mail, with Pinlet's Settings window hidden behind it
+        ((900, 10), None),  # the menu bar
     ],
 )
 def test_what_a_click_would_land_on(point, word):
-    window = offlimits.window_under(SCREEN, *point, helper_pid=HELPER)
-    why = offlimits.refusal(window, {APP, HELPER})
-    assert (why is None) if word is None else (word in why)
+    found = offlimits.refusal_at(SCREEN, *point, own_pids={APP, HELPER}, helper_pid=HELPER)
+    assert (found is None) if word is None else (word in found[0])
+
+
+def test_pinlet_settings_in_front_is_off_limits():
+    front = [SCREEN[-1], *SCREEN[:-1]]
+    assert "Pinlet's own window" in offlimits.refusal_at(front, 1500, 900, {APP})[0]
 
 
 def test_invisible_windows_do_not_count():
     hidden = [
-        _w(APP, "Pinlet", "", 0, 0, 500, 500, alpha=0.0),
+        _w(APP, "Pinlet", "", 0, 0, 500, 500, alpha=0.0, layer=25),
         _w(9, "Mail", "Inbox", 0, 0, 500, 500),
     ]
-    assert offlimits.window_under(hidden, 10, 10, None)["owner"] == "Mail"
-    assert offlimits.window_under([], 10, 10, None) is None
+    assert offlimits.refusal_at(hidden, 10, 10, {APP}) is None
+    assert offlimits.refusal_at([], 10, 10, {APP}) is None
+    assert offlimits.refusal({"pid": APP, "owner": "Pinlet"}, {APP})
+    assert offlimits.refusal({"pid": 9, "owner": "Mail"}, {APP}) is None
 
 
 @pytest.mark.parametrize(

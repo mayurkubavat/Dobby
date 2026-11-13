@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         menu = StatusMenu(callbacks: .init(
             action: { [weak self] key, pid in self?.send(key, pid: pid) },
-            answer: { [weak self] id, ok, always in self?.answer(id, ok: ok, always: always) },
+            answer: { [weak self] id, answer in self?.answer(id, answer) },
             restartEngine: { [weak self] in self?.engine.restart() },
             openLog: { NSWorkspace.shared.open(PinletPaths.daemonLog) },
             openSettings: { [weak self] in self?.settingsWindow.show() },
@@ -35,10 +35,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: ActivityPanel.showRequest, object: nil, queue: .main) {
             [weak self] _ in self?.activity.show()
         }
-        promptPanel.onAnswer = { [weak self] id, ok, always, reason in
-            self?.answer(id, ok: ok, always: always, reason: reason)
+        promptPanel.onAnswer = { [weak self] id, answer in self?.answer(id, answer) }
+        notifier.onAnswer = { [weak self] id, ok in self?.answer(id, PromptAnswer(ok: ok)) }
+        control.rulesKey = RulesKey.hex()
+        PermissionsModel.shared.fetch = { [weak self] done in
+            self?.control.queue.async { [weak self] in
+                let found = self?.control.permissions()
+                DispatchQueue.main.async { done(found?.rules, found?.apps) }
+            }
         }
-        notifier.onAnswer = { [weak self] id, ok in self?.answer(id, ok: ok) }
+        PermissionsModel.shared.revoke = { [weak self] rule, app, done in
+            self?.control.queue.async { [weak self] in
+                self?.control.revoke(rule: rule, app: app)
+                DispatchQueue.main.async { done() }
+            }
+        }
         notifier.onOpenPrompt = { [weak self] in self?.promptPanel.focus() }
         notifier.start()
         settingsWindow.restartEngine = { [weak self] in self?.engine.restart() }
@@ -157,17 +168,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func answer(_ promptID: Int, ok: Bool, always: Bool = false, reason: String = "") {
-        if ok && always && !confirming.contains(promptID) {
+    private func answer(_ promptID: Int, _ answer: PromptAnswer) {
+        if answer.needsPerson && !confirming.contains(promptID) {
             // A standing permission takes proof of a person (Touch ID). Until macOS
             // answers, the question stays open and its card stays put away.
-            let app = lastPrompts.first(where: { $0.id == promptID })?.app ?? ""
+            let prompt = lastPrompts.first(where: { $0.id == promptID })
+            let app = prompt?.app ?? ""
+            let who = (prompt?.client).flatMap { $0.isEmpty ? nil : $0 } ?? "the AI"
+            let reason: String
+            if answer.always {
+                reason = "always allow Pinlet to use \(app.isEmpty ? "this app" : app)"
+            } else if answer.wide {
+                reason = "let \(who) finish this task without asking"
+            } else {
+                let what = (prompt?.actionLabel).flatMap { $0.isEmpty ? nil : $0 } ?? "this step"
+                reason = "stop asking about “\(what)”\(app.isEmpty ? "" : " in \(app)") for a month"
+            }
             confirming.insert(promptID)
             promptPanel.hide()
-            PersonCheck.confirm("always allow Pinlet to use \(app.isEmpty ? "this app" : app)") { [weak self] passed in
+            PersonCheck.confirm(reason) { [weak self] passed in
                 guard let self else { return }
                 if passed {
-                    self.answer(promptID, ok: true, always: true, reason: reason)
+                    self.answer(promptID, answer)
                 } else {
                     // Cancelled or failed: nothing is saved and the question is asked again.
                     self.confirming.remove(promptID)
@@ -179,7 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         confirming.remove(promptID)
         if promptPanel.shown?.id == promptID { promptPanel.hide() }
         control.queue.async { [weak self] in
-            self?.control.answer(promptID, ok: ok, always: always, reason: reason)
+            self?.control.answer(promptID, answer)
             DispatchQueue.main.async { self?.poll() }
         }
     }

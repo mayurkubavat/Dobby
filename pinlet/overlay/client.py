@@ -53,6 +53,16 @@ class OverlayDenied(OverlayStopped):
     """
 
 
+def _end_task_rules() -> None:
+    """Stop ends the "for this task" rules of the AI that was stopped."""
+    try:
+        from . import rules
+
+        rules.book().end_task(rules.asker()[0])
+    except Exception:  # noqa: BLE001 - Stop itself must never fail
+        log.debug("could not end task rules", exc_info=True)
+
+
 class OverlayBlocked(OverlayDenied):
     """Pinlet may not do this in this app (``~/.pinlet/apps.json`` or a Deny to "Let Pinlet use …?").
 
@@ -496,6 +506,7 @@ class OverlayClient(NullOverlay):
                 if self._stop_requested:
                     self._stop_requested = False
                     self._user_input_seen = False
+                    _end_task_rules()
                     raise OverlayStopped("Stopped by the user from the Pinlet overlay")
                 if not (self._paused or self._user_active):
                     break
@@ -616,8 +627,13 @@ class OverlayClient(NullOverlay):
         deny: str = "Deny",
         kind: str = "danger",
         app: str = "",
+        action: str = "",
+        image: str = "",
     ) -> bool:
         """Ask the user Allow/Deny on the pill. False on deny or timeout.
+
+        ``action`` (the kind of risky step) and ``image`` (a picture of the
+        target) go to Pinlet.app's card, which can then offer "Don't ask again".
 
         ``kind`` "access" asks whether Pinlet may use an app (calm colours);
         "danger" is a risky step. ``detail`` explains; ``allow``/``deny``
@@ -628,7 +644,7 @@ class OverlayClient(NullOverlay):
         with ``control_changed`` so this agent looks again.
         """
         with _yield_lease_while_asking() as turn:
-            ok = self._confirm(text, secs, detail, allow, deny, kind, app)
+            ok = self._confirm(text, secs, detail, allow, deny, kind, app, action, image)
             turn.reacquire = ok  # a Deny is reported as a Deny, not as "look again"
         return ok
 
@@ -641,6 +657,8 @@ class OverlayClient(NullOverlay):
         deny: str,
         kind: str,
         app: str,
+        action: str = "",
+        image: str = "",
     ) -> bool:
         try:
             from pinlet.hub import prompts
@@ -648,7 +666,15 @@ class OverlayClient(NullOverlay):
             if prompts.app_listening():  # Pinlet.app shows it as a native card + notification
                 self.intent("Waiting for you: " + text)
                 return prompts.ask(
-                    text, secs=secs, detail=detail, allow=allow, deny=deny, kind=kind, app=app
+                    text,
+                    secs=secs,
+                    detail=detail,
+                    allow=allow,
+                    deny=deny,
+                    kind=kind,
+                    app=app,
+                    action=action,
+                    image=image,
                 )
         except ImportError:
             pass
