@@ -70,6 +70,7 @@ from .barlock import (  # noqa: E402
     waiting_dir,
 )
 from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
+from .protocol import ACTING_STATES  # noqa: E402
 from .text import short  # noqa: E402
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -95,7 +96,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 # Classic arrow, y down, tip at (0, 0) (same outline as the macOS helper).
 _ARROW = [(0, 0), (0, 18), (4.5, 14), (8, 21.5), (10.5, 20.5), (7, 13), (13, 13)]
-_STATE_ICON = {"idle": "", "thinking": "…", "typing": "⌨", "waiting_user": "?"}
+_STATE_ICON = {
+    "idle": "",
+    "thinking": "…",
+    "typing": "⌨",
+    "keys": "⌨",
+    "scrolling": "↕",
+    "dragging": "✥",
+    "waiting_user": "?",
+}
 # Ctrl+Alt+<key> per action, first free key wins. GNOME/Metacity grabs Ctrl+Alt+Esc
 # (cycle-panels), so Stop falls back to Ctrl+Alt+End there.
 _HOTKEYS = {"stop": ("Escape", "End"), "pause": ("p",)}
@@ -1662,8 +1671,10 @@ class X11Overlay:
             self.ack(msg_id)
         elif op == "cursor.state":
             self.state = msg["state"]
-            if self.state in ("typing", "thinking"):
+            if self.state in ("thinking", *ACTING_STATES):
                 self._mark_active()
+            if self.state in ACTING_STATES and self.cursor is None:
+                self._place_pointer(self._real_mouse())
             self._layout_tag()
             self.ack(msg_id)
         elif op == "cursor.hide":

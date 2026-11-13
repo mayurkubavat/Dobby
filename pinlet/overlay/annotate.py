@@ -229,7 +229,7 @@ def _draw_chip(
     dfont = _font(int(11 * scale))
     h = 22 * scale
     pad = 9 * scale
-    icon = 8 * scale if state in ("thinking", "typing", "waiting_user") else 0.0
+    icon = 8 * scale if state not in ("idle", "") else 0.0
     lw = d.textlength(label, font=font)
     dw = d.textlength(detail, font=dfont) if detail else 0.0
     chev = 8 * scale

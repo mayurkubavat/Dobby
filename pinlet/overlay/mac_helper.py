@@ -146,6 +146,7 @@ from .menu import (
     status_of,
     takes_over,
 )
+from .protocol import ACTING_STATES
 
 _kCGEventSourceUserData = 42
 PINLET_EVENT_TAG = 0x444F4242  # same value as pinlet.hal.macos.PINLET_EVENT_TAG
@@ -1874,8 +1875,18 @@ class OverlayController:
             self.ack(msg_id)
         elif op == "cursor.state":
             self.cursor_state = msg["state"]
-            if self.cursor_state in ("typing", "thinking"):
+            if self.cursor_state in ("thinking", *ACTING_STATES):
                 self._mark_active()
+            if (
+                self.cursor_state in ACTING_STATES
+                and self.cursor is None
+                and not self.cfg.get("background")
+            ):
+                # Keys and scrolling land where the real pointer is: show Pinlet's there.
+                start = self._real_mouse()
+                self._place_pointer(start, 0)
+                self._set_pointer_visible(True)
+                self.cursor = start
             self._refresh_tag()
             self._refresh_pill()  # thinking: bar shimmer and glow sweep
             self.ack(msg_id)

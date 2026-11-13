@@ -134,7 +134,7 @@ def test_bar_offers_take_over_when_locked():
     assert bar_click("working", "primary") == "pause"  # Take over is the existing Pause
     spec = bar_spec(view)
     primary = next(b for b in spec.buttons if b.key == "primary")
-    assert primary.title == "Take over" and primary.icon == "hand.raised.fill"
+    assert primary.title == "Take over" and primary.icon is None  # a word, filled
 
 
 # -------------------------------------------------------------- protocol

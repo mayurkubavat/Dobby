@@ -88,7 +88,13 @@ _ARROW_H = 21.5 * _ARROW_SCALE
 _ARROW_W = 13 * _ARROW_SCALE
 
 # SF Symbols for the chip's state icon ("thinking" uses an animated arc).
-STATE_SYMBOLS = {"typing": "keyboard", "waiting_user": "hand.raised.fill"}
+STATE_SYMBOLS = {
+    "typing": "keyboard",
+    "keys": "command",
+    "scrolling": "arrow.up.arrow.down",
+    "dragging": "hand.draw.fill",
+    "waiting_user": "hand.raised.fill",
+}
 _CHIP_H = 20.0
 _CHIP_FONT = 11.5
 

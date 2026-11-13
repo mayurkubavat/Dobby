@@ -149,11 +149,10 @@ class TestBar:
             view(working=True), step="Click ‘Send’", steps=7, elapsed=42, narrate=False
         )
         assert quiet.text == "Click ‘Send’ · step 7 · 0:42"
-        assert keys(spec) == ["primary", "secondary", "hide", "menu"]
-        icons = {b.key: b.icon for b in spec.buttons}
-        assert icons["primary"] == "pause.fill" and icons["secondary"] == "stop.fill"
-        stop = spec.buttons[1]
-        assert stop.role == "danger" and "⌃⌥⎋" in stop.tip
+        # One choice while it works, in words: Pause. Stop is ⌃⌥⎋ and the menu.
+        assert keys(spec) == ["primary", "hide", "menu"]
+        pause = spec.buttons[0]
+        assert pause.title == "Pause" and pause.icon is None and "⌃⌥⎋" in pause.tip
 
     def test_working_turbo_and_thinking(self):
         spec = style.bar_spec(
@@ -177,9 +176,19 @@ class TestBar:
         )
         assert spec.text == "Builder is working · Press ⌘S · step 2 · 0:03"
 
-    def test_paused_uses_play_icon(self):
-        spec = style.bar_spec(view(paused=True))
-        assert spec.buttons[0].icon == "play.fill" and spec.text == "Pinlet is paused"
+    def test_paused_offers_resume_or_cancel_in_words(self):
+        from pinlet.overlay.menu import bar_click
+
+        for v in (view(paused=True), view(takeover=True)):
+            spec = style.bar_spec(v)
+            resume, cancel = spec.buttons[:2]
+            assert resume.title.startswith("Resume") and resume.icon is None
+            assert resume.role == "accent" and style.is_filled(resume)
+            assert cancel.title == "Cancel task" and cancel.icon is None and cancel.role == "danger"
+            assert bar_click(spec.mode, "primary") == "resume"
+            assert bar_click(spec.mode, "secondary") == "stop"
+        assert style.bar_spec(view(paused=True)).text == "Pinlet is paused"
+        assert style.bar_spec(view(paused=True), label="Pip").text == "Pip is paused"
 
     def test_stopped_keeps_words(self):
         spec = style.bar_spec(("stopped", "Pinlet stopped", "OK", "Hide", "danger", 1.0))

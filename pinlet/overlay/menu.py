@@ -129,6 +129,10 @@ def picker_groups(
 BarView = tuple[str, str, str, str, str, float]
 
 
+#: The paused bar's second choice: ends the task (what Stop does).
+CANCEL = "Cancel task"
+
+
 def bar_view(
     *,
     paused: bool,
@@ -163,21 +167,21 @@ def bar_view(
     click into Pinlet's window; Pause is offered as "Take over".
     """
     if paused:
-        return ("paused", "Pinlet is paused", "Resume", "Stop", "caution", 1.0)
+        return ("paused", "Pinlet is paused", "Resume", CANCEL, "caution", 1.0)
     if takeover:
         text = (
             "You're in control · Pinlet waits until you stop"
             if takeover_resume == "auto"
             else "You're in control"
         )
-        return ("takeover", text, "Resume now", "Stop", "caution", 1.0)
+        return ("takeover", text, "Resume now", CANCEL, "caution", 1.0)
     if current_mode == "stopped":
         return ("stopped", "Pinlet stopped", "OK", "Hide", "danger", 1.0)
     if working:
         label = "Pinlet ⚡ Turbo" if turbo else "Pinlet is working"
         return (
             "working",
-            label + " · ⌃⌥⎋ stops",
+            label + " · ⌃⌥P pauses",
             "Take over" if locked else "Pause",
             "Stop",
             "risk",

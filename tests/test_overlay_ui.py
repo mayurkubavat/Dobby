@@ -47,15 +47,17 @@ class TestBarStaysOn:
         assert view(owner=False, working=True)[0] == "working"
         assert view(owner=False, paused=True)[0] == "paused"
 
-    def test_working_uses_risk_colour_and_names_stop_hotkey(self):
+    def test_working_uses_risk_colour_and_names_pause_hotkey(self):
         v = view(working=True)
-        assert v[4] == "risk" and "⌃⌥⎋" in v[1]
+        assert v[4] == "risk" and "⌃⌥P" in v[1]
 
 
 class TestBarStates:
     def test_paused_beats_everything(self):
         v = view(paused=True, takeover=True, working=True, current_mode="stopped")
-        assert v[:4] == ("paused", "Pinlet is paused", "Resume", "Stop") and v[4] == "caution"
+        assert (
+            v[:4] == ("paused", "Pinlet is paused", "Resume", "Cancel task") and v[4] == "caution"
+        )
 
     @pytest.mark.parametrize(
         "resume,text", [("auto", "waits until you stop"), ("manual", "You're in control")]

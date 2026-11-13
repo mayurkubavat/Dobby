@@ -19,7 +19,10 @@ PROTOCOL_VERSION = 4
 #: Name given to every overlay panel, so window listings can filter them out.
 OVERLAY_WINDOW_TITLE = "Pinlet Overlay"
 
-CURSOR_STATES = ("idle", "thinking", "typing", "waiting_user")
+CURSOR_STATES = ("idle", "thinking", "typing", "keys", "scrolling", "dragging", "waiting_user")
+#: States in which Pinlet is sending input right now: the pointer is on screen
+#: with a badge for the kind of input, so every action shows where it lands.
+ACTING_STATES = ("typing", "keys", "scrolling", "dragging")
 RISK_LEVELS = ("ok", "caution", "danger")
 CONFIRM_KINDS = ("danger", "access")
 

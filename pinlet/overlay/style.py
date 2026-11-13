@@ -274,12 +274,36 @@ _ICONS = {
     "Resume now": ("play.fill", "Resume now"),
     "Stop": ("stop.fill", "Stop Pinlet (⌃⌥⎋)"),
 }
+# The working and paused bars spell their choices out: Pause, then Resume or
+# Cancel task. Words, not icons, so nobody has to guess what a square does.
+_WORD_TIPS = {
+    "Pause": "Pause before the next step and take over (⌃⌥P). ⌃⌥⎋ ends the task at once.",
+    "Take over": _ICONS["Take over"][1],
+    "Resume": "Let Pinlet carry on from here (⌃⌥P)",
+    "Resume now": "Let Pinlet carry on from here",
+    "Cancel task": "End this task (⌃⌥⎋). Nothing is undone.",
+}
+
+
+def _word_button(key: str, title: str) -> Button:
+    role = (
+        "accent"
+        if title.startswith("Resume")
+        else ("danger" if title == "Cancel task" else "normal")
+    )
+    return Button(key, title, None, _WORD_TIPS.get(title, ""), role)
+
+
 _HIDE = Button("hide", "–", "minus", "Hide this bar (⌃⌥H shows it again)")
 _MENU = Button("menu", "▾", "chevron.down", "Pinlet menu")
 
 
 def _action_button(key: str, title: str, style: str) -> Button:
-    role = "danger" if title in ("Stop", "Deny") else ("accent" if title == "Allow" else "normal")
+    role = (
+        "danger"
+        if title in ("Stop", "Deny", "Cancel task")
+        else ("accent" if title == "Allow" else "normal")
+    )
     icon, tip = _ICONS.get(title, (None, ""))
     if style == "classic":
         icon = None
@@ -372,17 +396,15 @@ def bar_spec(
             )
         else:
             live = working_text(step, steps, elapsed, turbo, lead=lead)
-        buttons = (
-            _action_button("primary", primary, style),
-            _action_button("secondary", secondary, style),
-            _HIDE,
-            _MENU,
-        )
+        # One choice while it works: Pause. Stop stays on ⌃⌥⎋ and in the ▾ menu.
+        buttons = (_word_button("primary", primary), _HIDE, _MENU)
         return BarSpec(mode, live, buttons, color, dot_alpha, shimmer=thinking)
     if mode in ("paused", "takeover"):
+        if label != "Pinlet":
+            text = text.replace("Pinlet is paused", f"{label} is paused")
         buttons = (
-            _action_button("primary", primary, style),
-            _action_button("secondary", secondary, style),
+            _word_button("primary", primary),
+            _word_button("secondary", secondary),
             _HIDE,
             _MENU,
         )
