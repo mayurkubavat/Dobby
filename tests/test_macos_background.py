@@ -557,9 +557,12 @@ def test_agent_browser_opens_a_separate_background_instance(tmp_path, monkeypatc
     assert not profile.exists()  # --print changes nothing
 
 
-def test_agent_browser_puts_the_persons_app_back_in_front():
+def test_agent_browser_puts_the_persons_app_back_in_front(monkeypatch):
+    import sys
+
     from pinlet import agent_browser
 
+    monkeypatch.setitem(sys.modules, "AppKit", None)  # on a Mac: do not ask the real one
     calls = []
 
     def run(cmd, **kw):
