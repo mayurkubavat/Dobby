@@ -168,13 +168,30 @@ def test_capture_shows_only_the_target_window_where_it_sits():
     assert region.size == (400, 300) and region.getpixel((0, 0)) == (255, 255, 255)
 
 
-def test_capture_draws_the_apps_open_menu_over_the_window():
-    wins = _windows()
-    menu = _win(9, "TextEdit", "", MINE, 150, 80, 120, 200, layer=101)
-    hal, _, captured = _hal(windows=[menu, *wins])
+def test_capture_places_a_menu_that_hangs_below_the_window():
+    # macOS hands back the window and its open menu as one picture covering both.
+    menu = _win(9, "TextEdit", "", MINE, 120, 340, 100, 100, layer=101)
+    hal, _, captured = _hal(windows=[menu, *_windows()])
+    both = Image.new("RGB", (800, 780), "black")  # 400 x 390 points at 2x
+    both.paste(Image.new("RGB", (800, 600), "white"), (0, 0))
+    both.paste(Image.new("RGB", (200, 200), "blue"), (40, 580))
+    hal._capture_window = lambda wid: captured.append(wid) or both
     hal.focus_window("2")
-    hal.capture_screen()
-    assert captured == ["2", "9"]  # the window first, the menu on top
+    shot = hal.capture_screen()
+    assert captured == ["2"]
+    assert shot.getpixel((300, 200)) == (255, 255, 255)  # the window, not shrunk
+    assert shot.getpixel((498, 348)) == (255, 255, 255)  # its bottom-right corner
+    assert shot.getpixel((170, 400)) == (0, 0, 255)  # the menu, where it really is
+    assert shot.getpixel((300, 400)) == shot.getpixel((5, 5))  # beside the menu: backdrop
+
+
+def test_capture_of_an_unexpected_size_is_shown_as_the_window():
+    hal, _, _ = _hal()
+    hal._capture_window = lambda wid: Image.new("RGB", (613, 377), "white")
+    hal.focus_window("2")
+    shot = hal.capture_screen()
+    assert shot.getpixel((101, 51)) == (255, 255, 255)
+    assert shot.getpixel((498, 348)) == (255, 255, 255)
 
 
 def test_capture_after_the_window_closed_asks_for_a_new_target():
@@ -350,3 +367,53 @@ def test_accessibility_tree_reads_the_targets_app_not_the_front_app():
     target.choose("2", MINE, "TextEdit")
     names = {e.name for e in inspector.inspect_desktop()}
     assert "Mine" in names and "Theirs" not in names
+
+
+def _menu_bar(enabled=True):
+    select_all = _el(
+        "AXMenuItem",
+        AXTitle="Select All",
+        AXMenuItemCmdChar="A",
+        AXMenuItemCmdModifiers=0,
+        AXEnabled=enabled,
+        actions=["AXPress"],
+    )
+    save_as = _el(
+        "AXMenuItem",
+        AXTitle="Save As",
+        AXMenuItemCmdChar="S",
+        AXMenuItemCmdModifiers=1,  # shift
+        actions=["AXPress"],
+    )
+    save = _el(
+        "AXMenuItem",
+        AXTitle="Save",
+        AXMenuItemCmdChar="S",
+        AXMenuItemCmdModifiers=0,
+        actions=["AXPress"],
+    )
+    edit = _el("AXMenuBarItem", children=[_el("AXMenu", children=[select_all])], AXTitle="Edit")
+    file = _el("AXMenuBarItem", children=[_el("AXMenu", children=[save, save_as])], AXTitle="File")
+    return _el("AXMenuBar", children=[file, edit])
+
+
+def test_cmd_shortcut_picks_the_menu_item_instead_of_sending_keys():
+    ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar()}})
+    hal, q, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    hal.keyboard_hotkey(["cmd", "a"])
+    hal.keyboard_hotkey(["cmd", "shift", "s"])
+    hal.keyboard_hotkey(["cmd", "s"])
+    assert ax.performed == [("Select All", "AXPress"), ("Save As", "AXPress"), ("Save", "AXPress")]
+    assert q.posted == [] and q.to_pid == []
+
+
+def test_shortcut_without_an_enabled_menu_item_is_sent_as_keys_to_the_app():
+    ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar(enabled=False)}})
+    hal, q, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    hal.keyboard_hotkey(["cmd", "a"])  # disabled item
+    hal.keyboard_hotkey(["cmd", "k"])  # no such item
+    hal.keyboard_hotkey(["shift", "tab"])  # not a Cmd shortcut
+    assert ax.performed == []
+    assert q.posted == [] and {pid for pid, _ in q.to_pid} == {MINE}

@@ -236,3 +236,73 @@ def ax_scroll_at(ax: Any, pid: int, x: float, y: float, dx: int, dy: int) -> boo
         target = min(1.0, max(0.0, now - step if lines > 0 else now + step))
         moved = _set(ax, bar, "AXValue", target) or moved
     return moved
+
+
+_CMD_NAMES = frozenset({"cmd", "command", "super", "meta", "win"})
+_SHIFT, _OPTION, _CONTROL, _NO_CMD = 1, 2, 4, 8  # AXMenuItemCmdModifiers bits
+_MENU_DEPTH = 3
+_MENU_ITEMS = 1500
+
+
+def _shortcut(keys: list[str]) -> tuple[str, int] | None:
+    """A Cmd chord as (character, AX modifier bits), or None when it is not one."""
+    mods, chars = 0, []
+    has_cmd = False
+    for key in keys:
+        k = str(key).lower().strip()
+        if k in _CMD_NAMES:
+            has_cmd = True
+        elif k == "shift":
+            mods |= _SHIFT
+        elif k in ("alt", "option", "opt"):
+            mods |= _OPTION
+        elif k in ("ctrl", "control"):
+            mods |= _CONTROL
+        else:
+            chars.append(k)
+    if not has_cmd or len(chars) != 1 or len(chars[0]) != 1:
+        return None
+    return chars[0].upper(), mods
+
+
+def ax_menu_shortcut(ax: Any, pid: int, keys: list[str]) -> bool:
+    """Picks the menu item of app ``pid`` whose keyboard shortcut is ``keys``.
+
+    An app that is not in front does not act on Cmd shortcuts sent as key
+    events, but its menu items can still be pressed. False when the chord is
+    not a Cmd shortcut, no enabled item has it, or the press failed (the
+    caller then sends the keys anyway).
+    """
+    wanted = _shortcut(keys)
+    if wanted is None:
+        return False
+    char, mods = wanted
+    try:
+        app = ax.AXUIElementCreateApplication(int(pid))
+    except Exception:  # noqa: BLE001
+        return False
+    bar = _attr(ax, app, "AXMenuBar")
+    if bar is None:
+        return False
+    budget = [_MENU_ITEMS]
+
+    def search(el: Any, depth: int) -> Any:
+        for child in _attr(ax, el, "AXChildren") or []:
+            if budget[0] <= 0:
+                return None
+            budget[0] -= 1
+            if str(_attr(ax, child, "AXMenuItemCmdChar") or "").upper() == char:
+                item_mods = int(_number(_attr(ax, child, "AXMenuItemCmdModifiers")) or 0)
+                if item_mods == mods:  # the "no Cmd" bit is not set, so Cmd is part of it
+                    return child
+            if depth < _MENU_DEPTH:
+                for menu in _attr(ax, child, "AXChildren") or []:
+                    hit = search(menu, depth + 1)
+                    if hit is not None:
+                        return hit
+        return None
+
+    item = search(bar, 0)
+    if item is None or _attr(ax, item, "AXEnabled") is False:
+        return False
+    return _perform(ax, item, "AXPress")

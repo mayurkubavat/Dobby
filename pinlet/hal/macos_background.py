@@ -21,6 +21,7 @@ wait until the person is idle, borrow the pointer and put everything back.
 from __future__ import annotations
 
 import contextlib
+import itertools
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -29,7 +30,7 @@ from PIL import Image
 from typing_extensions import override
 
 from pinlet.hal import target
-from pinlet.hal.background import ax_action_at, ax_click_at, ax_scroll_at
+from pinlet.hal.background import ax_action_at, ax_click_at, ax_menu_shortcut, ax_scroll_at
 from pinlet.hal.macos import MacHAL, _load_ax, _screencapture
 from pinlet.types import WindowInfo
 
@@ -38,7 +39,7 @@ _BACKDROP = (38, 38, 40)
 # Off-screen windows worth listing: titled and big enough to be a real window.
 _MIN_W, _MIN_H = 100, 60
 # Menus, popovers and sheets of the same app drawn over the window.
-_MAX_EXTRAS = 4
+_MAX_EXTRAS = 6
 _IDLE_SECS = 3.0
 _IDLE_WAIT_SECS = 45.0
 _HID_STATE = 1  # kCGEventSourceStateHIDSystemState
@@ -188,37 +189,49 @@ class BackgroundMacHAL(MacHAL):
             return
 
     # ------------------------------------------------------------- capture
-    def _extras(self, chosen: target.Target, win: WindowInfo) -> list[WindowInfo]:
-        """Menus, popovers and sheets of the target's app that overlap it, back to front."""
+    def _extras(self, chosen: target.Target) -> list[WindowInfo]:
+        """Windows of the target's app that may hang off it: menus, popovers, sheets."""
         found: list[WindowInfo] = []
-        t = win.bbox
         for w in self._window_dicts(every_desktop=True):
             if int(w.get("kCGWindowOwnerPID", -1)) != chosen.pid:
                 continue
-            wid = str(int(w.get("kCGWindowNumber", 0)))
-            if wid == chosen.window_id:
+            if str(int(w.get("kCGWindowNumber", 0))) == chosen.window_id:
                 continue
             layer = int(w.get("kCGWindowLayer", 0))
             if layer == 0 and str(w.get("kCGWindowName", "") or ""):
                 continue  # another document window, not part of ours
-            if layer == 0 and not w.get("kCGWindowIsOnscreen", False):
-                continue  # a hidden helper window
             info = self._window_info({**w, "kCGWindowLayer": 0})
-            if info is None:
-                continue
-            b = info.bbox
-            apart = (
-                b.x >= t.x + t.width
-                or b.x + b.width <= t.x
-                or b.y >= t.y + t.height
-                or b.y + b.height <= t.y
-            )
-            if apart or b.width * b.height > t.width * t.height:
-                continue
-            found.append(info)
+            if info is not None:
+                found.append(info)
             if len(found) >= _MAX_EXTRAS:
                 break
-        return list(reversed(found))
+        return found
+
+    @staticmethod
+    def _union(boxes: list[Any]) -> tuple[int, int, int, int]:
+        x0 = min(b.x for b in boxes)
+        y0 = min(b.y for b in boxes)
+        x1 = max(b.x + b.width for b in boxes)
+        y1 = max(b.y + b.height for b in boxes)
+        return x0, y0, x1 - x0, y1 - y0
+
+    def _layout(
+        self, shot: Image.Image, win: WindowInfo, extras: list[WindowInfo]
+    ) -> tuple[float, tuple[int, int], list[Any]] | None:
+        """Works out what a window capture shows: (scale, top-left on screen, window boxes).
+
+        macOS captures a window together with whatever hangs off it (an open
+        menu, a sheet), so the picture can be larger than the window. The
+        picture's size says which of the app's other windows are in it.
+        """
+        for count in range(len(extras) + 1):
+            for group in itertools.combinations(extras, count):
+                boxes = [win.bbox, *(e.bbox for e in group)]
+                x, y, w, h = self._union(boxes)
+                for scale in (2.0, 1.0, 3.0):
+                    if abs(shot.width - w * scale) <= 2 and abs(shot.height - h * scale) <= 2:
+                        return scale, (x, y), boxes
+        return None
 
     @override
     def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> Image.Image:
@@ -238,17 +251,28 @@ class BackgroundMacHAL(MacHAL):
                 "gone. Call list_windows, then focus_window(window_id) to pick one."
             )
         canvas = Image.new("RGB", self.get_screen_size(), _BACKDROP)
-        for info in [win, *self._extras(chosen, win)]:
-            try:
-                shot = self._capture_window(info.window_id)
-            except Exception:  # noqa: BLE001 - a popup that closed meanwhile
-                if info is win:
-                    raise
-                continue
-            size = (max(1, info.bbox.width), max(1, info.bbox.height))
-            if shot.size != size:
-                shot = shot.resize(size, Image.LANCZOS)
-            canvas.paste(shot.convert("RGB"), (info.bbox.x, info.bbox.y))
+        shot = self._capture_window(win.window_id).convert("RGB")
+        layout = self._layout(shot, win, self._extras(chosen))
+        if layout is None:
+            # An unexpected size: show it as the window, the best guess there is.
+            size = (max(1, win.bbox.width), max(1, win.bbox.height))
+            canvas.paste(shot.resize(size, Image.LANCZOS), (win.bbox.x, win.bbox.y))
+        else:
+            scale, (ox, oy), boxes = layout
+            for b in boxes:  # the window first, then what hangs off it
+                left, top = (b.x - ox) * scale, (b.y - oy) * scale
+                piece = shot.crop(
+                    (
+                        round(left),
+                        round(top),
+                        round(left + b.width * scale),
+                        round(top + b.height * scale),
+                    )
+                )
+                size = (max(1, b.width), max(1, b.height))
+                if piece.size != size:
+                    piece = piece.resize(size, Image.LANCZOS)
+                canvas.paste(piece, (b.x, b.y))
         if region:
             x, y, w, h = (int(v) for v in region)
             return canvas.crop((x, y, x + max(1, w), y + max(1, h)))
@@ -333,7 +357,13 @@ class BackgroundMacHAL(MacHAL):
     def keyboard_hotkey(self, keys: list[str]) -> None:
         if self._borrowing:
             return super().keyboard_hotkey(keys)
-        with self._to_app(self._need_target().pid):
+        chosen = self._need_target()
+        # An app that is not in front ignores Cmd shortcuts sent as keys, so
+        # pick the menu item that has the shortcut instead.
+        if ax_menu_shortcut(self._ax_api(), chosen.pid, keys):
+            self._cooldown()
+            return None
+        with self._to_app(chosen.pid):
             return super().keyboard_hotkey(keys)
 
     @override
