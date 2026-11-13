@@ -231,7 +231,8 @@ accessibility, and typing and keys go to that window's app. Prefer buttons, fiel
 plain keys (Tab, Return, arrows). Hovering does nothing. Drags, right-clicks, clicks on a canvas and most Cmd
 shortcuts may be refused because they need the window in front: try another way (Cmd+A in a text
 field does work), or tell the person the step needs them. When a right-click is allowed, its menu
-stays open for about 15 seconds: take a screenshot and click the item, or press Escape. After a
+stays open for about 15 seconds: take a screenshot and click the item, or press Escape (Return
+alone picks whatever the pointer is on). After a
 click or key, check that it took effect before going on. A click in a text field puts the
 caret there without selecting what is in it: press Cmd+A before typing to replace it. Scrolling a
 web page moves a page at a time. To work in another window, call
