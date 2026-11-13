@@ -22,8 +22,21 @@ Kept free of engine imports so connecting is fast.
 
 from __future__ import annotations
 
+import importlib
 import sys
 from collections.abc import Sequence
+
+# Commands that hand the rest of the line to another module's ``main``. Each
+# module is imported only when its command runs, so connecting stays fast.
+_COMMANDS = {
+    "setup": "pinlet.agent_setup",
+    "doctor": "pinlet.doctor",
+    "mode": "pinlet.mode",
+    "policy": "pinlet.policy",
+    "activity": "pinlet.journal",
+    "tasks": "pinlet.control.tasks",
+    "triage": "pinlet.triage",
+}
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -38,35 +51,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         from pinlet.hub.daemon import serve
 
         sys.exit(serve())
-    if command == "setup":
-        from pinlet.agent_setup import main as setup
-
-        rest = argv[argv.index("setup") + 1 :]
-        sys.exit(setup(rest))
-    if command == "doctor":
-        from pinlet.doctor import main as doctor
-
-        sys.exit(doctor(argv[argv.index("doctor") + 1 :]))
-    if command == "mode":
-        from pinlet.mode import main as mode
-
-        sys.exit(mode(argv[argv.index("mode") + 1 :]))
-    if command == "policy":
-        from pinlet.policy import main as policy
-
-        sys.exit(policy(argv[argv.index("policy") + 1 :]))
-    if command == "activity":
-        from pinlet.journal import main as activity
-
-        sys.exit(activity(argv[argv.index("activity") + 1 :]))
-    if command == "tasks":
-        from pinlet.control.tasks import main as tasks
-
-        sys.exit(tasks(argv[argv.index("tasks") + 1 :]))
-    if command == "triage":
-        from pinlet.triage import main as triage
-
-        sys.exit(triage(argv[argv.index("triage") + 1 :]))
+    if command in _COMMANDS:
+        run = importlib.import_module(_COMMANDS[command]).main
+        sys.exit(run(argv[argv.index(command) + 1 :]))
     if command == "stdio":
         from pinlet.hub.connector import run_in_process
 

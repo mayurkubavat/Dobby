@@ -44,65 +44,15 @@ from pathlib import Path
 
 from pinlet import runtime
 
+# The skill readers lived here before pinlet.skills; kept importable from this module.
+from pinlet.skills import (  # noqa: F401
+    read_skill,
+    skill_names,
+    skills_dir,
+    skills_index_markdown,
+)
+
 SERVER_NAME = "Pinlet"
-_SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
-
-# ------------------------------------------------------------------ skills
-def skills_dir() -> Path | None:
-    """Returns the folder holding the skills (``plugins/pinlet/skills`` in a clone), if present."""
-    here = Path(__file__).resolve().parent.parent / "plugins" / "pinlet" / "skills"
-    return here if here.is_dir() else None
-
-
-def skill_names(root: Path | None = None) -> list[str]:
-    """Names of the skills shipped with Pinlet, entry skill first."""
-    root = root or skills_dir()
-    if root is None:
-        return []
-    names = sorted(p.name for p in root.iterdir() if (p / "SKILL.md").is_file())
-    return sorted(names, key=lambda n: n != "pinlet")
-
-
-def _frontmatter(text: str) -> dict[str, str]:
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
-    out: dict[str, str] = {}
-    for line in (m.group(1) if m else "").splitlines():
-        key, _, value = line.partition(":")
-        out[key.strip()] = value.strip()
-    return out
-
-
-def read_skill(name: str, root: Path | None = None) -> str:
-    """Returns one skill's SKILL.md text. Raises ValueError for an unknown or unsafe name."""
-    root = root or skills_dir()
-    if root is None or not _SKILL_NAME.match(name or ""):
-        raise ValueError(f"Unknown Pinlet skill {name!r}")
-    path = root / name / "SKILL.md"
-    if not path.is_file():
-        raise ValueError(f"Unknown Pinlet skill {name!r}; known: {', '.join(skill_names(root))}")
-    return path.read_text(encoding="utf-8")
-
-
-def skills_index_markdown(root: Path | None = None) -> str:
-    """A Markdown list of the skills with their descriptions and resource URIs."""
-    root = root or skills_dir()
-    names = skill_names(root)
-    if not names:
-        return (
-            "# Pinlet skills\n\nThe skills folder is not installed with this copy of Pinlet. "
-            "Install Pinlet from a clone (`pip install -e .`) to get them.\n"
-        )
-    lines = [
-        "# Pinlet skills",
-        "",
-        "Read `mcp://pinlet/skills/<name>` for one. Start with `pinlet`.",
-        "",
-    ]
-    for name in names:
-        desc = _frontmatter(read_skill(name, root)).get("description", "")
-        lines.append(f"- `{name}` (mcp://pinlet/skills/{name}): {desc}")
-    return "\n".join(lines) + "\n"
 
 
 # ------------------------------------------------------------------ tools
@@ -275,9 +225,8 @@ def _copilot(home: Path, cmd: list[str], env: dict[str, str], force: bool = Fals
     entry = {"type": "local", "command": cmd[0], "args": cmd[1:], "tools": ["*"]}
     if env:
         entry["env"] = env
-    return _json_server(
-        "copilot", home / ".copilot" / "mcp-config.json", "mcpServers", entry, force
-    )
+    path_of, section = _JSON_CONFIGS["copilot"]
+    return _json_server("copilot", path_of(home), section, entry, force)
 
 
 def _opencode(home: Path, cmd: list[str], env: dict[str, str], force: bool = False) -> Change:
@@ -496,10 +445,7 @@ def tools() -> list[Tool]:
                 "claude-desktop",
                 "Claude Desktop",
                 lambda h: _app_support(h, "Claude").is_dir(),
-                mcp=_mcp_servers_json(
-                    lambda h: _app_support(h, "Claude", "claude_desktop_config.json"),
-                    "claude-desktop",
-                ),
+                mcp=_mcp_servers_json(_JSON_CONFIGS["claude-desktop"][0], "claude-desktop"),
                 note="quit Claude Desktop before running setup; it rewrites its config on quit",
             ),
             Tool(
@@ -515,7 +461,7 @@ def tools() -> list[Tool]:
                 "cursor",
                 "Cursor",
                 lambda h: (h / ".cursor").is_dir(),
-                mcp=_mcp_servers_json(lambda h: h / ".cursor" / "mcp.json", "cursor"),
+                mcp=_mcp_servers_json(_JSON_CONFIGS["cursor"][0], "cursor"),
                 skills=lambda h: h / ".agents" / "skills",
             ),
             Tool(
@@ -524,7 +470,7 @@ def tools() -> list[Tool]:
                 lambda h: (
                     (h / ".gemini" / "settings.json").exists() or shutil.which("gemini") is not None
                 ),
-                mcp=_mcp_servers_json(lambda h: h / ".gemini" / "settings.json", "gemini-cli"),
+                mcp=_mcp_servers_json(_JSON_CONFIGS["gemini-cli"][0], "gemini-cli"),
                 skills=lambda h: h / ".agents" / "skills",
             ),
             Tool(
@@ -533,9 +479,7 @@ def tools() -> list[Tool]:
                 lambda h: (
                     (h / ".gemini" / "antigravity").is_dir() or (h / ".gemini" / "config").is_dir()
                 ),
-                mcp=_mcp_servers_json(
-                    lambda h: h / ".gemini" / "config" / "mcp_config.json", "antigravity"
-                ),
+                mcp=_mcp_servers_json(_JSON_CONFIGS["antigravity"][0], "antigravity"),
                 skills=lambda h: h / ".agents" / "skills",
                 note="Antigravity only reads tool schemas at start: restart it after setup",
             ),
@@ -543,10 +487,7 @@ def tools() -> list[Tool]:
                 "antigravity-cli",
                 "Antigravity CLI",
                 lambda h: (h / ".gemini" / "antigravity-cli").is_dir(),
-                mcp=_mcp_servers_json(
-                    lambda h: h / ".gemini" / "antigravity-cli" / "mcp_config.json",
-                    "antigravity-cli",
-                ),
+                mcp=_mcp_servers_json(_JSON_CONFIGS["antigravity-cli"][0], "antigravity-cli"),
                 skills=lambda h: h / ".gemini" / "antigravity-cli" / "skills",
             ),
             Tool(
@@ -574,6 +515,8 @@ def tools() -> list[Tool]:
     )
 
 
+# Where each JSON-configured tool keeps its MCP servers: (config file for a home, section).
+# The one place these paths are written; registering, reading and removing all use it.
 _JSON_CONFIGS: dict[str, tuple[Callable[[Path], Path], str]] = {
     "claude-desktop": (
         lambda h: _app_support(h, "Claude", "claude_desktop_config.json"),
