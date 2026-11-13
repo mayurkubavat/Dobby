@@ -11,6 +11,11 @@ for the sites the AI should use; the profile is kept between runs.
     pinlet browser https://…       open it on a page
     pinlet browser --app "Brave Browser"
 
+A browser puts itself in front when it starts, whatever it is told, so the
+app you were using is put back in front a moment later. The new window still
+opens on the Desktop you are looking at: move it to the Desktop the AI works
+on once (Mission Control, or drag it to the screen edge).
+
 macOS only (background mode is). Stdlib only.
 """
 
@@ -20,6 +25,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -57,8 +63,50 @@ def command(app: str, profile: Path, url: str) -> list[str]:
         f"--user-data-dir={profile}",
         "--no-first-run",
         "--no-default-browser-check",
+        # Build the page's accessibility tree from the start: it is how the AI
+        # reads and presses things without the pointer.
+        "--force-renderer-accessibility",
         url,
     ]
+
+
+_LSAPPINFO = "/usr/bin/lsappinfo"
+
+
+def front_app_path(run=subprocess.run) -> str | None:
+    """The bundle path of the app in front (asked fresh), or None when unknown."""
+    try:
+        asn = run([_LSAPPINFO, "front"], capture_output=True, text=True, timeout=2).stdout.strip()
+        if not asn:
+            return None
+        out = run(
+            [_LSAPPINFO, "info", "-only", "bundlepath", asn],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    _, _, value = out.partition("=")
+    path = value.strip().strip('"')
+    return path if path.endswith(".app") else None
+
+
+def give_front_back(path: str | None, run=subprocess.run, sleep=time.sleep) -> None:
+    """Puts the app the person was using back in front after the browser took it.
+
+    Twice, because a browser may come forward a second time when its window is ready.
+    """
+    if not path:
+        return
+    for wait in (1.0, 1.5):
+        sleep(wait)
+        if front_app_path(run) == path:
+            continue
+        try:
+            run(["/usr/bin/open", "-a", path], check=False, timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            return
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -87,10 +135,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(" ".join(f'"{c}"' if " " in c else c for c in cmd))
         return 0
     profile.mkdir(parents=True, exist_ok=True)
+    before = front_app_path()
     done = subprocess.run(cmd, check=False)
     if done.returncode == 0:
+        give_front_back(before)
         print(
-            f"Opened {app} for the AI in the background (profile {profile}).\n"
+            f"Opened {app} for the AI (profile {profile}) and put your app back in front.\n"
             "Move its window to the Desktop the AI works on; the AI finds it with list_windows."
         )
     return done.returncode

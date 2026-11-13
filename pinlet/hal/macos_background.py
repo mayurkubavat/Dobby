@@ -48,6 +48,17 @@ _BACKDROP = (38, 38, 40)
 _MIN_W, _MIN_H = 100, 60
 # Menus, popovers and sheets of the same app drawn over the window.
 _MAX_EXTRAS = 6
+# One wheel line is about 40 points; a Page Down moves most of a window.
+_LINES_PER_PAGE = 12
+_BROWSER_BUNDLES = (
+    "com.google.chrome",
+    "org.chromium.chromium",
+    "com.brave.browser",
+    "com.microsoft.edgemac",
+    "company.thebrowser.browser",
+    "com.vivaldi.vivaldi",
+    "com.operasoftware.opera",
+)
 _IDLE_SECS = 3.0
 _IDLE_WAIT_SECS = 45.0
 _HID_STATE = 1  # kCGEventSourceStateHIDSystemState
@@ -207,12 +218,21 @@ class BackgroundMacHAL(MacHAL):
             target.choose(info.window_id, pid, info.app_name or "")
             self._make_main(pid, info)
             try:  # browsers and Electron apps: have the page's elements ready
-                enable_web_content(self._ax_api(), pid)
+                enable_web_content(self._ax_api(), pid, browser=self._is_browser(pid))
             except Exception:  # noqa: BLE001 - reading the tree asks again
                 pass
             return True
         self.last_focus_error = f"window {window_id} does not exist"
         return False
+
+    def _is_browser(self, pid: int) -> bool:
+        """Whether app ``pid`` is a Chromium-family browser (by bundle id)."""
+        try:
+            app = self.AK.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+            bundle = str(app.bundleIdentifier() or "").lower() if app is not None else ""
+        except Exception:  # noqa: BLE001
+            return False
+        return bundle.startswith(_BROWSER_BUNDLES)
 
     def _make_main(self, pid: int, info: WindowInfo) -> None:
         """Keys sent to an app go to its main window: make ours that one (best effort).
@@ -388,9 +408,14 @@ class BackgroundMacHAL(MacHAL):
             if ax_scroll_at(self._ax_api(), chosen.pid, cx, cy, dx, dy):
                 self._cooldown()
                 return None
-        # No scroll bar to move (web pages often): send the wheel to the app itself.
-        with self._to_app(chosen.pid):
-            return super().mouse_scroll(dx, dy)
+        # No scroll bar to move (web pages): apps ignore a wheel event sent to
+        # them while they are not in front, but Page Down and Page Up get through.
+        if dy:
+            key = "page_up" if dy > 0 else "page_down"
+            with self._to_app(chosen.pid):
+                for _ in range(min(10, max(1, round(abs(dy) / _LINES_PER_PAGE)))):
+                    super().keyboard_press_key(key)
+        return None
 
     # ------------------------------------------------------------ keyboard
     @override

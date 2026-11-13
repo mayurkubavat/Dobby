@@ -357,13 +357,19 @@ def window_frame_at(ax: Any, pid: int, x: float, y: float) -> tuple[int, int, in
     return int(p.x), int(p.y), int(s.width), int(s.height)
 
 
-def enable_web_content(ax: Any, pid: int) -> bool:
+def enable_web_content(ax: Any, pid: int, browser: bool = False) -> bool:
     """Asks a Chromium or Electron app to build its page's accessibility tree.
 
-    They build it only once a client sets ``AXManualAccessibility``. Native
-    apps refuse the attribute, which is harmless.
+    Electron apps build it once a client sets ``AXManualAccessibility``; native
+    apps refuse the attribute, which is harmless. Chromium browsers do not know
+    that attribute and want ``AXEnhancedUserInterface`` instead, the switch
+    screen readers use. It can disturb window animations, so it is set only
+    for a ``browser`` the agent picked as its own window.
     """
     try:
-        return _set(ax, ax.AXUIElementCreateApplication(int(pid)), "AXManualAccessibility", True)
+        app = ax.AXUIElementCreateApplication(int(pid))
     except Exception:  # noqa: BLE001
         return False
+    if _set(ax, app, "AXManualAccessibility", True):
+        return True
+    return browser and _set(ax, app, "AXEnhancedUserInterface", True)

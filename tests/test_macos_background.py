@@ -348,12 +348,14 @@ def test_scroll_moves_the_scroll_bar_through_accessibility():
     assert q.posted == [] and q.to_pid == []
 
 
-def test_scroll_without_a_scroll_bar_sends_the_wheel_to_the_app():
+def test_scroll_without_a_scroll_bar_pages_with_keys_sent_to_the_app():
     hal, q, _ = _hal()
     hal.focus_window("2")
-    hal.mouse_scroll(0, -3)
-    assert [(pid, e["kind"]) for pid, e in q.to_pid] == [(MINE, "scroll")]
-    assert q.posted == []
+    hal.mouse_scroll(0, -3)  # down a little: one Page Down
+    hal.mouse_scroll(0, 30)  # up a lot: Page Up, a few times
+    downs = [e["code"] for pid, e in q.to_pid if e["kind"] == "key" and e["down"]]
+    assert downs == [121, 116, 116]  # page_down, then page_up twice (30 lines / 12)
+    assert {pid for pid, _ in q.to_pid} == {MINE} and q.posted == []
 
 
 def test_each_agent_session_keeps_its_own_target():
@@ -545,6 +547,39 @@ def test_agent_browser_opens_a_separate_background_instance(tmp_path, monkeypatc
     cmd = agent_browser.command("Google Chrome", profile, "https://example.com")
     assert cmd[:5] == ["/usr/bin/open", "-g", "-n", "-a", "Google Chrome"]
     assert f"--user-data-dir={profile}" in cmd and cmd[-1] == "https://example.com"
+    assert "--force-renderer-accessibility" in cmd
     assert agent_browser.main(["--print", "--app", "Brave Browser"]) == 0
     assert '-a "Brave Browser"' in capsys.readouterr().out
     assert not profile.exists()  # --print changes nothing
+
+
+def test_agent_browser_puts_the_persons_app_back_in_front():
+    from pinlet import agent_browser
+
+    calls = []
+    front = {"path": "/Applications/Google Chrome.app"}  # the browser took the front
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        if cmd[:2] == ["/usr/bin/lsappinfo", "front"]:
+            return SimpleNamespace(stdout="ASN:0x0-0x1\n")
+        if cmd[0] == "/usr/bin/lsappinfo":
+            return SimpleNamespace(stdout=f'"LSBundlePath"="{front["path"]}"\n')
+        front["path"] = cmd[-1]  # open -a <app>: it comes forward
+        return SimpleNamespace(stdout="")
+
+    assert agent_browser.front_app_path(run) == "/Applications/Google Chrome.app"
+    agent_browser.give_front_back("/Applications/Claude.app", run=run, sleep=lambda s: None)
+    opens = [c for c in calls if c[0] == "/usr/bin/open"]
+    assert opens == [["/usr/bin/open", "-a", "/Applications/Claude.app"]]  # once was enough
+
+
+def test_a_chromium_browser_gets_the_screen_reader_switch_and_other_apps_do_not():
+    from pinlet.hal.background import enable_web_content
+
+    chrome = {"pid": MINE, "AXRole": "AXApplication", "settable": ("AXEnhancedUserInterface",)}
+    ax = AX({MINE: chrome})
+    assert enable_web_content(ax, MINE) is False  # not known to be a browser: left alone
+    assert "AXEnhancedUserInterface" not in chrome
+    assert enable_web_content(ax, MINE, browser=True) is True
+    assert chrome["AXEnhancedUserInterface"] is True
