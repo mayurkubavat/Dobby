@@ -35,6 +35,9 @@ def make(tmp_path):
             "style": "classic",
             "personality": "off",
             "menu_bar": False,
+            # The bar hides itself while idle by default ("auto"). These tests
+            # check the bar, so it stays up unless a test asks for "auto".
+            "pill": "always",
         }
         base.update(cfg)
         c = mac_helper.OverlayController(base, out=out, interactive=False)
