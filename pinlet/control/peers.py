@@ -8,7 +8,7 @@ its next tool result, or at once when it waits in ``wait_for_wake``.
 
 A message is a request from one AI to another, never the person's word: it
 cannot answer an Allow/Deny card, change a mode or grant an app, and the
-receiving AI is told so (see ``pinlet.server.AGENT_NOTE``).
+receiving AI is told so (see ``pinlet.server_support.AGENT_NOTE``).
 """
 
 from __future__ import annotations
