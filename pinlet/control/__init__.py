@@ -28,6 +28,9 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from ..envflags import FALSE as _FALSE
+from ..envflags import TRUE as _TRUE
+from ..envflags import is_true, under_test_or_replay
 from . import names
 from .controller import ControlBusy, ControlChanged, ControlError, Controller, ControlStopped
 from .hal import ACTING, OBSERVING, ControlHAL, find_control_hal, unwrap_control
@@ -55,8 +58,6 @@ __all__ = [
     "wrap_hal",
 ]
 
-_TRUE = {"1", "true", "yes", "on"}
-_FALSE = {"0", "false", "no", "off"}
 _CONTROLLER: Controller | None = None
 
 
@@ -68,7 +69,7 @@ def control_enabled(env: dict[str, str] | None = None) -> bool:
         return False
     if flag in _TRUE:
         return True
-    return not ("PYTEST_CURRENT_TEST" in env or env.get("PINLET_REPLAY", "").lower() in _TRUE)
+    return not under_test_or_replay(env)
 
 
 def control_root(env: dict[str, str] | None = None) -> Path:
@@ -92,7 +93,7 @@ def settings_from_env(env: dict[str, str] | None = None) -> ControlSettings:
     s.slice = _num(env, "PINLET_CONTROL_SLICE", s.slice, 1.0)
     s.max_wait = _num(env, "PINLET_CONTROL_MAX_WAIT", s.max_wait, 0.0)
     s.hold_cap = _num(env, "PINLET_CONTROL_HOLD_CAP", s.hold_cap, 0.0)
-    s.preempt = env.get("PINLET_CONTROL_PREEMPT", "").strip().lower() in _TRUE
+    s.preempt = is_true(env, "PINLET_CONTROL_PREEMPT")
     return s
 
 

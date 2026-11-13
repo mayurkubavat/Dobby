@@ -57,6 +57,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pinlet.envflags import is_true
+
 log = logging.getLogger("pinlet.policy")
 
 TIERS = ("full", "click", "read")
@@ -326,7 +328,6 @@ def reset_cache() -> None:
 
 
 # ---------------------------------------------------------------- shell
-_TRUE = {"1", "true", "yes", "on"}
 
 
 def shell_enabled(
@@ -351,7 +352,7 @@ def shell_enabled(
             False,
             f"Terminal commands are turned off by your organisation's Pinlet policy ({policy.source}).",
         )
-    if env.get("PINLET_ALLOW_SHELL", "").strip().lower() in _TRUE or CONFIG.allow_terminal_commands:
+    if is_true(env, "PINLET_ALLOW_SHELL") or CONFIG.allow_terminal_commands:
         return True, ""
     return False, (
         "Terminal commands are off. The person can turn them on with PINLET_ALLOW_SHELL=1 "

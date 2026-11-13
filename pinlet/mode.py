@@ -34,10 +34,11 @@ import sys
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 
+from pinlet.envflags import is_true
+
 TURBO, CAREFUL, SECURE = "turbo", "careful", "secure"
 LEVELS = (TURBO, CAREFUL, SECURE)  # least to most asking
 LABELS = {TURBO: "Full", CAREFUL: "Ask for risky", SECURE: "Ask everything"}
-_TRUE = {"1", "true", "yes", "on"}
 
 
 def level(mode: str | None) -> int:
@@ -77,7 +78,7 @@ def _requested(env: Mapping[str, str], argv: Sequence[str]) -> str:
     mode = env.get("PINLET_MODE", "").strip().lower()
     if mode in LEVELS:
         return mode
-    if env.get("PINLET_SECURE", "").strip().lower() in _TRUE:
+    if is_true(env, "PINLET_SECURE"):
         return SECURE
     return TURBO
 

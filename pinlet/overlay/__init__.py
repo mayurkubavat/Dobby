@@ -81,6 +81,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ..envflags import FALSE as _FALSE
+from ..envflags import TRUE as _TRUE
+from ..envflags import is_false, is_true, under_test_or_replay
 from ..mode import asks_risky, is_secure
 from ..personality import normalize_level
 from .client import (
@@ -115,9 +118,6 @@ __all__ = [
     "wrap_hal",
 ]
 
-_TRUE = {"1", "true", "yes", "on"}
-_FALSE = {"0", "false", "no", "off"}
-
 
 def _admin_secure() -> bool:
     from ..policy import current
@@ -135,7 +135,7 @@ def overlay_enabled(env: dict[str, str] | None = None, platform: str = sys.platf
         return False
     if flag in _TRUE:
         return True
-    return not ("PYTEST_CURRENT_TEST" in env or env.get("PINLET_REPLAY", "").lower() in _TRUE)
+    return not under_test_or_replay(env)
 
 
 def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
@@ -147,9 +147,9 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
     look = env.get("PINLET_OVERLAY_STYLE", "").strip().lower()
     if look in ("modern", "classic"):
         cfg["style"] = look
-    if env.get("PINLET_OVERLAY_AGENT_COLORS", "").strip().lower() in _FALSE:
+    if is_false(env, "PINLET_OVERLAY_AGENT_COLORS"):
         cfg["agent_colors"] = False
-    if env.get("PINLET_OVERLAY_NARRATE", "").strip().lower() in _FALSE:
+    if is_false(env, "PINLET_OVERLAY_NARRATE"):
         cfg["narrate"] = False
     if env.get("PINLET_PERSONALITY", "").strip():
         cfg["personality"] = normalize_level(env["PINLET_PERSONALITY"])
@@ -161,7 +161,7 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
         cfg["label"] = env["PINLET_OVERLAY_LABEL"]
     elif env.get("PINLET_AGENT_NAME", "").strip():
         cfg["label"] = env["PINLET_AGENT_NAME"].strip()  # which agent this cursor belongs to
-    if env.get("PINLET_OVERLAY_CAPTURE_VISIBLE", "").strip().lower() in _FALSE:
+    if is_false(env, "PINLET_OVERLAY_CAPTURE_VISIBLE"):
         cfg["capture_visible"] = False
     resume = env.get("PINLET_OVERLAY_RESUME", "").strip().lower()
     if resume in ("auto", "manual"):
@@ -183,7 +183,7 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
         cfg["turbo"] = (
             True  # default: turbo; ``--secure`` / PINLET_MODE=secure turns the prompts on
         )
-    if env.get("PINLET_OVERLAY_TRAIL", "").strip().lower() in _FALSE:
+    if is_false(env, "PINLET_OVERLAY_TRAIL"):
         cfg["trail"] = False
     pill = env.get("PINLET_OVERLAY_PILL", "").strip().lower()
     if pill in ("always", "auto", "off"):
@@ -195,7 +195,7 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
         cfg["menu_bar"] = True
     elif menu_bar in _FALSE:
         cfg["menu_bar"] = False
-    if env.get("PINLET_OVERLAY_PILL_RECORD", "").strip().lower() in _TRUE:
+    if is_true(env, "PINLET_OVERLAY_PILL_RECORD"):
         cfg["pill_in_recordings"] = True
     glass = env.get("PINLET_OVERLAY_GLASS", "").strip().lower()
     if glass in _FALSE:
@@ -207,7 +207,7 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
         cfg["theme"] = theme
     if lock_mode(env) != "off":
         cfg["input_lock"] = lock_mode(env)
-    if env.get("PINLET_BACKGROUND_CLICKS", "").strip().lower() in _FALSE:
+    if is_false(env, "PINLET_BACKGROUND_CLICKS"):
         cfg["background_clicks"] = False
     if env.get("PINLET_OVERLAY_SPEED"):
         try:
@@ -225,7 +225,7 @@ def make_overlay(enabled: bool | None = None) -> NullOverlay:
         return NullOverlay()
     log_path = Path(os.path.expanduser("~/.pinlet/logs/overlay.log"))
     tracks = None
-    if os.environ.get("PINLET_OVERLAY_TRACKS", "").strip().lower() not in _FALSE:
+    if not is_false(os.environ, "PINLET_OVERLAY_TRACKS"):
         tracks = Path(os.path.expanduser("~/.pinlet/overlay/tracks"))
     return OverlayClient(config=overlay_config(), log_path=log_path, track_dir=tracks)
 
@@ -249,8 +249,7 @@ def wrap_hal(hal: Any, overlay: NullOverlay | None = None, **kwargs: Any) -> Any
         kwargs.setdefault("grants", AppGrants())
         kwargs.setdefault(
             "confirm_clicks",
-            _admin_secure()
-            or os.environ.get("PINLET_CONFIRM_CLICKS", "").strip().lower() not in _FALSE,
+            _admin_secure() or not is_false(os.environ, "PINLET_CONFIRM_CLICKS"),
         )
         return OverlayHAL(hal, overlay, **kwargs)
     from ..policy import current

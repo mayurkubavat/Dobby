@@ -22,6 +22,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from ..envflags import FALSE
 from .text import short as _short
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -112,7 +113,7 @@ GLASS_TINT = {
 def normalize_glass(value: object) -> str:
     """One of :data:`GLASS_CHOICES` (``0``/``false``/``no`` mean ``"off"``); default ``"auto"``."""
     value = str(value or "").strip().lower()
-    if value in ("0", "false", "no", "off"):
+    if value in FALSE:
         return "off"
     return value if value in GLASS_CHOICES else "auto"
 

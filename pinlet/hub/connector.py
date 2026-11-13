@@ -31,11 +31,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from ..envflags import FALSE as _FALSE
+from ..envflags import is_false
 from . import paths
 
 HELLO_VERSION = 1
 CONNECT_TIMEOUT_S = 90.0  # the first start loads the models
-_FALSE = {"0", "false", "no", "off"}
 
 
 def shared_enabled(env: dict[str, str] | None = None) -> bool:
@@ -43,7 +44,7 @@ def shared_enabled(env: dict[str, str] | None = None) -> bool:
     env = os.environ if env is None else env
     if not hasattr(socket, "AF_UNIX"):
         return False
-    return env.get("PINLET_SHARED", "").strip().lower() not in _FALSE
+    return not is_false(env, "PINLET_SHARED")
 
 
 def _mode(argv: Sequence[str]) -> str:
