@@ -219,6 +219,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 # -------------------------------------------------------------- controller
+# The pointer label keeps a step's words at least this long, so a quick key
+# press can still be read before the label goes back to "Thinking…".
+_STEP_HOLD_S = 2.0
+
+
 class OverlayController:
     """The macOS overlay helper: draws the pointer, glow and bar, and answers the server.
 
@@ -251,6 +256,8 @@ class OverlayController:
         # The task in progress, for the bar's live step and timer.
         self.task_started = 0.0
         self.goal = ""  # what the AI says it is doing, for the bar
+        self.intent_at = 0.0  # when the pointer label last got a step to show
+        self.intent_held = False
         self.task_steps = 0
         self.current_step = ""
         self.bar_second = -1
@@ -415,7 +422,12 @@ class OverlayController:
             self.intent_text if (self.intent_text and time.monotonic() < self.intent_until) else ""
         )
         return self.agent_label, style.tag_detail(
-            detail, self.cursor_state, self.narrate, self.goal, self.risk_level == "danger"
+            detail,
+            self.cursor_state,
+            self.narrate,
+            self.goal,
+            # A question is up, or the step is fresh: keep it readable before "Thinking…".
+            self.risk_level == "danger" or time.monotonic() - self.intent_at < _STEP_HOLD_S,
         )
 
     def _refresh_tag(self) -> None:
@@ -879,6 +891,9 @@ class OverlayController:
         if self.interactive and not self.bar_owner.owned and now >= self.bar_owner_retry:
             self.bar_owner_retry = now + 2.0
             self._claim_bar()
+        if self.intent_held and time.monotonic() - self.intent_at >= _STEP_HOLD_S:
+            self.intent_held = False
+            self._refresh_tag()  # the step has been readable long enough: "Thinking…" may show
         if self.intent_text and (
             now >= self.intent_until
             or (self.narrate and now - self.last_action > float(self.cfg["active_secs"]))
@@ -1818,6 +1833,9 @@ class OverlayController:
 
     def _set_intent(self, text: str, ms: float | None = None) -> None:
         self.intent_text = _short(text) if text else ""
+        if text:
+            self.intent_at = time.monotonic()
+            self.intent_held = True
         secs = style.intent_secs(ms, float(self.cfg["intent_ms"]), self.narrate)
         if not text:
             self.intent_until = 0.0

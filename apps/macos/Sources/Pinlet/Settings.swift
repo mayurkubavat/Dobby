@@ -308,7 +308,7 @@ struct SettingsView: View {
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
             .tag("diagnostics")
         }
-        .frame(width: 540)
+        .frame(width: 600)
         .safeAreaInset(edge: .bottom) {
             if changed {
                 HStack {
@@ -328,7 +328,7 @@ struct SettingsForm: ViewModifier {
     func body(content: Content) -> some View {
         content
             .formStyle(.grouped)
-            .frame(minHeight: 300, alignment: .top)
+            .frame(minHeight: 460, alignment: .top)
     }
 }
 

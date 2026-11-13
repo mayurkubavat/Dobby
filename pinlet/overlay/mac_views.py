@@ -652,6 +652,11 @@ class _Chip:
         )
         self.bg.setFrame_(CGRectMake(0, 0, w, h))
         self.shine.setFrame_(CGRectMake(0, h * 0.45, w, h * 0.55))
+        CATransaction.commit()
+        CATransaction.begin()
+        CATransaction.setDisableActions_(True)
+        # The text moves and changes in one step, not animated: a label sliding
+        # while its words change paints two strings over each other.
         cx = pad
         if icon_w:
             self.icon.setFrame_(CGRectMake(cx, (h - 11) / 2, 11, 11))
@@ -663,9 +668,6 @@ class _Chip:
         self.chev.setFrame_(CGRectMake(cx, (h - 8) / 2, chev_w, 8))
         cx += (chev_w + gap) if chev_w else 0.0
         self.detail.setFrame_(CGRectMake(cx, text_y, dw + 2, _CHIP_FONT * 1.3))
-        CATransaction.commit()
-        CATransaction.begin()
-        CATransaction.setDisableActions_(True)
         self.label.setString_(label)
         self.detail.setString_(detail)
         self.detail.setOpacity_(1.0 if detail else 0.0)
