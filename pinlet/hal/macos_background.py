@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import contextlib
 import itertools
+import threading
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -65,6 +66,9 @@ _BROWSER_BUNDLES = (
 )
 _IDLE_SECS = 3.0
 _IDLE_WAIT_SECS = 45.0
+# After a borrowed right-click the window stays in front this long, so the AI can
+# look at the menu and pick from it; then the menu is closed and the front given back.
+_HOLD_SECS = 15.0
 _HID_STATE = 1  # kCGEventSourceStateHIDSystemState
 _ANY_INPUT = 0xFFFFFFFF  # kCGAnyInputEventType
 
@@ -96,6 +100,10 @@ class BackgroundMacHAL(MacHAL):
         self._capture_window = window_capture_fn or (lambda wid: _screencapture(None, wid))
         # True while a step borrows the real pointer: behave like a plain MacHAL.
         self._borrowing = False
+        # (front pid, pointer) to give back while a context menu waits for a pick.
+        self._held: tuple[int | None, tuple[int, int]] | None = None
+        self._hold_lock = threading.Lock()
+        self._hold_timer: threading.Timer | None = None
         target.set_frame_fn(self._target_frame)
 
     # ------------------------------------------------------------- helpers
@@ -373,6 +381,8 @@ class BackgroundMacHAL(MacHAL):
     def mouse_move(self, x: int, y: int) -> None:
         if self._borrowing:
             return super().mouse_move(x, y)
+        if self._held is not None:  # over an open menu: hover for real, keep the menu
+            return self._in_hold(lambda: MacHAL.mouse_move(self, x, y), end=False)
         self._need_target()  # hovering is not possible without the pointer; nothing to do
         return None
 
@@ -380,6 +390,8 @@ class BackgroundMacHAL(MacHAL):
     def mouse_click(self, x: int, y: int, button: str = "left", click_count: int = 1) -> None:
         if self._borrowing:
             return super().mouse_click(x, y, button, click_count)
+        if self._held is not None:  # the pick from the open menu
+            return self._in_hold(lambda: MacHAL.mouse_click(self, x, y, button, click_count))
         chosen = self._need_target()
         ax = self._ax_api()
         self._in_own_window(chosen, x, y)
@@ -401,6 +413,7 @@ class BackgroundMacHAL(MacHAL):
         return self._borrow(
             f"a {kind} at ({x}, {y})",
             lambda: MacHAL.mouse_click(self, x, y, button, click_count),
+            hold=button == "right",
         )
 
     @override
@@ -409,6 +422,7 @@ class BackgroundMacHAL(MacHAL):
     ) -> None:
         if self._borrowing:
             return super().mouse_drag(start_x, start_y, end_x, end_y, duration_sec)
+        self._end_hold()
         self._need_target()
         return self._borrow(
             "a drag", lambda: MacHAL.mouse_drag(self, start_x, start_y, end_x, end_y, duration_sec)
@@ -441,6 +455,7 @@ class BackgroundMacHAL(MacHAL):
     def keyboard_type(self, text: str, delay_ms: float = 12.0) -> None:
         if self._borrowing:
             return super().keyboard_type(text, delay_ms)
+        self._end_hold()
         with self._to_app(self._need_target().pid):
             return super().keyboard_type(text, delay_ms)
 
@@ -448,6 +463,9 @@ class BackgroundMacHAL(MacHAL):
     def keyboard_press_key(self, key_name: str) -> None:
         if self._borrowing:
             return super().keyboard_press_key(key_name)
+        if self._held is not None:  # arrows, Return or Escape in the open menu
+            closes = str(key_name).lower().strip() in ("escape", "esc", "return", "enter")
+            return self._in_hold(lambda: MacHAL.keyboard_press_key(self, key_name), end=closes)
         with self._to_app(self._need_target().pid):
             return super().keyboard_press_key(key_name)
 
@@ -455,6 +473,7 @@ class BackgroundMacHAL(MacHAL):
     def keyboard_hotkey(self, keys: list[str]) -> None:
         if self._borrowing:
             return super().keyboard_hotkey(keys)
+        self._end_hold()
         chosen = self._need_target()
         names = [str(k).lower().strip() for k in keys]
         if not any(k in ("cmd", "command", "super", "meta", "win") for k in names):
@@ -507,8 +526,12 @@ class BackgroundMacHAL(MacHAL):
         except Exception:  # noqa: BLE001 - unknown: treat them as busy
             return 0.0
 
-    def _borrow(self, what: str, act: Callable[[], Any]) -> Any:
-        """Does a step that needs the real pointer, or says why not."""
+    def _borrow(self, what: str, act: Callable[[], Any], hold: bool = False) -> Any:
+        """Does a step that needs the real pointer, or says why not.
+
+        ``hold``: the step opens a menu the AI must still pick from, so the
+        window stays in front for up to ``_HOLD_SECS`` (see ``_in_hold``).
+        """
         chosen = self._need_target()
         if target.pointer_mode() != "idle":
             raise NeedsPointer(
@@ -529,13 +552,76 @@ class BackgroundMacHAL(MacHAL):
         where = self.get_cursor_position()
         front = self._frontmost_pid()
         self._borrowing = True
+        done = False
         try:
             if not MacHAL.focus_window(self, chosen.window_id):
                 raise NeedsPointer(f"Could not bring the window forward for {what}.")
+            result = act()
+            done = True
+            return result
+        finally:
+            self._borrowing = False
+            if hold and done:
+                self._start_hold(front, where)
+            else:
+                self._give_back(front, where)
+
+    # ------------------------------------------------ an open context menu
+    def _start_hold(self, front: int | None, where: tuple[int, int]) -> None:
+        timer = threading.Timer(_HOLD_SECS, self._end_hold)
+        timer.daemon = True
+        with self._hold_lock:
+            self._held, self._hold_timer = (front, where), timer
+        timer.start()
+
+    def _take_hold(self) -> tuple[int | None, tuple[int, int]] | None:
+        with self._hold_lock:
+            held, timer = self._held, self._hold_timer
+            self._held = self._hold_timer = None
+        if timer is not None:
+            timer.cancel()
+        return held
+
+    def _still_in_front(self) -> bool:
+        chosen = target.get()
+        return chosen is not None and self._frontmost_pid() == chosen.pid
+
+    def _end_hold(self) -> None:
+        """Closes a menu left open and gives the front and the pointer back."""
+        held = self._take_hold()
+        if held is None:
+            return
+        if not self._still_in_front():
+            return  # the person came back and took the front themselves
+        self._borrowing = True
+        try:
+            MacHAL.keyboard_press_key(self, "escape")
+        except Exception:  # noqa: BLE001 - give back all the same
+            pass
+        finally:
+            self._borrowing = False
+            self._give_back(*held)
+
+    def _in_hold(self, act: Callable[[], Any], end: bool = True) -> Any:
+        """A step in the menu a borrowed right-click opened, with the real pointer.
+
+        Raises:
+            NeedsPointer: The person came back meanwhile, so the menu is gone.
+        """
+        if not self._still_in_front():
+            self._take_hold()
+            raise NeedsPointer(
+                "The menu is no longer open: the person started using the Mac again. "
+                "Right-click again later, or try another way."
+            )
+        held = self._take_hold() if end else self._held
+        self._borrowing = True
+        try:
             return act()
         finally:
             self._borrowing = False
-            self._give_back(front, where)
+            if end and held is not None:
+                self._give_back(*held)
 
     def _give_back(self, front_pid: int | None, where: tuple[int, int]) -> None:
         """Puts the person's app back in front and the pointer where it was."""

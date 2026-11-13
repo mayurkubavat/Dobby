@@ -22,7 +22,9 @@ The first public release will be 0.1.0. It contains:
   its windows is refused, and picking a window asks Chromium and Electron apps
   for their page elements. Windows are told apart by the window server's id, so
   two windows of one app at the same place are not mixed, and Cmd+A works in
-  web and Electron text fields.
+  web and Electron text fields. With "borrow the pointer when idle", a
+  right-click keeps its menu open for up to 15 seconds so the AI can pick from
+  it, then closes it and gives the front back.
 - Background mode on macOS (`PINLET_BACKGROUND=1`): the AI works in one window
   without taking the screen. `focus_window` picks the window without bringing
   it forward, screenshots show that window alone (even when it is covered or

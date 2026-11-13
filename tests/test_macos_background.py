@@ -629,3 +629,49 @@ def test_cmd_a_with_no_focused_element_named_uses_the_text_keys():
     assert ax.performed == [] and q.posted == []
     downs = [e["code"] for _, e in q.to_pid if e["kind"] == "key" and e["down"]]
     assert downs.count(0) == 1 and downs.count(14) == 1
+
+
+def test_a_borrowed_right_click_keeps_the_menu_until_the_pick(monkeypatch):
+    monkeypatch.setenv("PINLET_BACKGROUND_POINTER", "idle")
+    hal, q, _ = _hal()
+    for w in q.windows:
+        w["kCGWindowIsOnscreen"] = True
+    hal.focus_window("2")
+    q.idle = 10.0
+    hal.mouse_click(120, 80, button="right")
+    assert hal._appkit.activated == [MINE]  # still in front: the menu is open
+    assert hal._held is not None
+    monkeypatch.setattr(hal, "_frontmost_pid", lambda: MINE)
+    hal.mouse_click(130, 100)  # the pick, with the real pointer
+    assert hal._appkit.activated == [MINE, THEIRS] and q.warped == (10, 20)
+    assert hal._held is None and hal._hold_timer is None
+
+
+def test_a_menu_nobody_picks_from_is_closed_and_the_front_given_back(monkeypatch):
+    monkeypatch.setenv("PINLET_BACKGROUND_POINTER", "idle")
+    hal, q, _ = _hal()
+    for w in q.windows:
+        w["kCGWindowIsOnscreen"] = True
+    hal.focus_window("2")
+    q.idle = 10.0
+    hal.mouse_click(120, 80, button="right")
+    monkeypatch.setattr(hal, "_frontmost_pid", lambda: MINE)
+    before = len(q.posted)
+    hal._end_hold()  # what the timer does
+    assert [e["code"] for e in q.posted[before:] if e["kind"] == "key" and e["down"]] == [53]
+    assert hal._appkit.activated == [MINE, THEIRS] and hal._held is None
+
+
+def test_a_pick_after_the_person_came_back_is_refused(monkeypatch):
+    monkeypatch.setenv("PINLET_BACKGROUND_POINTER", "idle")
+    hal, q, _ = _hal()
+    for w in q.windows:
+        w["kCGWindowIsOnscreen"] = True
+    hal.focus_window("2")
+    q.idle = 10.0
+    hal.mouse_click(120, 80, button="right")
+    monkeypatch.setattr(hal, "_frontmost_pid", lambda: THEIRS)
+    before = len(q.posted)
+    with pytest.raises(NeedsPointer, match="no longer open"):
+        hal.mouse_click(130, 100)
+    assert len(q.posted) == before and hal._appkit.activated == [MINE] and hal._held is None
