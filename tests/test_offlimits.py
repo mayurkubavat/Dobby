@@ -244,3 +244,19 @@ def test_human_pace_waits_between_steps_and_before_a_click(monkeypatch):
     monkeypatch.setenv("PINLET_PACE", "fast")
     hal.mouse_click(1500, 900)
     assert len(slept) == 4
+
+
+def test_pinlets_menu_bar_icon_is_off_limits(monkeypatch):
+    # macOS draws the icon in a system window, so the window list misses it:
+    # the element's owner, or failing that its name, gives it away.
+    assert offlimits.own_element({"role": "push button", "name": "x", "pid": APP}, {APP})
+    assert offlimits.own_element({"role": "menu item", "name": "Pinlet: 9 running"}, {APP})
+    assert offlimits.own_element({"role": "menu item", "name": "Pinlet"}, set())
+    assert offlimits.own_element({"role": "menu item", "name": "File", "pid": 9}, {APP}) is None
+    assert offlimits.own_element({"role": "push button", "name": "Pinlet", "pid": 9}, {APP}) is None
+    assert offlimits.own_element(None, {APP}) is None
+    hit = lambda x, y: {"role": "menu item", "name": "Pinlet", "secure": False, "pid": APP}
+    hal, desk = _hal(monkeypatch, hit=hit)
+    with pytest.raises(OverlayBlocked, match="Pinlet's own"):
+        hal.mouse_click(20, 5)
+    assert desk.done == []

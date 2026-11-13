@@ -65,13 +65,16 @@ def _owner(w: Mapping[str, Any]) -> str:
     return " ".join(str(w.get("kCGWindowOwnerName", "") or "").split())
 
 
+OWN_REFUSAL = (
+    "That is Pinlet's own window. An AI cannot press Pinlet's buttons or answer its "
+    "questions: only the person can. Carry on with the task, or wait for the person."
+)
+
+
 def _why(owner: str, title: str, pid: int, overlay: bool, own: set[int]) -> str | None:
     low, title = owner.lower(), title.lower()
     if overlay or pid in own:
-        return (
-            "That is Pinlet's own window. An AI cannot press Pinlet's buttons or answer its "
-            "questions: only the person can. Carry on with the task, or wait for the person."
-        )
+        return OWN_REFUSAL
     if low in SECURITY_OWNERS:
         return (
             "That is a macOS security prompt. Pinlet never answers those: ask the person to "
@@ -129,6 +132,26 @@ def refusal_at(
             return why, owner
         if layer == 0:
             return None  # an ordinary window takes the click
+    return None
+
+
+def own_element(hit: Mapping[str, Any] | None, own_pids: Iterable[int | None] = ()) -> str | None:
+    """Why the element under a click is off limits, or None.
+
+    The window list misses Pinlet's menu bar icon, which macOS draws in a
+    system window: the element itself still belongs to Pinlet.app, and when
+    the owner is not known its name in the menu bar gives it away.
+    """
+    if not hit:
+        return None
+    own = {int(p) for p in own_pids if p}
+    pid = hit.get("pid")
+    if pid and int(pid) in own:
+        return OWN_REFUSAL
+    role = str(hit.get("role") or "").lower()
+    name = str(hit.get("name") or "").strip().lower()
+    if "menu" in role and (name == "pinlet" or name.startswith("pinlet:")):
+        return OWN_REFUSAL
     return None
 
 

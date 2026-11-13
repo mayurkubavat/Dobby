@@ -420,6 +420,16 @@ class OverlayHAL:
         if found:
             self._refuse(found[0], app=found[1])
 
+    def _guard_element(self, hit: dict | None) -> None:
+        """Refuse a click on an element of Pinlet's own, such as its menu bar icon."""
+        from . import offlimits
+
+        if self._quiet:
+            return
+        why = offlimits.own_element(hit, self._own_pids())
+        if why:
+            self._refuse(why, app="Pinlet")
+
     def _guard_keys(self) -> None:
         """Refuse keys while Pinlet.app or a macOS security prompt is the frontmost app."""
         from . import offlimits
@@ -761,6 +771,7 @@ class OverlayHAL:
         app = self._window_app_at(x, y)
         self._gate(app, "click")
         hit = self._probe(x, y)
+        self._guard_element(hit)
         self._field = hit
         self._refuse_payment(hit, app)
         self._confirm_consequential(hit, verb, app)

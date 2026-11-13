@@ -119,7 +119,10 @@ class Hub:
 
             # The strictest of the client's request, the person's choice for
             # this client (~/.pinlet/modes.json) and the admin policy's floor.
-            mode = mode_for_client(str(hello.get("mode") or ""), name)
+            asked = str(hello.get("mode") or "")
+            if asked == "turbo" and not hello.get("mode_set"):
+                asked = ""  # an older connector's "nothing set", not a choice of turbo
+            mode = mode_for_client(asked, name)
             from pinlet.control import pick_first_name
             from pinlet.control.names import display
 

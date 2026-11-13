@@ -552,10 +552,11 @@ def intent_secs(ms: float | None, default_ms: float, narrate: bool) -> float | N
     return float(default_ms) / 1000.0
 
 
-def tag_detail(intent: str, state: str, narrate: bool) -> str:
+def tag_detail(intent: str, state: str, narrate: bool, goal: str = "") -> str:
     """Text after "Pinlet ›" on the pointer tag: the action, or "Thinking…" between actions."""
     if narrate and state == "thinking":
-        return "Thinking…"
+        # Between steps the tag keeps the goal in view, so "Thinking…" says about what.
+        return f"Thinking… · {_short(goal, 36)}" if goal.strip() else "Thinking…"
     return intent
 
 

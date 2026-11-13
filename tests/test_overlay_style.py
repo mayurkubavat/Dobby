@@ -383,3 +383,9 @@ def test_pointer_states_for_every_kind_of_input():
     for state in protocol.ACTING_STATES:
         assert protocol.decode(protocol.encode("cursor.state", state=state))["state"] == state
     assert protocol.decode(protocol.encode("goal", text="Reply to Sam"))["text"] == "Reply to Sam"
+
+
+def test_pointer_label_keeps_the_goal_while_thinking():
+    assert style.tag_detail("", "thinking", True) == "Thinking…"
+    assert style.tag_detail("", "thinking", True, "Reply to Sam") == "Thinking… · Reply to Sam"
+    assert style.tag_detail("Click ‘Send’", "idle", True, "Reply to Sam") == "Click ‘Send’"

@@ -74,6 +74,9 @@ def hello(argv: Sequence[str]) -> dict[str, object]:
         "pid": os.getpid(),
         "parent_pid": os.getppid(),
         "mode": _mode(argv),
+        # This connector names a mode only when its own config does. Older
+        # ones always sent their resolved mode ("turbo" when nothing was set).
+        "mode_set": True,
         "name": os.environ.get("PINLET_AGENT_NAME") or _parent_name() or "AI client",
         "cwd": os.getcwd(),
         **(

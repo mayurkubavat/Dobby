@@ -104,7 +104,16 @@ def _client(path, name, mode, info_name=None):
         pytest.fail("shared Pinlet did not listen")
     sock.sendall(
         (
-            json.dumps({"pinlet_hello": 1, "pid": os.getpid(), "mode": mode, "name": name}) + "\n"
+            json.dumps(
+                {
+                    "pinlet_hello": 1,
+                    "pid": os.getpid(),
+                    "mode": mode,
+                    "mode_set": True,
+                    "name": name,
+                }
+            )
+            + "\n"
         ).encode()
     )
     buf = [b""]
@@ -509,3 +518,9 @@ def test_one_clients_toolsets_never_change_anothers(tmp_path, short_sock):
     finally:
         daemon.terminate()
         daemon.wait(timeout=10)
+
+
+def test_an_older_connectors_turbo_is_not_a_choice():
+    from pinlet.hub.connector import hello
+
+    assert hello(["pinlet"])["mode_set"] is True  # names a mode only when its config does

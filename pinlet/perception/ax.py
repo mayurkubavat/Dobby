@@ -335,7 +335,14 @@ class AXInspector:
         bbox = (
             {"x": frame[0], "y": frame[1], "width": frame[2], "height": frame[3]} if frame else None
         )
-        return {"role": role, "name": name, "bbox": bbox, "secure": secure}
+        owner = None
+        try:  # whose element this is: Pinlet's own are off limits (overlay.offlimits)
+            err, owner_pid = self._ax.AXUIElementGetPid(el, None)
+            if err == 0 and owner_pid:
+                owner = int(owner_pid)
+        except Exception:
+            owner = None
+        return {"role": role, "name": name, "bbox": bbox, "secure": secure, "pid": owner}
 
     def inspect(self) -> list[UIElement]:
         """All elements (not just interactable) of the frontmost app."""

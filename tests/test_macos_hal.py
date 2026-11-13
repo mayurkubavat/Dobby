@@ -589,7 +589,10 @@ def test_ax_inspector_hit_test_maps_role_and_frame():
         "name": "Save changes?",
         "bbox": {"x": 0, "y": 0, "width": 400, "height": 200},
         "secure": False,
+        "pid": None,
     }
+    ax.AXUIElementGetPid = lambda el, _: (0, 777)
+    assert insp.hit_test(10, 10)["pid"] == 777  # whose element it is
     ax.AXUIElementCopyElementAtPosition = lambda el, x, y, _: (-25204, None)
     assert insp.hit_test(10, 10) is None
 

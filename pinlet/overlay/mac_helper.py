@@ -414,7 +414,9 @@ class OverlayController:
         detail = (
             self.intent_text if (self.intent_text and time.monotonic() < self.intent_until) else ""
         )
-        return self.agent_label, style.tag_detail(detail, self.cursor_state, self.narrate)
+        return self.agent_label, style.tag_detail(
+            detail, self.cursor_state, self.narrate, self.goal
+        )
 
     def _refresh_tag(self) -> None:
         label, detail = self._tag_parts()
@@ -1912,6 +1914,7 @@ class OverlayController:
             self.ack(msg_id)
         elif op == "goal":
             self.goal = msg["text"]
+            self._refresh_tag()
             self._refresh_pill()
             self.ack(msg_id)
         elif op == "risk":
