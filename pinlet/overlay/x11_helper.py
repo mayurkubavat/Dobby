@@ -774,6 +774,7 @@ class X11Overlay:
         self.agents_next = 0.0
         # The task in progress, for the bar's live step and timer.
         self.task_started = 0.0
+        self.goal = ""  # what the AI says it is doing, for the bar
         self.task_steps = 0
         self.current_step = ""
         self.bar_second = -1
@@ -1352,6 +1353,7 @@ class X11Overlay:
             label=str(self.cfg["label"]),
             step=self.current_step,
             steps=self.task_steps,
+            goal=self.goal,
             elapsed=(now - self.task_started) if self.task_started else 0.0,
             turbo=bool(self.cfg.get("turbo")),
             thinking=self.state == "thinking",
@@ -1695,6 +1697,10 @@ class X11Overlay:
         elif op == "target.clear":
             self.box.place(None)
             self.ack(msg_id)
+        elif op == "goal":
+            self.goal = msg["text"]
+            self._refresh_bar()
+            self.ack(msg_id)
         elif op == "risk":
             self.risk = msg["level"]
             self._apply_colors()
@@ -1741,6 +1747,7 @@ class X11Overlay:
             self._apply_visibility()
             self.ack(msg_id)
         elif op == "sleep.wait":
+            self.goal = ""  # that task is over
             self._ai_wait(True)
             self.ack(msg_id)
         elif op == "sleep.done":

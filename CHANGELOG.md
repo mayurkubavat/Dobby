@@ -11,6 +11,12 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- The bar while an AI works has one button, the word **Pause**; paused, it
+  offers **Resume** or **Cancel task**. Stop stays on ⌃⌥⎋ and in the menu.
+- The bar leads with the AI's goal ("Pip: Reply to Sam · Click ‘Send’ · step 7
+  · 0:42"), which the AI gives with `request_control(goal=…)`; hovering shows
+  the goal and step in full. Pinlet's pointer now also appears, with a badge,
+  for typing, key presses and scrolling.
 - Pinlet no longer clicks payment buttons (Pay, Buy, Place order, Checkout,
   Subscribe and the like) in any mode, turbo included. The AI is told to hand
   the click to the person. `PINLET_BLOCK_PAYMENTS=0` lifts the rule.

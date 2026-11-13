@@ -242,6 +242,37 @@ def working_text(
     return ("⚡ Turbo · " + text) if turbo else text
 
 
+def goal_text(
+    goal: str,
+    step: str,
+    steps: int,
+    elapsed: float,
+    turbo: bool = False,
+    who: str = "",
+    thinking: bool = False,
+) -> str:
+    """The working bar with a goal: "Pip: Reply to Sam · Click ‘Send’ · step 7 · 0:42"."""
+    lead = _short(" ".join(goal.split()), 44)
+    parts = [f"{who}: {lead}" if who else lead]
+    if step:
+        parts.append(_short(step, 32))
+    elif thinking:
+        parts.append("thinking…")
+    if steps > 0:
+        parts.append(f"step {steps}")
+    parts.append(fmt_elapsed(elapsed))
+    text = " · ".join(parts)
+    return ("⚡ " + text) if turbo else text
+
+
+def goal_tip(goal: str, step: str) -> str | None:
+    """The working bar's tooltip: the whole goal and the step, uncut."""
+    goal = " ".join(goal.split())
+    if not goal:
+        return None
+    return f"Goal: {goal}" + (f"\nNow: {step}" if step else "")
+
+
 @dataclass(frozen=True)
 class Button:
     """One button on the bar: its key, title and optional SF Symbol icon."""
@@ -323,6 +354,7 @@ def bar_spec(
     thinking: bool = False,
     narrate: bool = True,
     voice: Voice | None = None,
+    goal: str = "",
 ) -> BarSpec | None:
     """Turn ``menu.bar_view``'s answer into what the bar draws.
 
@@ -398,7 +430,14 @@ def bar_spec(
             live = working_text(step, steps, elapsed, turbo, lead=lead)
         # One choice while it works: Pause. Stop stays on ⌃⌥⎋ and in the ▾ menu.
         buttons = (_word_button("primary", primary), _HIDE, _MENU)
-        return BarSpec(mode, live, buttons, color, dot_alpha, shimmer=thinking)
+        if goal.strip():
+            # The AI said what it is trying to get done: that leads, so the
+            # person reads the goal first and the step under way next.
+            who = label if narrate else ""
+            live = goal_text(goal, step, steps, elapsed, turbo, who=who, thinking=thinking)
+        return BarSpec(
+            mode, live, buttons, color, dot_alpha, shimmer=thinking, tip=goal_tip(goal, step)
+        )
     if mode in ("paused", "takeover"):
         if label != "Pinlet":
             text = text.replace("Pinlet is paused", f"{label} is paused")

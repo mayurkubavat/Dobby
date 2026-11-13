@@ -645,6 +645,19 @@ class OverlayHAL:
             self.overlay.intent(text)
 
     @contextlib.contextmanager
+    def _cue(self, state: str) -> Iterator[None]:
+        """Badge Pinlet's pointer for this kind of input (keys, scrolling, dragging).
+
+        The helper also brings the pointer on screen where the real one is, so
+        every action shows where it lands, not only clicks.
+        """
+        self.overlay.state(state)
+        try:
+            yield
+        finally:
+            self.overlay.state("idle")
+
+    @contextlib.contextmanager
     def _passing(self) -> Iterator[None]:
         """Let this action's real input past the input lock (X11 shield)."""
         self._dwell()
@@ -759,7 +772,7 @@ class OverlayHAL:
         self._gate(app, "scroll")
         direction = ("down" if dy < 0 else "up") if dy else ("right" if dx > 0 else "left")
         self._intent(action_text(f"Scroll {direction}", None, app))
-        with self._passing():
+        with self._cue("scrolling"), self._passing():
             return self._inner.mouse_scroll(dx, dy, *args, **kwargs)
 
     # ------------------------------------------------------------ keyboard
@@ -812,7 +825,7 @@ class OverlayHAL:
         self._gate(app, "keys")
         self._intent(action_text(f"Press {combo_label([key_name])}", None, app))
         try:
-            with self._passing():
+            with self._cue("keys"), self._passing():
                 return self._inner.keyboard_press_key(key_name, *args, **kwargs)
         finally:
             self._after_keys()
@@ -837,7 +850,7 @@ class OverlayHAL:
         if reason is None:
             self._intent(action_text(f"Press {label}", None, app))
             try:
-                with self._passing():
+                with self._cue("keys"), self._passing():
                     return self._inner.keyboard_hotkey(keys, *args, **kwargs)
             finally:
                 self._after_keys()

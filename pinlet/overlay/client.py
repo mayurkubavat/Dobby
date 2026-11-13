@@ -135,6 +135,10 @@ class NullOverlay:
         """Sets the risk colour for the current step ("caution", "danger" or none)."""
         return True
 
+    def goal(self, text: str) -> bool:
+        """Tells the bar what the AI is trying to get done ("" clears it)."""
+        return True
+
     def scan(self, rect: tuple | None = None) -> bool:
         """Plays the scan animation over ``rect`` (or the screen)."""
         return True
@@ -741,6 +745,10 @@ class OverlayClient(NullOverlay):
     @override
     def risk(self, level: str) -> bool:
         return self._send("risk", level=level)
+
+    @override
+    def goal(self, text: str) -> bool:
+        return self._send("goal", text=" ".join(str(text or "").split())[:160])
 
     @override
     def scan(self, rect: tuple | None = None) -> bool:

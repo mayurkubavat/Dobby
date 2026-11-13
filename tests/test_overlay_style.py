@@ -356,3 +356,30 @@ def test_dark_regular_glass_gets_the_strongest_tint_and_a_rim():
     assert style.glass_rim(True, compact=True) == 0.0
     assert style.glass_rim(True, compact=False) == 0.35
     assert style.glass_rim(False, compact=False) == 0.28
+
+
+def test_working_bar_leads_with_the_goal():
+    spec = style.bar_spec(
+        view(working=True),
+        label="Pip",
+        step="Click ‘Send’",
+        steps=7,
+        elapsed=42,
+        goal="Reply to Sam's   email about the invoice",
+    )
+    assert spec.text == "Pip: Reply to Sam's email about the invoice · Click ‘Send’ · step 7 · 0:42"
+    assert spec.tip == "Goal: Reply to Sam's email about the invoice\nNow: Click ‘Send’"
+    quiet = style.bar_spec(
+        view(working=True), goal="Tidy the Desktop", thinking=True, narrate=False
+    )
+    assert quiet.text == "Tidy the Desktop · thinking… · 0:00"
+    assert style.bar_spec(view(working=True)).tip is None  # no goal: as before
+    assert style.goal_text("x" * 80, "", 0, 0).startswith("x" * 43 + "…")
+
+
+def test_pointer_states_for_every_kind_of_input():
+    from pinlet.overlay import protocol
+
+    for state in protocol.ACTING_STATES:
+        assert protocol.decode(protocol.encode("cursor.state", state=state))["state"] == state
+    assert protocol.decode(protocol.encode("goal", text="Reply to Sam"))["text"] == "Reply to Sam"

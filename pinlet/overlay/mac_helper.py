@@ -250,6 +250,7 @@ class OverlayController:
         self.agent_dots: list[tuple[int, str, bool, bool]] = []
         # The task in progress, for the bar's live step and timer.
         self.task_started = 0.0
+        self.goal = ""  # what the AI says it is doing, for the bar
         self.task_steps = 0
         self.current_step = ""
         self.bar_second = -1
@@ -1156,6 +1157,7 @@ class OverlayController:
                 label=str(self.cfg["label"]),
                 step=self.current_step,
                 steps=self.task_steps,
+                goal=self.goal,
                 elapsed=(now - self.task_started) if self.task_started else 0.0,
                 turbo=self.turbo,
                 thinking=self.cursor_state == "thinking",
@@ -1908,6 +1910,10 @@ class OverlayController:
         elif op == "target.clear":
             self._clear_box()
             self.ack(msg_id)
+        elif op == "goal":
+            self.goal = msg["text"]
+            self._refresh_pill()
+            self.ack(msg_id)
         elif op == "risk":
             self._set_risk(msg["level"])
             self.ack(msg_id)
@@ -1964,6 +1970,7 @@ class OverlayController:
             self._apply_alpha()
             self.ack(msg_id)
         elif op == "sleep.wait":
+            self.goal = ""  # that task is over
             self._ai_wait(True, str(msg.get("reason") or ""))
             self.ack(msg_id)
         elif op == "sleep.done":

@@ -36,6 +36,8 @@ OPS: dict[str, tuple] = {
     "cursor.state": (("state",), ()),
     "cursor.hide": ((), ()),
     "intent": (("text",), ("ms",)),
+    # What the AI is trying to get done, in one line, for the bar ("" clears it).
+    "goal": (("text",), ()),
     "target.box": (("x", "y", "w", "h"), ()),
     "target.clear": ((), ()),
     "risk": (("level",), ()),

@@ -5,6 +5,7 @@ perception with Set-of-Marks, pluggable GroundingEngine (ensemble, semantic, cv,
 input injection, compound autonomous actions, and closed-loop verification.
 """
 
+import contextlib
 import contextvars
 import logging
 import os
@@ -2108,12 +2109,21 @@ def _shared_clients() -> dict[str, Any]:
 
 
 @mcp_server.tool()
-def request_control(max_wait_s: float | None = None) -> dict[str, Any]:
+def request_control(max_wait_s: float | None = None, goal: str = "") -> dict[str, Any]:
     """Waits (up to max_wait_s, default the server's max wait) and takes control.
 
     Not required before acting: every acting tool acquires control by itself.
     Use it to queue early, before a task, so no time is lost later.
+
+    Args:
+        max_wait_s: How long to wait for control.
+        goal: One short line on what you are about to get done ("Reply to
+            Sam's email about the invoice"). Pinlet shows it on its bar while
+            you work, so the person watching can follow along. Give it at the
+            start of every task.
     """
+    if goal.strip():
+        _show_goal(goal)
     ctl = _control_or_none()
     if ctl is None:
         return dict(_CONTROL_OFF)
@@ -2123,6 +2133,18 @@ def request_control(max_wait_s: float | None = None) -> dict[str, Any]:
         return {"ok": True, "you_hold_control": True, "look_again": True, "note": str(exc)}
     ctl._finish_without_world()
     return {"ok": True, "you_hold_control": True, **ctl.status()}
+
+
+def _show_goal(goal: str) -> None:
+    """Put the AI's one-line goal on the bar (best effort)."""
+    from pinlet.overlay import find_overlay_hal
+
+    ov_hal = find_overlay_hal(hal)
+    if ov_hal is None:
+        return
+    with contextlib.suppress(Exception):
+        ov_hal.overlay.goal(goal)
+    tool_log.info("%sgoal: %s", _session_tag(), " ".join(goal.split())[:160])
 
 
 def _me() -> tuple[Any, dict[str, Any], str]:
