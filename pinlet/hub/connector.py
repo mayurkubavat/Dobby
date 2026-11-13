@@ -109,7 +109,6 @@ def daemon_env(env: dict[str, str]) -> dict[str, str]:
 
 
 # --------------------------------------------------------------- Pinlet.app
-APP_ID = "dev.pinlet.app"
 # What the Pinlet app needs to start ``pinlet serve`` itself: this Python, and
 # the settings that shape the engine (never secrets the client happens to have).
 _APP_ENV_KEYS = ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "OLLAMA_HOST", "HF_HOME", "LANG")

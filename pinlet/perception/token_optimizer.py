@@ -13,16 +13,6 @@ class TokenOptimizer:
     """Manages visual context compression, region of interest cropping, and delta-patching."""
 
     @staticmethod
-    def crop_bounding_box(image: Image.Image, bbox: BoundingBox) -> Image.Image:
-        """Crops image to a specific physical bounding box."""
-        img_w, img_h = image.size
-        left = max(0, min(bbox.x, img_w))
-        top = max(0, min(bbox.y, img_h))
-        right = max(left + 1, min(bbox.x + bbox.width, img_w))
-        bottom = max(top + 1, min(bbox.y + bbox.height, img_h))
-        return image.crop((left, top, right, bottom))
-
-    @staticmethod
     def compute_changed_patch(
         before_img: Image.Image,
         after_img: Image.Image,
@@ -67,17 +57,3 @@ class TokenOptimizer:
             height=p_lower - p_upper,
         )
         return patch, patch_box
-
-    @staticmethod
-    def generate_compact_thumbnail(
-        image: Image.Image,
-        max_dim: int = 600,
-    ) -> Image.Image:
-        """Creates a low-token thumbnail for macro orientation."""
-        orig_w, orig_h = image.size
-        scale = max_dim / float(max(orig_w, orig_h))
-        if scale >= 1.0:
-            return image
-        new_w = int(orig_w * scale)
-        new_h = int(orig_h * scale)
-        return image.resize((new_w, new_h), Image.Resampling.BILINEAR)

@@ -396,7 +396,3 @@ class SleepQuiescenceMonitor:
             max_total_timeout_ms=max_total_timeout_ms,
         )
         return QuiescenceReport(phase=phase, elapsed_ms=elapsed, dirty_area=dirty, cursor="unknown")
-
-
-MacQuiescenceMonitor = SleepQuiescenceMonitor
-WinQuiescenceMonitor = SleepQuiescenceMonitor

@@ -69,10 +69,6 @@ class JournalCorrelator:
         self.is_recording = False
         return list(self.recorded_steps)
 
-    def clear_recorded_steps(self) -> None:
-        """Clears accumulated trajectory history."""
-        self.recorded_steps.clear()
-
     def mark_pre_action(self) -> int:
         """Records the current end-of-file byte offset immediately prior to physical action injection."""
         if not self._fd and self.journal_path and os.path.exists(self.journal_path):

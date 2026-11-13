@@ -242,8 +242,6 @@ def label_click(mode: str) -> str:
 
 
 # ----------------------------------------------------- person vs Pinlet
-# Kinds of real input seen by a helper's global monitor.
-INPUT_KINDS = ("move", "click", "drag", "scroll", "key")
 
 
 def takes_over(

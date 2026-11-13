@@ -99,8 +99,6 @@ LIVELY: dict[str, tuple[str, ...]] = {
     "egg_late": ("So late! {name} works very quietly",),
 }
 
-MOMENTS = tuple(LIVELY)
-
 
 def normalize_level(value: str | None) -> str:
     """A known personality level ("off", "subtle" or "lively") for loose user input."""

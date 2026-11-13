@@ -482,9 +482,3 @@ class ObstructionInterceptor:
             "attempts": 1 if result.detected else 0,
             "triage_result": result.model_dump(),
         }
-
-    def dismiss_with_escape(self) -> bool:
-        """Fallback non-destructive escape key dismissal."""
-        self.hal.keyboard_press_key("escape")
-        time.sleep(0.2)
-        return True

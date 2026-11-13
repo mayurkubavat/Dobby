@@ -25,17 +25,6 @@ from PIL import Image, ImageChops, ImageStat
 # Snapshot callback: returns a frame dict (without frame_id) and an optional image.
 SnapshotFn = Callable[[], "tuple[dict[str, Any], Image.Image | None]"]
 
-INPUT_ACTIONS = (
-    "mouse_move",
-    "mouse_click",
-    "mouse_drag",
-    "mouse_scroll",
-    "keyboard_type",
-    "keyboard_press_key",
-    "keyboard_hotkey",
-    "focus_window",
-)
-
 
 def sanitize_name(name: str) -> str:
     """Cassette folder names are limited to [a-z0-9_-]."""

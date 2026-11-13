@@ -533,32 +533,3 @@ def _checkpoint_from_text(text: str) -> StateCheckpoint | None:
         return StateCheckpoint(**data)
     except Exception:
         return None
-
-
-def _render_checkpoint(checkpoint: StateCheckpoint) -> str:
-    actions = (
-        "; ".join(checkpoint.actions_taken)
-        if checkpoint.actions_taken
-        else "Routine navigation steps"
-    )
-    errors = "; ".join(checkpoint.errors_and_fixes) if checkpoint.errors_and_fixes else "None"
-    tasks = (
-        "; ".join(checkpoint.task_template)
-        if checkpoint.task_template
-        else "Progressing sub-goals."
-    )
-    constraints = (
-        "; ".join(checkpoint.constraints)
-        if checkpoint.constraints
-        else "Read-only / failsafe bounds maintained."
-    )
-    return (
-        f"1. [USER_INSTRUCTIONS]: {checkpoint.user_instructions}\n"
-        f"2. [TASK_TEMPLATE]: {tasks}\n"
-        f"3. [CONSTRAINTS]: {constraints}\n"
-        f"4. [ACTIONS_TAKEN]: {actions}\n"
-        f"5. [ERRORS_AND_FIXES]: {errors}\n"
-        f"6. [PROGRESS_METRICS]: {checkpoint.progress_metrics}\n"
-        f"7. [CURRENT_SCREEN_STATE]: {checkpoint.current_screen_state}\n"
-        f"8. [NEXT_IMMEDIATE_STEP]: {checkpoint.next_immediate_step}\n"
-    )

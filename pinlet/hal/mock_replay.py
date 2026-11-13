@@ -93,11 +93,6 @@ class MockReplayHAL:
         """The frame the replay is currently showing."""
         return self.states[self.cursor]
 
-    def set_auto_advance(self, auto_advance: bool) -> None:
-        """Enable frame advance on every action. Ignored while transitions are bound."""
-        if not self.transitions:
-            self._auto_advance = auto_advance
-
     def advance_frame(self) -> None:
         """Manually advance to the next recorded state frame if available."""
         if self.cursor < len(self.states) - 1:

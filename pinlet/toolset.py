@@ -12,7 +12,6 @@ import hashlib
 import json
 import os
 import tempfile
-import time
 from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
@@ -43,23 +42,6 @@ class ToolDefinition(BaseModel):
     description: str = ""
     input_schema: dict[str, Any] = Field(default_factory=dict)
     max_inline_tokens: int = 350
-
-
-class ManageToolsetsInput(BaseModel):
-    """Input parameters for manage_toolsets tool."""
-
-    action: str = Field(
-        pattern="^(list_domains|enable|disable|set_output_mode)$",
-        description="Action to perform: 'list_domains', 'enable', 'disable', or 'set_output_mode'",
-    )
-    domains: list[str] = Field(
-        default_factory=list,
-        description="List of domain names to enable or disable",
-    )
-    output_mode: OutputMode | None = Field(
-        default=None,
-        description="Target output mode when action is 'set_output_mode'",
-    )
 
 
 class ToolSetManager:
@@ -161,14 +143,6 @@ class ToolSetManager:
     def register_tool(self, tool: ToolDefinition) -> None:
         """Registers a tool definition and its domain categorization."""
         self._registry[tool.name] = tool
-
-    def get_tool(self, name: str) -> ToolDefinition | None:
-        """Retrieves tool definition by name."""
-        return self._registry.get(name)
-
-    def list_all_tools(self) -> list[str]:
-        """Lists all registered tool names."""
-        return sorted(self._registry.keys())
 
     def get_active_domains(self) -> list[str]:
         """Returns sorted list of currently enabled domain names."""
@@ -372,18 +346,3 @@ class ToolSetManager:
         if not path.is_file():
             raise FileNotFoundError(name)
         return path
-
-    def cleanup_old_state(self, max_age_seconds: int = 3600) -> int:
-        """Deletes state payload files older than max_age_seconds."""
-        now = time.time()
-        removed = 0
-        if not self._state_dir.exists():
-            return 0
-        for f in self._state_dir.glob("*.json"):
-            try:
-                if now - f.stat().st_mtime > max_age_seconds:
-                    f.unlink()
-                    removed += 1
-            except OSError:
-                pass
-        return removed
