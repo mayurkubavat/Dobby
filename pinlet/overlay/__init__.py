@@ -209,6 +209,11 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
         cfg["input_lock"] = lock_mode(env)
     if is_false(env, "PINLET_BACKGROUND_CLICKS"):
         cfg["background_clicks"] = False
+    if is_true(env, "PINLET_BACKGROUND"):
+        # Background mode: the agent works in its own window, maybe on another
+        # Desktop, so nothing is drawn over the person's screen but the bar,
+        # and their clicks and keys are not a take-over.
+        cfg["background"] = True
     if env.get("PINLET_OVERLAY_SPEED"):
         try:
             cfg["speed"] = float(env["PINLET_OVERLAY_SPEED"])

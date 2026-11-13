@@ -139,6 +139,7 @@ _kCGEventMouseMoved, _kCGEventLeftMouseDragged = 5, 6
 _kCGMouseButtonLeft, _kCGMouseButtonRight = 0, 1
 _kCGMouseEventClickState = 1
 _kCGScrollEventUnitLine = 1
+_kCGWindowListOptionAll = 0
 _kCGWindowListOptionOnScreenOnly = 1
 _kCGWindowListExcludeDesktopElements = 16
 _kCGNullWindowID = 0
@@ -190,12 +191,21 @@ def _load_ax():
     return ApplicationServices
 
 
-def _screencapture(region: tuple[int, int, int, int] | None) -> Image.Image:
+def _screencapture(
+    region: tuple[int, int, int, int] | None, window_id: str | None = None
+) -> Image.Image:
+    """One screenshot: the screen, a region of it, or (``window_id``) one window.
+
+    A window is captured by itself, without its shadow, whether or not it is
+    covered or on the Desktop the person is looking at.
+    """
     fd, path = tempfile.mkstemp(suffix=".png", prefix="dc_cap_")
     os.close(fd)
     try:
         args = ["/usr/sbin/screencapture", "-x", "-t", "png"]
-        if region:
+        if window_id is not None:
+            args += ["-o", "-l", str(int(window_id))]
+        elif region:
             x, y, w, h = region
             args.append(f"-R{int(x)},{int(y)},{int(w)},{int(h)}")
         args.append(path)
@@ -230,6 +240,8 @@ class MacHAL(IDesktopHAL):
         # Why the last focus_window returned False, for the tool result.
         self.last_focus_error: str | None = None
         self._capture = capture_fn or _screencapture
+        # Set while a step's events go to one app only (background mode).
+        self._post_pid: int | None = None
         self._is_wayland = False  # diagnostics compatibility
         self.display_server = "Quartz"
         # A private event source: our key events never pick up modifier state from
@@ -262,7 +274,11 @@ class MacHAL(IDesktopHAL):
             self.Q.CGEventSetIntegerValueField(event, _kCGEventSourceUserData, PINLET_EVENT_TAG)
         except Exception:  # noqa: BLE001
             pass
-        self.Q.CGEventPost(_kCGHIDEventTap, event)
+        if self._post_pid is not None:
+            # Straight to one app: the pointer and the front app stay as they are.
+            self.Q.CGEventPostToPid(self._post_pid, event)
+        else:
+            self.Q.CGEventPost(_kCGHIDEventTap, event)
 
     def _cooldown(self) -> None:
         time.sleep(CONFIG.action_cooldown_ms / 1000.0)
@@ -476,8 +492,10 @@ class MacHAL(IDesktopHAL):
         except Exception:
             return None
 
-    def _window_dicts(self) -> list[dict[str, Any]]:
-        opts = _kCGWindowListOptionOnScreenOnly | _kCGWindowListExcludeDesktopElements
+    def _window_dicts(self, every_desktop: bool = False) -> list[dict[str, Any]]:
+        """Quartz window records, front to back; ``every_desktop`` adds off-screen ones."""
+        scope = _kCGWindowListOptionAll if every_desktop else _kCGWindowListOptionOnScreenOnly
+        opts = scope | _kCGWindowListExcludeDesktopElements
         return list(self.Q.CGWindowListCopyWindowInfo(opts, _kCGNullWindowID) or [])
 
     def list_windows(self) -> list[WindowInfo]:
@@ -486,28 +504,12 @@ class MacHAL(IDesktopHAL):
         results: list[WindowInfo] = []
         active_assigned = False
         for w in self._window_dicts():
-            if int(w.get("kCGWindowLayer", 0)) != 0:
+            is_active = (not active_assigned) and int(w.get("kCGWindowOwnerPID", -1)) == front_pid
+            info = self._window_info(w, is_active)
+            if info is None:
                 continue
-            b = w.get("kCGWindowBounds") or {}
-            width, height = int(b.get("Width", 0)), int(b.get("Height", 0))
-            if width < 20 or height < 20:
-                continue
-            owner = str(w.get("kCGWindowOwnerName", "") or "")
-            title = str(w.get("kCGWindowName", "") or "")
-            pid = int(w.get("kCGWindowOwnerPID", -1))
-            is_active = (not active_assigned) and pid == front_pid
             active_assigned = active_assigned or is_active
-            results.append(
-                WindowInfo(
-                    window_id=str(int(w.get("kCGWindowNumber", 0))),
-                    title=f"{title} - {owner}" if title else owner,
-                    bbox=BoundingBox(
-                        x=int(b.get("X", 0)), y=int(b.get("Y", 0)), width=width, height=height
-                    ),
-                    is_active=is_active,
-                    app_name=owner,
-                )
-            )
+            results.append(info)
         return results
 
     @override
@@ -523,6 +525,27 @@ class MacHAL(IDesktopHAL):
             if str(int(w.get("kCGWindowNumber", -1))) == str(window_id):
                 return int(w.get("kCGWindowOwnerPID", -1))
         return None
+
+    @staticmethod
+    def _window_info(w: dict[str, Any], is_active: bool = False) -> WindowInfo | None:
+        """A Quartz window record as a ``WindowInfo``; None for tiny or non-normal windows."""
+        if int(w.get("kCGWindowLayer", 0)) != 0:
+            return None
+        b = w.get("kCGWindowBounds") or {}
+        width, height = int(b.get("Width", 0)), int(b.get("Height", 0))
+        if width < 20 or height < 20:
+            return None
+        owner = str(w.get("kCGWindowOwnerName", "") or "")
+        title = str(w.get("kCGWindowName", "") or "")
+        return WindowInfo(
+            window_id=str(int(w.get("kCGWindowNumber", 0))),
+            title=f"{title} - {owner}" if title else owner,
+            bbox=BoundingBox(
+                x=int(b.get("X", 0)), y=int(b.get("Y", 0)), width=width, height=height
+            ),
+            is_active=is_active,
+            app_name=owner,
+        )
 
     def background_click(self, x: int, y: int, window_id: str) -> bool:
         """Presses the button at (x, y) in ``window_id``'s app without the real mouse.
@@ -628,4 +651,10 @@ class MacHAL(IDesktopHAL):
 
 def build_hal() -> MacHAL:
     """Factory used by :func:`pinlet.hal.factory.get_desktop_hal`."""
+    from pinlet.hal import target
+
+    if target.enabled():
+        from pinlet.hal.macos_background import BackgroundMacHAL
+
+        return BackgroundMacHAL()
     return MacHAL()

@@ -11,6 +11,14 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- Background mode on macOS (`PINLET_BACKGROUND=1`): the AI works in one window
+  without taking the screen. `focus_window` picks the window without bringing
+  it forward, screenshots show that window alone (even when it is covered or
+  on another Desktop), clicks press, focus or select through accessibility,
+  and typing goes straight to the window's app. The person's pointer, keyboard
+  and front app are left alone, and their input is no longer a take-over.
+  Steps that need the real pointer are refused, or with
+  `PINLET_BACKGROUND_POINTER=idle` done while the person is idle.
 - `scripts/install.sh`: installs Pinlet into a folder it owns
   (`~/Library/Application Support/Pinlet` or `~/.local/share/pinlet`) with uv,
   on Apple silicon Macs and Linux, and runs `pinlet setup`. Running it again

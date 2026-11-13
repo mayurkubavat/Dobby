@@ -218,3 +218,23 @@ something, check with the person before doing it.
 
 When the task is done, call wait_for_wake so the person can hand you the next step from Pinlet's bar.
 """
+
+BACKGROUND_INSTRUCTIONS = """
+Background mode is on: the person keeps using this computer while you work, so you do not take
+the screen. First call list_windows (it lists windows on every Desktop), then
+focus_window(window_id) for the one window you will work in. Nothing comes to the front. From then
+on screenshots show only that window (the rest is blank), clicks press, focus or select through
+accessibility, and typing and keys go to that window's app. Prefer buttons, fields, menu items and
+keyboard shortcuts. Hovering does nothing, and drags or clicks on a canvas may be refused because
+they need the real pointer: try another way, or tell the person the step needs them. After a
+click or key, check that it took effect before going on. To work in another window, call
+focus_window again. If you need an app that is not open, ask the person to open it.
+"""
+
+
+def pinlet_instructions() -> str:
+    """The server instructions, with the background-mode note when that mode is on."""
+    # Function-local: this module is otherwise free of pinlet imports (see tests/test_layering.py).
+    from pinlet.hal import target
+
+    return PINLET_INSTRUCTIONS + (BACKGROUND_INSTRUCTIONS if target.enabled() else "")

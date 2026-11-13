@@ -31,12 +31,12 @@ from pinlet.hal.factory import get_desktop_hal
 from pinlet.server_support import (
     AGENT_NOTE,
     PERSON_NOTE,
-    PINLET_INSTRUCTIONS,
     _image_as_content,
     _receipt_for,
     _receipt_mark,
     _returns_dict,
     _session_tag,
+    pinlet_instructions,
     setup_server_log,
     tool_log,
 )
@@ -330,7 +330,7 @@ def _adopt_client_name(context: Any) -> None:
 
 from pinlet.mode import security_mode  # noqa: E402
 
-mcp_server = PinletServer("Pinlet", instructions=PINLET_INSTRUCTIONS)
+mcp_server = PinletServer("Pinlet", instructions=pinlet_instructions())
 hal = get_desktop_hal()
 controller = FeedbackLoopController(hal)
 
@@ -349,6 +349,20 @@ try:
     _wire_overlay_hit_test()
 except Exception:  # noqa: BLE001 - naming is cosmetic; never block startup
     logging.getLogger(__name__).debug("overlay hit test not wired", exc_info=True)
+
+
+def _wire_background_targets() -> None:
+    """Background mode: each connected agent keeps its own target window."""
+    from pinlet.hal import target
+    from pinlet.hub import sessions
+
+    if not target.enabled():
+        return
+    target.set_key_fn(lambda: getattr(sessions.CURRENT.get(), "id", None))
+    sessions.on_close(target.clear)
+
+
+_wire_background_targets()
 trajectory_engine = TrajectoryEngine(controller)
 
 toolset_manager = ToolSetManager(
@@ -1032,10 +1046,17 @@ def get_active_window() -> dict[str, Any] | None:
 
 @mcp_server.tool()
 def focus_window(window_id: str) -> dict[str, Any]:
-    """Brings target window to the foreground and grants it focus."""
+    """Brings target window to the foreground and grants it focus.
+
+    In background mode (the server instructions say when it is on) nothing comes to the
+    front: the window becomes the one you work in, and screenshots, clicks and keys
+    apply to it alone.
+    """
     ok = hal.focus_window(window_id)
     _enable_plugin_domain()
     result: dict[str, Any] = {"success": ok, "window_id": window_id}
+    if ok and getattr(hal, "background", False):
+        result["background"] = True
     if not ok:
         reason = getattr(hal, "last_focus_error", None)
         result["reason"] = (

@@ -368,7 +368,8 @@ class OverlayHAL:
         wid = getattr(win, "window_id", None) if win is not None else None
         if wid is not None and str(wid) != self._tracked:
             self._tracked = str(wid)
-            self.overlay.track(window_id=wid)
+            if not self._quiet:
+                self.overlay.track(window_id=wid)
 
     def _reclaim_target(self) -> None:
         """Input lock: bring Pinlet's window back to the front before acting.
@@ -427,6 +428,11 @@ class OverlayHAL:
         if getattr(self.overlay, "lock_on", False):
             self._follow_active_window()
 
+    @property
+    def _quiet(self) -> bool:
+        """Background mode: draw nothing over the person's screen but the bar."""
+        return bool(getattr(self.overlay, "config", {}).get("background"))
+
     def _point_to(
         self,
         x: float,
@@ -437,6 +443,12 @@ class OverlayHAL:
         probe: bool = False,
         app: str | None = None,
     ) -> None:
+        if self._quiet:
+            # The agent's window may be on another Desktop: a pointer drawn at
+            # this spot would land on whatever the person is looking at.
+            if verb and not self._in_step:
+                self.overlay.intent(action_text(verb, None, app))
+            return
         px, py = self._to_points(x, y)
         # Inside a step() the tool already set the intent text; still box it.
         if app:
@@ -516,7 +528,8 @@ class OverlayHAL:
         self._point_to(x, y, verb=verb, probe=True, app=app)
         with self._passing():
             result = self._inner.mouse_click(x, y, button, click_count, *args, **kwargs)
-        self.overlay.click(button=button, count=click_count)
+        if not self._quiet:
+            self.overlay.click(button=button, count=click_count)
         self._follow_active_window()
         return result
 
@@ -648,7 +661,8 @@ class OverlayHAL:
         if ok:
             self._field = None
             self._tracked = str(window_id)
-            self.overlay.track(window_id=window_id)
+            if not self._quiet:
+                self.overlay.track(window_id=window_id)
         return ok
 
     def list_windows(self, *args: Any, **kwargs: Any) -> list[Any]:
@@ -667,6 +681,13 @@ class OverlayHAL:
         """Hides the overlay for the capture so screenshots never show it."""
         if not self.overlay.active:
             return self._inner.capture_screen(*args, **kwargs)
+        if self._quiet:
+            # One window is captured by itself: the bar is never in the picture,
+            # so it need not blink off, and nothing is scanned on the person's screen.
+            try:
+                return self._inner.capture_screen(*args, **kwargs)
+            finally:
+                self.overlay.state("thinking")
         self.overlay.hide()
         try:
             return self._inner.capture_screen(*args, **kwargs)

@@ -213,6 +213,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # clicks, scrolls and keys out of the window Pinlet works in while it
     # works; "off" keeps take-over as before.
     "input_lock": "off",
+    "background": False,  # background mode: no drawn pointer or glow, no take-over
 }
 
 
@@ -1349,6 +1350,8 @@ class OverlayController:
             sys.stderr.write(f"pinlet.overlay: input monitor: {exc}\n")
 
     def _on_user_input(self, kind: str = "click") -> None:
+        if self.cfg.get("background"):
+            return  # the agent works in its own window; the person's input is theirs
         now = time.monotonic()
         working = now - self.last_action <= float(self.cfg["active_secs"])
         if self.takeover and kind == "move":

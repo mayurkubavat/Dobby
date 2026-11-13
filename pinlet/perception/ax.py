@@ -19,6 +19,7 @@ from collections.abc import Callable
 from typing import Any
 
 from pinlet.config import CONFIG
+from pinlet.hal import target
 from pinlet.perception.atspi import INTERACTABLE_ROLES
 from pinlet.types import BoundingBox, UIElement
 
@@ -175,9 +176,11 @@ class AXInspector:
         ws = self._appkit.NSWorkspace.sharedWorkspace()
         if not app_name_filter:
             front = None
-            if self._front_pid_fn is not None:
+            # Background mode: the app the agent works in, not the one in front.
+            pid_fn = target.current_pid if target.current_pid() else self._front_pid_fn
+            if pid_fn is not None:
                 try:
-                    pid = self._front_pid_fn()
+                    pid = pid_fn()
                     if pid:
                         front = self._appkit.NSRunningApplication.runningApplicationWithProcessIdentifier_(
                             pid
@@ -289,8 +292,13 @@ class AXInspector:
         if not self.is_available:
             return None
         try:
-            system = self._ax.AXUIElementCreateSystemWide()
-            err, el = self._ax.AXUIElementCopyElementAtPosition(system, float(x), float(y), None)
+            # Background mode asks the agent's own app: its window may be covered.
+            pid = target.current_pid()
+            if pid:
+                scope = self._ax.AXUIElementCreateApplication(pid)
+            else:
+                scope = self._ax.AXUIElementCreateSystemWide()
+            err, el = self._ax.AXUIElementCopyElementAtPosition(scope, float(x), float(y), None)
         except Exception:
             return None
         if err != 0 or el is None:

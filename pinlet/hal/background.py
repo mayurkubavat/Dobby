@@ -1,14 +1,17 @@
-"""Background clicks: press a button without moving the real mouse.
+"""Background clicks: act on an app through accessibility, without the real mouse.
 
-With the input lock on (``PINLET_INPUT_LOCK=window``), Pinlet tries this first
-for a plain left click: it asks the target app's own accessibility tree what
-is at the point and, when that is a button-like element that supports
-``AXPress``, presses it. The app need not be in front and the person's
-pointer stays where they left it; only Pinlet's drawn pointer moves.
-
-Anything else (text fields, canvases, lists, games, apps without
-accessibility, right or double clicks) falls back to the real mouse.
+With the input lock on (``PINLET_INPUT_LOCK=window``), Pinlet tries
+:func:`ax_press_at` first for a plain left click: it asks the target app's
+own accessibility tree what is at the point and, when that is a button-like
+element that supports ``AXPress``, presses it. The app need not be in front
+and the person's pointer stays where they left it; only Pinlet's drawn
+pointer moves. Anything else falls back to the real mouse.
 ``PINLET_BACKGROUND_CLICKS=0`` turns this off.
+
+Background mode (``PINLET_BACKGROUND=1``, ``pinlet.hal.macos_background``)
+never uses the real mouse, so it also needs the rest of this module: giving a
+text field the keyboard, selecting a row, opening a context menu and
+scrolling, all through accessibility.
 """
 
 from __future__ import annotations
@@ -94,3 +97,142 @@ def ax_press_at(ax: Any, pid: int, x: float, y: float) -> str | None:
         if el is None:
             return None
     return None
+
+
+# A click in one of these gives it the keyboard.
+EDITABLE = frozenset(
+    {"AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXSecureTextField"}
+)
+_ROW_ROLES = frozenset({"AXRow", "AXCell", "AXOutlineRow"})
+_SCROLL_UP = 12  # how far up the tree a scroll area is looked for
+_LINE_PT = 40.0  # points one wheel "line" moves the content
+
+
+def element_at(ax: Any, pid: int, x: float, y: float) -> Any:
+    """The deepest element of app ``pid`` at screen point (x, y), or None.
+
+    Asked of the app itself, so it answers for a window that is covered or on
+    another Desktop.
+    """
+    try:
+        app = ax.AXUIElementCreateApplication(int(pid))
+        try:
+            ax.AXUIElementSetMessagingTimeout(app, 0.5)
+        except Exception:  # noqa: BLE001
+            pass
+        err, el = ax.AXUIElementCopyElementAtPosition(app, float(x), float(y), None)
+    except Exception:  # noqa: BLE001
+        return None
+    return el if err == 0 else None
+
+
+def _set(ax: Any, el: Any, name: str, value: Any) -> bool:
+    try:
+        return ax.AXUIElementSetAttributeValue(el, name, value) == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _perform(ax: Any, el: Any, action: str) -> bool:
+    if action not in _actions(ax, el):
+        return False
+    try:
+        return ax.AXUIElementPerformAction(el, action) == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def ax_click_at(ax: Any, pid: int, x: float, y: float) -> str | None:
+    """What a plain left click at (x, y) in app ``pid`` does, done without the mouse.
+
+    Returns "pressed" (a button-like element), "focused" (a text field now has
+    the keyboard), "selected" (a list or table row), or None when the point
+    needs a real click (a canvas, a drag handle, an app without accessibility).
+    """
+    if ax_press_at(ax, pid, x, y) is not None:
+        return "pressed"
+    el = element_at(ax, pid, x, y)
+    hops = 0
+    while el is not None and hops <= MAX_UP + 2:
+        role = _attr(ax, el, "AXRole")
+        if role in EDITABLE:
+            return "focused" if _set(ax, el, "AXFocused", True) else None
+        if role in _ROW_ROLES:
+            row = el if role != "AXCell" else (_attr(ax, el, "AXParent") or el)
+            return "selected" if _set(ax, row, "AXSelected", True) else None
+        if role is None or role in ("AXWindow", "AXSheet", "AXApplication"):
+            return None
+        if role == "AXWebArea":
+            # Clicking empty page space only moves the keyboard to the page.
+            return "focused" if _set(ax, el, "AXFocused", True) else None
+        el = _attr(ax, el, "AXParent")
+        hops += 1
+    return None
+
+
+def ax_action_at(ax: Any, pid: int, x: float, y: float, action: str) -> bool:
+    """Performs ``action`` ("AXShowMenu", "AXOpen") on the element at (x, y) or a near parent."""
+    el = element_at(ax, pid, x, y)
+    for _ in range(MAX_UP + 1):
+        if el is None:
+            return False
+        if _perform(ax, el, action):
+            return True
+        if _attr(ax, el, "AXRole") in _STOP:
+            return False
+        el = _attr(ax, el, "AXParent")
+    return False
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _height(ax: Any, el: Any) -> float | None:
+    size = _attr(ax, el, "AXSize")
+    if size is None:
+        return None
+    try:
+        ok, s = ax.AXValueGetValue(size, ax.kAXValueCGSizeType, None)
+        return float(s.height) if ok else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def ax_scroll_at(ax: Any, pid: int, x: float, y: float, dx: int, dy: int) -> bool:
+    """Scrolls the scroll area under (x, y) in app ``pid`` by moving its scroll bar.
+
+    ``dy`` > 0 moves the content up (toward the start), as the mouse wheel
+    does. False when there is no scroll area with a scroll bar to move.
+    """
+    el = element_at(ax, pid, x, y)
+    for _ in range(_SCROLL_UP):
+        if el is None:
+            return False
+        if _attr(ax, el, "AXRole") == "AXScrollArea":
+            break
+        el = _attr(ax, el, "AXParent")
+    else:
+        return False
+    moved = False
+    for lines, bar_attr in ((dy, "AXVerticalScrollBar"), (-dx, "AXHorizontalScrollBar")):
+        if not lines:
+            continue
+        bar = _attr(ax, el, bar_attr)
+        now = _number(_attr(ax, bar, "AXValue")) if bar is not None else None
+        if now is None:
+            continue
+        # The bar's value runs 0..1 over what is hidden; turn lines into that fraction.
+        step = 0.1 * abs(lines) / 3.0
+        if bar_attr == "AXVerticalScrollBar":
+            shown = _height(ax, el)
+            contents = _attr(ax, el, "AXContents") or []
+            total = _height(ax, contents[0]) if len(contents) else None
+            if shown and total and total > shown:
+                step = abs(lines) * _LINE_PT / (total - shown)
+        target = min(1.0, max(0.0, now - step if lines > 0 else now + step))
+        moved = _set(ax, bar, "AXValue", target) or moved
+    return moved
