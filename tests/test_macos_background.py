@@ -557,21 +557,21 @@ def test_agent_browser_puts_the_persons_app_back_in_front():
     from pinlet import agent_browser
 
     calls = []
-    front = {"path": "/Applications/Google Chrome.app"}  # the browser took the front
 
     def run(cmd, **kw):
         calls.append(cmd)
         if cmd[:2] == ["/usr/bin/lsappinfo", "front"]:
-            return SimpleNamespace(stdout="ASN:0x0-0x1\n")
-        if cmd[0] == "/usr/bin/lsappinfo":
-            return SimpleNamespace(stdout=f'"LSBundlePath"="{front["path"]}"\n')
-        front["path"] = cmd[-1]  # open -a <app>: it comes forward
-        return SimpleNamespace(stdout="")
+            return SimpleNamespace(stdout="ASN:0x0-0x1:\n")
+        return SimpleNamespace(stdout='"LSBundlePath"="/Applications/Claude.app"\n')
 
-    assert agent_browser.front_app_path(run) == "/Applications/Google Chrome.app"
-    agent_browser.give_front_back("/Applications/Claude.app", run=run, sleep=lambda s: None)
+    assert agent_browser.front_app_path(run) == "/Applications/Claude.app"
+    waits = []
+    agent_browser.give_front_back("/Applications/Claude.app", run=run, sleep=waits.append)
     opens = [c for c in calls if c[0] == "/usr/bin/open"]
-    assert opens == [["/usr/bin/open", "-a", "/Applications/Claude.app"]]  # once was enough
+    assert opens == [["/usr/bin/open", "-a", "/Applications/Claude.app"]] * 2
+    assert sum(waits) >= 3  # after the browser has had time to come forward
+    agent_browser.give_front_back(None, run=run, sleep=waits.append)  # unknown: nothing to do
+    assert len([c for c in calls if c[0] == "/usr/bin/open"]) == 2
 
 
 def test_a_chromium_browser_gets_the_screen_reader_switch_and_other_apps_do_not():

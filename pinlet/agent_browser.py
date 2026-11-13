@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -75,6 +76,15 @@ _LSAPPINFO = "/usr/bin/lsappinfo"
 
 def front_app_path(run=subprocess.run) -> str | None:
     """The bundle path of the app in front (asked fresh), or None when unknown."""
+    try:  # a new process sees the true front app through AppKit
+        from AppKit import NSWorkspace  # type: ignore
+
+        app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        url = app.bundleURL() if app is not None else None
+        if url is not None and str(url.path()).endswith(".app"):
+            return str(url.path())
+    except Exception:  # noqa: BLE001 - no pyobjc here: ask the launch services tool
+        pass
     try:
         asn = run([_LSAPPINFO, "front"], capture_output=True, text=True, timeout=2).stdout.strip()
         if not asn:
@@ -87,22 +97,20 @@ def front_app_path(run=subprocess.run) -> str | None:
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return None
-    _, _, value = out.partition("=")
-    path = value.strip().strip('"')
-    return path if path.endswith(".app") else None
+    found = re.search(r'"(/[^"]+\.app)/?"', out)
+    return found.group(1) if found else None
 
 
 def give_front_back(path: str | None, run=subprocess.run, sleep=time.sleep) -> None:
     """Puts the app the person was using back in front after the browser took it.
 
-    Twice, because a browser may come forward a second time when its window is ready.
+    A browser comes forward a moment after it starts, and sometimes again when
+    its window is ready, so this is done twice.
     """
     if not path:
         return
-    for wait in (1.0, 1.5):
+    for wait in (1.5, 2.0):
         sleep(wait)
-        if front_app_path(run) == path:
-            continue
         try:
             run(["/usr/bin/open", "-a", path], check=False, timeout=5)
         except (OSError, subprocess.SubprocessError):
@@ -139,8 +147,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     done = subprocess.run(cmd, check=False)
     if done.returncode == 0:
         give_front_back(before)
+        back = " and put your app back in front" if before else ""
         print(
-            f"Opened {app} for the AI (profile {profile}) and put your app back in front.\n"
+            f"Opened {app} for the AI (profile {profile}){back}.\n"
             "Move its window to the Desktop the AI works on; the AI finds it with list_windows."
         )
     return done.returncode
