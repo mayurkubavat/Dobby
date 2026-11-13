@@ -228,6 +228,8 @@ class PinletServer(MCPServer):
         from pinlet.hub import sessions as _sessions
 
         _sessions.note_call(name)
+        if name != "request_control":  # that one states its own goal
+            _restore_goal()
         receipt = _receipt_for(name, arguments)
         if receipt is not None and receipt.get("blocked") is not None:
             _journal(name, "repeat_blocked", 0.0)
@@ -2140,6 +2142,33 @@ def request_control(max_wait_s: float | None = None, goal: str = "") -> dict[str
 _goal_owner = ""  # which agent's goal is on the bar ("" when none)
 
 
+_goals_checked: set[str] = set()  # agents whose saved goal this process has looked up
+
+
+def _restore_goal() -> None:
+    """Put a reconnecting agent's goal back on the bar after this Pinlet restarted.
+
+    Runs on every tool call and costs one set lookup after the first. A goal
+    is restored only when the bar has none: a newer goal always wins.
+    """
+    try:
+        from pinlet.hub import goals as _goals
+        from pinlet.hub import sessions as _sessions
+
+        info = _sessions.CURRENT.get()
+        key = info.agent_key if info is not None else ""
+        if not key or key in _goals_checked:
+            return
+        _goals_checked.add(key)
+        root, _who, _key = _me()
+        text = _goals.load(root, key)
+        if text and not _goal_owner:
+            tool_log.info("%sgoal kept across a restart", _session_tag())
+            _show_goal(text)
+    except Exception:  # noqa: BLE001 - never let this break a tool
+        return
+
+
 def _show_goal(goal: str) -> None:
     """Put the AI's one-line goal on the bar (best effort)."""
     from pinlet.overlay import find_overlay_hal
@@ -2151,6 +2180,12 @@ def _show_goal(goal: str) -> None:
     _goal_owner = _session_tag() if goal.strip() else ""
     with contextlib.suppress(Exception):
         ov_hal.overlay.goal(goal)
+    with contextlib.suppress(Exception):  # so it outlives a restart of this Pinlet
+        from pinlet.hub import goals as _goals
+
+        root, _who, key = _me()
+        _goals_checked.add(key)
+        _goals.save(root, key, goal)
     tool_log.info("%sgoal: %s", _session_tag(), " ".join(goal.split())[:160])
 
 
@@ -2398,8 +2433,7 @@ def release_control() -> dict[str, Any]:
             if released:  # done for now: the pointer label stops saying "Thinking…"
                 ov_hal.overlay.state("idle")
             if mine:
-                ov_hal.overlay.goal("")
-                _goal_owner = ""
+                _show_goal("")
     return {"ok": True, "released": released, **ctl.status()}
 
 
