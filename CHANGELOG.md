@@ -11,6 +11,9 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- Pinlet no longer clicks payment buttons (Pay, Buy, Place order, Checkout,
+  Subscribe and the like) in any mode, turbo included. The AI is told to hand
+  the click to the person. `PINLET_BLOCK_PAYMENTS=0` lifts the rule.
 - `pinlet browser`: starts a separate Chrome (or another Chromium browser) with
   its own profile in the background, so an AI in background mode has a browser
   that is not the person's.

@@ -363,3 +363,41 @@ def test_one_shared_pinlet_serves_turbo_and_secure_clients(tmp_path):
         with pytest.raises(OverlayBlocked):  # "Let Pinlet use Vivado?" -> Don't Allow
             hal.mouse_click(10, 10)
     assert [c for c in ov.calls if c[0] == "turbo"] == [("turbo", True), ("turbo", False)]
+
+
+@pytest.mark.parametrize(
+    "role, name, pays",
+    [
+        ("button", "Pay now", True),
+        ("button", "Buy", True),
+        ("link", "Place your order", True),
+        ("button", "Proceed to checkout", True),
+        ("button", "Subscribe", True),
+        ("button", "Send", False),
+        ("button", "Payment settings", False),
+        ("button", "Buyer protection", False),
+        ("text", "Pay now", False),
+    ],
+)
+def test_payment_labels(role, name, pays):
+    from pinlet.overlay.hal import payment_label
+
+    assert (payment_label(role, name) is not None) is pays
+
+
+def test_payment_button_is_never_clicked_even_in_turbo(monkeypatch):
+    monkeypatch.delenv("PINLET_BLOCK_PAYMENTS", raising=False)
+    hit = lambda x, y: {"role": "button", "name": "Pay $42.00", "secure": False}
+    ov, desk = Overlay(answers=[True]), Desk()
+    with pytest.raises(OverlayBlocked, match="payment button"):
+        OverlayHAL(desk, ov, hit_test=hit).mouse_click(150, 10)
+    assert desk.done == []
+    assert not [c for c in ov.calls if c[0] == "confirm"]  # no prompt: it is the person's step
+
+
+def test_payment_rule_can_be_lifted(monkeypatch):
+    monkeypatch.setenv("PINLET_BLOCK_PAYMENTS", "0")
+    hit = lambda x, y: {"role": "button", "name": "Pay now", "secure": False}
+    ov, desk = Overlay(answers=[True]), Desk()
+    OverlayHAL(desk, ov, hit_test=hit).mouse_click(150, 10)
+    assert desk.done == [("click", 150, 10)]

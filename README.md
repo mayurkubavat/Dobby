@@ -348,6 +348,7 @@ it. Settings go in the client's `env`:
 | `PINLET_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |
 | `PINLET_APP_GRANTS=off` | Secure mode without the per-app question |
 | `PINLET_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |
+| `PINLET_BLOCK_PAYMENTS=0` | Pinlet never clicks a button that pays (Pay, Buy, Place order, Checkout, Subscribe…) in any mode; it tells the AI to hand that click to you. `0` lifts the rule |
 | `PINLET_ALLOW_SHELL=1` | Let the AI run shell commands (`run_terminal_command`). Off by default |
 | `PINLET_INPUT_LOCK=window` | Keep your clicks out of the window Pinlet works in; buttons are then pressed through accessibility so your pointer stays put (macOS and Linux). `PINLET_BACKGROUND_CLICKS=0` uses the real mouse instead |
 | `PINLET_BACKGROUND=1` | Background mode (macOS): keep using your Mac while the AI works. The AI picks one window, which may be covered or on another Desktop, and sees, clicks and types into that window only, through accessibility. Your pointer, keyboard and front app are left alone, and your own clicks no longer pause it. Switch it on in Settings > General ("Work in the background") or with this variable. Put the apps the AI uses on a second Desktop (Dock icon > Options > Assign To) and give it a browser of its own with `pinlet browser` (a separate Chrome with its own profile, started in the background) |

@@ -28,9 +28,12 @@ Anything not listed here is forwarded untouched through ``__getattr__``.
 from __future__ import annotations
 
 import contextlib
+import os
 import re
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any
+
+from pinlet.envflags import is_false
 
 from .client import NullOverlay
 from .grants import AppBlocked, AppGrants
@@ -105,6 +108,14 @@ _CONSEQUENTIAL = re.compile(
     r"sign out|log out|reset|revoke|unsubscribe|cancel (subscription|order|account)|close account)\b",
     re.I,
 )
+# Buttons that spend money. Pinlet never clicks these, in any mode: paying is
+# the person's step (``PINLET_BLOCK_PAYMENTS=0`` lifts the rule).
+_PAYMENT = re.compile(
+    r"^\W*(pay|buy|purchase|place (your |my )?order|order now|complete (your |my )?(order|purchase|"
+    r"payment)|confirm (and pay|purchase|payment|order)|check ?out|proceed to (checkout|payment)|"
+    r"subscribe|donate|send money|add funds|top up|transfer (money|funds)|authorize payment)\b",
+    re.I,
+)
 _PRESSABLE_ROLES = ("button", "menu item", "link", "check menu item", "radio menu item")
 _EDITABLE_ROLES = (
     "text",
@@ -131,6 +142,17 @@ def consequential_label(role: str | None, name: str | None) -> str | None:
     if not any(r in role for r in _PRESSABLE_ROLES):
         return None
     return name if _CONSEQUENTIAL.match(name) else None
+
+
+def payment_label(role: str | None, name: str | None) -> str | None:
+    """The button text when clicking it would pay for something, else None."""
+    name = " ".join(str(name or "").split())
+    role = str(role or "").lower()
+    if not name or len(name) > 48:
+        return None
+    if not any(r in role for r in _PRESSABLE_ROLES):
+        return None
+    return name if _PAYMENT.match(name) else None
 
 
 _SECRETISH = re.compile(r"^\S{8,}$")
@@ -203,6 +225,7 @@ class OverlayHAL:
         self._tracked: str | None = None
         self._confirm_danger = confirm_danger
         self._in_step = 0
+        self._block_payments = not is_false(os.environ, "PINLET_BLOCK_PAYMENTS")
 
     @property
     def inner(self) -> Any:
@@ -323,6 +346,26 @@ class OverlayHAL:
             return self._hit_test(int(x), int(y))
         except Exception:  # noqa: BLE001 - naming is best effort
             return None
+
+    def _refuse_payment(self, hit: dict | None, app: str | None) -> None:
+        """Pinlet does not click buttons that pay, whatever the mode.
+
+        Raises:
+            OverlayBlocked: The click would land on a Pay / Buy / Place order button.
+        """
+        from .client import OverlayBlocked
+
+        if not self._block_payments or hit is None:
+            return
+        label = payment_label(hit.get("role"), hit.get("name"))
+        if label is None:
+            return
+        self.overlay.intent(f"Your turn: ‘{_clip(label, 24)}’ pays", ms=4000)
+        raise OverlayBlocked(
+            f"‘{label}’ looks like a payment button. Pinlet does not click payment buttons: "
+            "tell the person everything is ready and ask them to click it themselves.",
+            app=app or "",
+        )
 
     def _confirm_consequential(self, hit: dict | None, verb: str, app: str | None) -> None:
         """Allow/Deny before pressing Send, Delete, Pay and the like."""
@@ -521,6 +564,7 @@ class OverlayHAL:
         self._gate(app, "click")
         hit = self._probe(x, y)
         self._field = hit
+        self._refuse_payment(hit, app)
         self._confirm_consequential(hit, verb, app)
         if self._background_click(x, y, button, click_count, verb, app=app):
             return None
