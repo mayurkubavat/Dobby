@@ -11,6 +11,13 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- `pinlet browser`: starts a separate Chrome (or another Chromium browser) with
+  its own profile in the background, so an AI in background mode has a browser
+  that is not the person's.
+- Background mode with apps that have several windows: the accessibility tree
+  covers only the agent's window, a click that the app would give to another of
+  its windows is refused, and picking a window asks Chromium and Electron apps
+  for their page elements.
 - Background mode on macOS (`PINLET_BACKGROUND=1`): the AI works in one window
   without taking the screen. `focus_window` picks the window without bringing
   it forward, screenshots show that window alone (even when it is covered or

@@ -35,6 +35,7 @@ class Target:
 _lock = threading.Lock()
 _targets: dict[Hashable, Target] = {}
 _key_fn: Callable[[], Hashable] | None = None
+_frame_fn: Callable[[Target], tuple[int, int, int, int] | None] | None = None
 
 
 def enabled(env: Mapping[str, str] | None = None) -> bool:
@@ -91,11 +92,40 @@ def clear(key: Hashable = None, *, current: bool = False) -> None:
 
 
 def reset() -> None:
-    """Forgets every target and the key function (tests)."""
-    global _key_fn
+    """Forgets every target, the key function and the frame function (tests)."""
+    global _key_fn, _frame_fn
     with _lock:
         _targets.clear()
     _key_fn = None
+    _frame_fn = None
+
+
+def set_frame_fn(fn: Callable[[Target], tuple[int, int, int, int] | None] | None) -> None:
+    """Sets how a target window's frame (x, y, width, height) is looked up; the HAL does."""
+    global _frame_fn
+    _frame_fn = fn
+
+
+def current_frame() -> tuple[int, int, int, int] | None:
+    """Where the current agent's window is now, or None when unknown.
+
+    An app's accessibility tree does not carry window ids, so readers match
+    the agent's window by this frame.
+    """
+    chosen = get()
+    if chosen is None or _frame_fn is None:
+        return None
+    try:
+        return _frame_fn(chosen)
+    except Exception:  # noqa: BLE001 - unknown is fine: readers then take every window
+        return None
+
+
+def same_frame(a: tuple | None, b: tuple | None, slack: int = 2) -> bool:
+    """Whether two frames are the same window, allowing a point or two of rounding."""
+    if a is None or b is None or len(a) != 4 or len(b) != 4:
+        return False
+    return all(abs(int(p) - int(q)) <= slack for p, q in zip(a, b, strict=True))
 
 
 def current_pid() -> int | None:

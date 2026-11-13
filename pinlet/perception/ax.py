@@ -244,7 +244,10 @@ class AXInspector:
         elements: list[UIElement] = []
         budget = [self.max_nodes]
         deadline = time.monotonic() + self.max_seconds
-        if CONFIG.ax_include_menu_bar and apps:
+        # Background mode: the agent's own window only (an app's other windows may be
+        # the person's), and no menu bar, which belongs to the app in front.
+        own = target.current_frame()
+        if CONFIG.ax_include_menu_bar and apps and target.get() is None:
             # Top-level menu bar items of the first (frontmost) app only: depth 2 stops
             # before the closed menus, which have no on-screen frame anyway.
             bar = self._attr(apps[0], "AXMenuBar")
@@ -261,7 +264,11 @@ class AXInspector:
                     parent_role="",
                 )
         for root in apps:
-            for win in self._attr(root, "AXWindows") or []:
+            windows = list(self._attr(root, "AXWindows") or [])
+            if own is not None:
+                mine = [w for w in windows if target.same_frame(self._frame(w), own)]
+                windows = mine or windows
+            for win in windows:
                 self._walk(
                     win,
                     1,

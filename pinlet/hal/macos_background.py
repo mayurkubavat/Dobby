@@ -36,6 +36,8 @@ from pinlet.hal.background import (
     ax_menu_shortcut,
     ax_scroll_at,
     ax_select_all,
+    enable_web_content,
+    window_frame_at,
 )
 from pinlet.hal.macos import MacHAL, _load_ax, _screencapture
 from pinlet.types import WindowInfo
@@ -79,6 +81,7 @@ class BackgroundMacHAL(MacHAL):
         self._capture_window = window_capture_fn or (lambda wid: _screencapture(None, wid))
         # True while a step borrows the real pointer: behave like a plain MacHAL.
         self._borrowing = False
+        target.set_frame_fn(self._target_frame)
 
     # ------------------------------------------------------------- helpers
     def _ax_api(self) -> Any:
@@ -106,6 +109,39 @@ class BackgroundMacHAL(MacHAL):
             if str(int(w.get("kCGWindowNumber", -1))) == chosen.window_id:
                 return self._window_info(w, is_active=True)
         return None
+
+    def _target_frame(self, chosen: target.Target) -> tuple[int, int, int, int] | None:
+        win = self._target_window(chosen)
+        if win is None:
+            return None
+        b = win.bbox
+        return b.x, b.y, b.width, b.height
+
+    def _in_own_window(self, chosen: target.Target, x: int, y: int) -> None:
+        """Refuses a click the app would give to another of its windows.
+
+        Raises:
+            NeedsPointer: Another window of the same app is on top at the point.
+        """
+        hit = window_frame_at(self._ax_api(), chosen.pid, x, y)
+        own = self._target_frame(chosen)
+        if hit is None or own is None or target.same_frame(hit, own):
+            return
+        # A sheet or popover of our window sits inside it; another document does not.
+        inside = (
+            hit[0] >= own[0] - 2
+            and hit[1] >= own[1] - 2
+            and hit[0] + hit[2] <= own[0] + own[2] + 2
+            and hit[1] + hit[3] <= own[1] + own[3] + 2
+        )
+        if inside:
+            return
+        raise NeedsPointer(
+            f"Background mode cannot click at ({x}, {y}): another window of "
+            f"{chosen.app_name or 'the same app'} is on top there, and the click would go to "
+            "it. Use a window that is not covered by the app's other windows; for a browser, "
+            "ask the person to run `pinlet browser` so you have one of your own."
+        )
 
     # ------------------------------------------------------------- windows
     @override
@@ -170,6 +206,10 @@ class BackgroundMacHAL(MacHAL):
                 break
             target.choose(info.window_id, pid, info.app_name or "")
             self._make_main(pid, info)
+            try:  # browsers and Electron apps: have the page's elements ready
+                enable_web_content(self._ax_api(), pid)
+            except Exception:  # noqa: BLE001 - reading the tree asks again
+                pass
             return True
         self.last_focus_error = f"window {window_id} does not exist"
         return False
@@ -303,6 +343,7 @@ class BackgroundMacHAL(MacHAL):
             return super().mouse_click(x, y, button, click_count)
         chosen = self._need_target()
         ax = self._ax_api()
+        self._in_own_window(chosen, x, y)
         done: Any
         if button == "right":
             # AXShowMenu would open the context menu, but macOS then draws the

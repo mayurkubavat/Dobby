@@ -16,6 +16,9 @@
     pinlet triage       write a debugging report and start your AI tool on it
                         (--agent claude|codex|gemini|cursor, --print)
 
+    pinlet browser      open a separate browser for the AI to use in background mode
+                        (pinlet browser https://example.com, --app "Brave Browser")
+
 Set ``PINLET_SHARED=0`` to make plain ``pinlet`` behave like ``pinlet stdio``.
 Kept free of engine imports so connecting is fast.
 """
@@ -36,6 +39,7 @@ _COMMANDS = {
     "activity": "pinlet.journal",
     "tasks": "pinlet.control.tasks",
     "triage": "pinlet.triage",
+    "browser": "pinlet.agent_browser",
 }
 
 

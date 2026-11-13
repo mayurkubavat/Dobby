@@ -333,3 +333,37 @@ def ax_select_all(ax: Any, pid: int) -> bool:
     except Exception:  # noqa: BLE001
         return False
     return whole is not None and _set(ax, el, "AXSelectedTextRange", whole)
+
+
+def window_frame_at(ax: Any, pid: int, x: float, y: float) -> tuple[int, int, int, int] | None:
+    """The frame of the app window that owns the element at (x, y), or None when unknown.
+
+    An app answers a hit test for whichever of its windows is on top at that
+    point, which may not be the one the agent works in.
+    """
+    el = element_at(ax, pid, x, y)
+    if el is None:
+        return None
+    win = el if _attr(ax, el, "AXRole") == "AXWindow" else _attr(ax, el, "AXWindow")
+    if win is None:
+        return None
+    try:
+        ok1, p = ax.AXValueGetValue(_attr(ax, win, "AXPosition"), ax.kAXValueCGPointType, None)
+        ok2, s = ax.AXValueGetValue(_attr(ax, win, "AXSize"), ax.kAXValueCGSizeType, None)
+    except Exception:  # noqa: BLE001
+        return None
+    if not (ok1 and ok2):
+        return None
+    return int(p.x), int(p.y), int(s.width), int(s.height)
+
+
+def enable_web_content(ax: Any, pid: int) -> bool:
+    """Asks a Chromium or Electron app to build its page's accessibility tree.
+
+    They build it only once a client sets ``AXManualAccessibility``. Native
+    apps refuse the attribute, which is harmless.
+    """
+    try:
+        return _set(ax, ax.AXUIElementCreateApplication(int(pid)), "AXManualAccessibility", True)
+    except Exception:  # noqa: BLE001
+        return False

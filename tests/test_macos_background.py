@@ -468,3 +468,83 @@ def test_idle_mode_sends_a_cmd_shortcut_with_the_app_in_front(monkeypatch):
     hal.keyboard_hotkey(["cmd", "k"])
     assert [e["code"] for e in q.posted if e["kind"] == "key" and e["down"]] == [55, 40]
     assert hal._appkit.activated == [MINE, THEIRS]
+
+
+def _framed_window(frame, title):
+    return _el("AXWindow", frame, AXTitle=title)
+
+
+def test_a_click_the_app_would_give_to_its_other_window_is_refused():
+    theirs = _framed_window((0, 0, 900, 700), "Their tab")  # same app, covers the point
+    link = _el("AXLink", AXTitle="Buy", AXEnabled=True, actions=["AXPress"], AXWindow=theirs)
+    ax = AX({MINE: {"pid": MINE}}, at={(MINE, 120, 80): link})
+    hal, q, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    with pytest.raises(NeedsPointer, match="pinlet browser"):
+        hal.mouse_click(120, 80)
+    assert ax.performed == [] and q.posted == []
+
+
+def test_a_click_in_the_agents_own_window_or_its_sheet_goes_through():
+    own = _framed_window((100, 50, 400, 300), "Draft")
+    sheet = _framed_window((150, 50, 300, 120), "")
+    ok = _el("AXButton", AXTitle="OK", AXEnabled=True, actions=["AXPress"], AXWindow=sheet)
+    save = _el("AXButton", AXTitle="Save", AXEnabled=True, actions=["AXPress"], AXWindow=own)
+    ax = AX({MINE: {"pid": MINE}}, at={(MINE, 120, 80): save, (MINE, 200, 100): ok})
+    hal, _, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    hal.mouse_click(120, 80)
+    hal.mouse_click(200, 100)
+    assert ax.performed == [("Save", "AXPress"), ("OK", "AXPress")]
+
+
+def test_picking_a_window_asks_a_browser_for_its_page_elements():
+    ax = AX(
+        {MINE: {"pid": MINE, "AXRole": "AXApplication", "settable": ("AXManualAccessibility",)}}
+    )
+    hal, _, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    assert ax.tree[MINE]["AXManualAccessibility"] is True
+
+
+def test_accessibility_tree_reads_only_the_agents_window_of_a_shared_app():
+    mine = _el(
+        "AXWindow",
+        (100, 50, 400, 300),
+        children=[_el("AXButton", (120, 80, 60, 24), AXTitle="Mine", AXEnabled=True)],
+    )
+    other = _el(
+        "AXWindow",
+        (0, 0, 800, 600),
+        children=[_el("AXButton", (10, 10, 60, 24), AXTitle="Other tab", AXEnabled=True)],
+    )
+    bar = _el(
+        "AXMenuBar",
+        (0, 0, 1512, 24),
+        children=[_el("AXMenuBarItem", (10, 0, 40, 24), AXTitle="File")],
+    )
+    ax = FakeAX({MINE: {"AXWindows": [other, mine], "AXMenuBar": bar}})
+    inspector = AXInspector(
+        ax=ax, appkit=FakeAppKit(front_pid=THEIRS), screen_bounds=(0, 0, 1512, 982)
+    )
+    hal, _, _ = _hal()
+    hal.focus_window("2")  # the window at (100, 50, 400, 300)
+    names = {e.name for e in inspector.inspect_desktop()}
+    assert names == {"Mine"}
+
+
+def test_agent_browser_opens_a_separate_background_instance(tmp_path, monkeypatch, capsys):
+    from pinlet import agent_browser
+
+    (tmp_path / "Google Chrome.app").mkdir()
+    assert agent_browser.find_browser(app_dirs=[str(tmp_path)]) == "Google Chrome"
+    assert agent_browser.find_browser(app_dirs=[str(tmp_path / "none")]) is None
+    monkeypatch.setenv("PINLET_HOME", str(tmp_path / "home"))
+    profile = agent_browser.profile_dir()
+    assert profile == tmp_path / "home" / "agent-browser"
+    cmd = agent_browser.command("Google Chrome", profile, "https://example.com")
+    assert cmd[:5] == ["/usr/bin/open", "-g", "-n", "-a", "Google Chrome"]
+    assert f"--user-data-dir={profile}" in cmd and cmd[-1] == "https://example.com"
+    assert agent_browser.main(["--print", "--app", "Brave Browser"]) == 0
+    assert '-a "Brave Browser"' in capsys.readouterr().out
+    assert not profile.exists()  # --print changes nothing

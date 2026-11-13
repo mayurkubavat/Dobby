@@ -43,6 +43,7 @@ ALLOWED = {
     "journal": set(),
     "clients": set(),
     "triage": set(),
+    "agent_browser": set(),
     "model_bench": set(),
     "__main__": {"cli"},
     "mode": {"envflags"},
