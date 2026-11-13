@@ -288,3 +288,35 @@ def test_always_allowed_apps_are_listed_and_revoked(tmp_path, monkeypatch, book)
     grants.remember("Vivado")
     book.add("send", "Mail", "claude", rules.TASK, pid=1)
     assert control.handle({"id": 4, "op": "revoke", "all": True})["revoked"] == 2
+
+
+def test_return_in_a_message_box_asks_like_send(book, monkeypatch):
+    from pinlet.overlay.hal import return_sends
+
+    assert return_sends("Return", {"name": "Message #general"}) == "Message #general"
+    assert return_sends("enter", {"name": "Reply to Sam"})
+    assert return_sends("return", {"name": "Search"}) is None
+    assert return_sends("return", {"name": "File name"}) is None
+    assert return_sends("tab", {"name": "Message"}) is None
+    assert return_sends("return", None) is None
+
+    monkeypatch.setenv("PINLET_PROMPT_HOLD", "0")
+    hit = lambda x, y: {"role": "text field", "name": "Message Sam", "secure": False}
+    desk, ov = _Desk(), _AppOverlay()
+    desk.keyboard_press_key = lambda key: desk.done.append(("key", key))
+    hal = OverlayHAL(desk, overlay=ov, hit_test=hit, secure=True)
+    hal.mouse_click(10, 10)  # into the message box: no question
+    hal.keyboard_press_key("tab")  # not Return: no question
+    t, seen = _answer_next(ok=True, remember="task")
+    hal.keyboard_press_key("Return")
+    t.join(3)
+    assert seen["action"] == "send" and "Return" in seen["text"]
+    hal.keyboard_press_key("Return")  # covered by the tick now
+    assert desk.done == [("click", 10, 10), ("key", "tab"), ("key", "Return"), ("key", "Return")]
+    # Turbo asks nothing.
+    desk2 = _Desk()
+    desk2.keyboard_press_key = lambda key: desk2.done.append(("key", key))
+    fast = OverlayHAL(desk2, overlay=_AppOverlay(), hit_test=hit, secure=False)
+    fast.mouse_click(10, 10)
+    fast.keyboard_press_key("Return")
+    assert desk2.done[-1] == ("key", "Return")

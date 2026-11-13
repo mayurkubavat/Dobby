@@ -118,6 +118,23 @@ _PAYMENT = re.compile(
     re.I,
 )
 _PRESSABLE_ROLES = ("button", "menu item", "link", "check menu item", "radio menu item")
+# A text box where Return sends what was typed (a chat, a reply, a comment).
+# Pressing Return there is a Send, so it asks like the Send button does.
+_RETURN_SENDS = re.compile(
+    r"\b(message|reply|comment|chat|post|tweet|send|compose|write to|say something|"
+    r"type a message|new message|direct message|dm)\b",
+    re.I,
+)
+
+
+def return_sends(key_name: str | None, field: dict | None) -> str | None:
+    """The field's name when Return in it would send something, else None."""
+    if str(key_name or "").strip().lower() not in ("return", "enter", "kp_enter"):
+        return None
+    name = " ".join(str((field or {}).get("name") or "").split())
+    return name if name and _RETURN_SENDS.search(name) else None
+
+
 _EDITABLE_ROLES = (
     "text",
     "entry",
@@ -477,6 +494,31 @@ class OverlayHAL:
             self.overlay.risk("ok")
             self.overlay.intent("", ms=0)
 
+    def _confirm_return(self, key_name: str, app: str | None) -> None:
+        """Allow/Deny before Return in a message box: there, Return is the Send button."""
+        from .client import OverlayDenied
+
+        if not (self.secure and self._confirm_clicks):
+            return
+        box = return_sends(key_name, self._type_target())
+        if box is None or self._allowed_by_rule("send", app):
+            return
+        where = app_label(app)
+        text = f"press Return in ‘{_clip(box, 24)}’" + (f" in {where}" if where else "")
+        self.overlay.risk("danger")
+        self.overlay.intent(f"Press Return to send in ‘{_clip(box, 24)}’", ms=60000)
+        try:
+            if not self._ask(
+                f"Allow Pinlet to {text}?",
+                detail="Return sends what was typed here.",
+                app=where or app or "",
+                action="send",
+            ):
+                raise OverlayDenied(f"The user denied: {text}")
+        finally:
+            self.overlay.risk("ok")
+            self.overlay.intent("", ms=0)
+
     def _allowed_by_rule(self, kind: str, app: str | None) -> bool:
         """True when the person's saved "don't ask again" covers this step; says so on the bar."""
         from . import rules
@@ -823,6 +865,7 @@ class OverlayHAL:
         self._guard_keys()
         app = self._active_app()
         self._gate(app, "keys")
+        self._confirm_return(key_name, app)
         self._intent(action_text(f"Press {combo_label([key_name])}", None, app))
         try:
             with self._cue("keys"), self._passing():
