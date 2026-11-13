@@ -151,6 +151,8 @@ struct EngineConfig: Equatable {
         out["PINLET_IDLE_EXIT"] = "0"            // the app keeps it alive; Quit stops it
         out["PINLET_OVERLAY_MENU_BAR"] = "0"     // the app draws the menu bar item
         out["PINLET_APP_OWNED"] = "1"
+        // The engine takes Allow, Resume and "tell" only from this process (pinlet/hub/control.py).
+        out["PINLET_APP_PID"] = String(ProcessInfo.processInfo.processIdentifier)
         out["PYTHONUNBUFFERED"] = "1"
         return out
     }
@@ -172,14 +174,15 @@ enum PinletPaths {
 }
 
 /// `pinlet://pause-all`, `pinlet://stop?pid=4242`… for Shortcuts, scripts and Raycast.
+/// There is no resume link: Resume is the person's, from the bar or the menu.
 enum PinletURL {
     static func action(for url: URL) -> (key: String, pid: Int?)? {
         guard url.scheme?.lowercased() == "pinlet" else { return nil }
         let name = (url.host ?? url.path).trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
         let pid = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "pid" })?.value.flatMap(Int.init)
-        let map = ["pause-all": "pause_all", "resume-all": "resume_all", "stop-all": "stop_all",
-                   "pause": "pause", "resume": "resume", "stop": "stop", "toggle": "pause_toggle"]
+        // Pause and Stop only: a link any process can open must not be able to let a paused AI go on.
+        let map = ["pause-all": "pause_all", "stop-all": "stop_all", "pause": "pause", "stop": "stop"]
         guard let key = map[name] else { return nil }
         if !key.hasSuffix("_all") && pid == nil { return nil }
         return (key, pid)

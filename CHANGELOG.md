@@ -50,6 +50,16 @@ The first public release will be 0.1.0. It contains:
 - "Always allow in …" now takes Touch ID (or your password) in Pinlet.app, and
   the saved rule lapses after 30 days (`PINLET_ALWAYS_DAYS`; 0 keeps it), after
   which Pinlet asks about that app again.
+- Off limits at every level, turbo included (`pinlet/overlay/offlimits.py`): an
+  AI cannot click or type into Pinlet's own card, bar, menu or windows, or a
+  macOS login, Touch ID or privacy prompt; Pinlet never types into a password
+  field; and it stops at a payment button ("Your turn") instead of pressing it.
+- Only Pinlet.app can Allow, Resume or "tell" on the control socket: the engine
+  checks the connecting process against the app's own process id. The
+  `pinlet://resume`, `resume-all` and `toggle` links are gone (Pause and Stop
+  links stay).
+- The Allow/Deny card no longer takes the keyboard when it appears (click it
+  first), holds Allow back for 0.6 s, and drops input injected through Pinlet.
 - Pinlet.app: the menu bar icon breathes while a Pinlet works (not with Reduce
   Motion); optional finish sound and trackpad tap; VoiceOver hears when a
   Pinlet starts, needs you, pauses or is done.

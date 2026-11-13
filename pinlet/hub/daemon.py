@@ -176,6 +176,7 @@ class Hub:
         """The Pinlet app's connection: status, menu content, Pause/Stop, quit."""
         from . import control
 
+        trusted = control.from_app(_peer_pid(stream))
         await stream.send(
             (
                 json.dumps({"pinlet_ready": 1, "control": 1, "server_pid": os.getpid()}) + "\n"
@@ -202,7 +203,7 @@ class Hub:
                 reply = {"ok": False, "error": f"bad request: {exc}"}
             else:
                 reply = await anyio.to_thread.run_sync(
-                    lambda: control.handle(request, lambda: quit_asked.append(1)),
+                    lambda: control.handle(request, lambda: quit_asked.append(1), trusted),
                     limiter=self._control_limiter(),
                 )
             await stream.send((json.dumps(reply) + "\n").encode())

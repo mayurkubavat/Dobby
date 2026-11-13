@@ -286,7 +286,10 @@ When Pinlet acts you see it:
 
 **Turbo or secure.** By default Pinlet runs in **turbo**: no permission
 prompts, and it keeps going if you touch the mouse (Stop and Pause still
-work). Start it with `pinlet --secure` (or `PINLET_MODE=secure` in the client's
+work). Three things hold in every mode: an AI cannot press Pinlet's own
+buttons or answer its questions, Pinlet never types into a password field or
+answers a macOS security prompt, and it stops at a payment button and hands
+that click to you. Start it with `pinlet --secure` (or `PINLET_MODE=secure` in the client's
 `env`) to turn on everything below.
 
 **In secure mode Pinlet asks before it uses an app.** The first time it clicks or types in an

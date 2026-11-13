@@ -339,6 +339,66 @@ class OverlayHAL:
             self.overlay.intent(f"Not allowed in {app_label(app) or app}", ms=2500)
             raise OverlayBlocked(str(exc), app=app, tier=exc.tier) from None
 
+    # ---------------------------------------------------------- off limits
+    def _own_pids(self) -> set[int]:
+        from . import offlimits
+
+        pids = {os.getpid(), offlimits.app_pid(), getattr(self.overlay, "pid", None)}
+        return {int(p) for p in pids if p}
+
+    def _refuse(self, why: str, app: str | None = None, say: str = "Off limits for Pinlet") -> None:
+        from .client import OverlayBlocked
+
+        self.overlay.intent(say, ms=4000)
+        raise OverlayBlocked(why, app=app or "")
+
+    def _guard_point(self, x: float, y: float) -> None:
+        """Refuse a click or drag that would land on Pinlet itself or a macOS security prompt.
+
+        Holds at every asking level. A HAL that cannot list every window
+        (Linux, tests) is not checked.
+        """
+        from . import offlimits
+
+        lister = getattr(self._inner, "window_records", None)
+        if lister is None or self._quiet:
+            return  # background mode acts on the agent's own window only, through accessibility
+        try:
+            px, py = self._to_points(x, y)
+            window = offlimits.window_under(lister(), px, py, getattr(self.overlay, "pid", None))
+            why = offlimits.refusal(window, self._own_pids())
+        except Exception:  # noqa: BLE001 - a listing error must not stop ordinary work
+            return
+        if why:
+            self._refuse(why, app=(window or {}).get("owner"))
+
+    def _guard_keys(self) -> None:
+        """Refuse keys while Pinlet.app or a macOS security prompt is the frontmost app."""
+        from . import offlimits
+
+        front = getattr(self._inner, "frontmost_app", None)
+        if front is None or self._quiet:
+            return
+        try:
+            pid, name = front()
+            why = offlimits.refusal({"pid": pid, "owner": name, "title": ""}, self._own_pids())
+        except Exception:  # noqa: BLE001
+            return
+        if why:
+            self._refuse(why, app=name)
+
+    def _guard_payment(self, hit: dict | None, app: str | None) -> None:
+        """Hand a payment button to the person instead of pressing it. Every level."""
+        from . import offlimits
+
+        label = offlimits.payment_label(hit.get("role"), hit.get("name")) if hit else None
+        if label:
+            self._refuse(
+                offlimits.PAYMENT_REFUSAL.format(label=f"‘{label}’"),
+                app=app,
+                say=f"Your turn: press ‘{_clip(label, 24)}’",
+            )
+
     def _probe(self, x: float, y: float) -> dict | None:
         if self._hit_test is None:
             return None
@@ -560,6 +620,7 @@ class OverlayHAL:
         self._sync_turbo()
         self.overlay.checkpoint()
         verb = _VERBS.get((button, click_count), "Click")
+        self._guard_point(x, y)
         app = self._window_app_at(x, y)
         self._gate(app, "click")
         hit = self._probe(x, y)
@@ -590,6 +651,8 @@ class OverlayHAL:
         """Checks the app, shows the drag on the overlay, then drags."""
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._guard_point(start_x, start_y)
+        self._guard_point(end_x, end_y)
         app = self._window_app_at(start_x, start_y)
         self._gate(app, "drag")
         self._reclaim_target()
@@ -620,17 +683,18 @@ class OverlayHAL:
         """Checks the app and field, shows what will be typed, then types it.
 
         Raises:
-            OverlayBlocked: The target is a password field in secure mode.
+            OverlayBlocked: The target is a password field, or the frontmost app is off limits.
         """
         from .client import OverlayBlocked
 
         self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
+        self._guard_keys()
         app = self._active_app()
         self._gate(app, "type")
         field = self._type_target()
-        if self.secure and field is not None and field.get("secure"):
+        if field is not None and field.get("secure"):  # every level: passwords are the person's
             self.overlay.intent("Your turn: type the password", ms=4000)
             raise OverlayBlocked(
                 "This is a password field. Pinlet does not type passwords: ask the person "
@@ -653,6 +717,7 @@ class OverlayHAL:
         self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
+        self._guard_keys()
         app = self._active_app()
         self._gate(app, "keys")
         self._intent(action_text(f"Press {combo_label([key_name])}", None, app))
@@ -673,6 +738,7 @@ class OverlayHAL:
         self._sync_turbo()
         self.overlay.checkpoint()
         self._reclaim_target()
+        self._guard_keys()
         app = self._active_app()
         self._gate(app, "keys")
         label = combo_label(keys)

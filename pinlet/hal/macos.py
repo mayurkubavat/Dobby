@@ -498,6 +498,24 @@ class MacHAL(IDesktopHAL):
         opts = scope | _kCGWindowListExcludeDesktopElements
         return list(self.Q.CGWindowListCopyWindowInfo(opts, _kCGNullWindowID) or [])
 
+    def window_records(self) -> list[dict[str, Any]]:
+        """Every on-screen window on every layer, front to back, as Quartz records.
+
+        Unlike :meth:`list_windows` this includes panels, sheets and the menu
+        bar, so ``pinlet.overlay.offlimits`` can tell what a click would hit.
+        """
+        return [dict(w) for w in self._window_dicts()]
+
+    def frontmost_app(self) -> tuple[int | None, str]:
+        """The frontmost app's process id and name ("" when unknown)."""
+        try:
+            app = self.AK.NSWorkspace.sharedWorkspace().frontmostApplication()
+            if app is None:
+                return None, ""
+            return int(app.processIdentifier()), str(app.localizedName() or "")
+        except Exception:  # noqa: BLE001 - best effort
+            return None, ""
+
     def list_windows(self) -> list[WindowInfo]:
         """Normal on-screen windows (layer 0), front to back. The frontmost app's top window is active."""
         front_pid = self._frontmost_pid()

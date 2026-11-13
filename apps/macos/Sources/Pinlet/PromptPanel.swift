@@ -3,8 +3,11 @@ import SwiftUI
 
 /// Pinlet's Allow/Deny question as a native card near the top of the screen.
 ///
-/// A non-activating panel: it takes the keyboard (Return / Esc) without
-/// bringing Pinlet.app forward, so the app Pinlet works in stays the active one.
+/// A non-activating panel that does not take the keyboard when it appears: a
+/// Return the person was typing elsewhere (or a key an AI was about to press)
+/// must never answer it. A click on the card gives it the keyboard; then Esc
+/// denies and Return / Cmd+Return allow. Allow is also held back for a moment
+/// after the card appears, and input that Pinlet itself injected is dropped.
 /// On macOS 26 the card is Liquid Glass (regular, since it carries text) with
 /// Pinlet's dark tint; earlier systems get the regular material. It takes the
 /// Look setting (dark by default, like the bar).
@@ -49,7 +52,7 @@ final class PromptPanel {
             self.hide()
             self.onAnswer(prompt.id, ok, always, reason)
         }
-        let host = NSHostingView(rootView: card)
+        let host = FirstClickHost(rootView: card)
         let size = host.fittingSize
         let panel = self.panel ?? KeyPanel()
         panel.appearance = appearance
@@ -63,7 +66,7 @@ final class PromptPanel {
         }
         self.panel = panel
         panel.alphaValue = 0
-        panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()  // in front, but the keyboard stays where it was
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
             panel.animator().alphaValue = 1
@@ -85,6 +88,12 @@ extension PromptPanel {
     }
 }
 
+/// The card is not the key window when it appears, and Pinlet.app is not the
+/// active app: without this the first click would only focus the card.
+private final class FirstClickHost<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 /// Borderless panels refuse key status by default; this one needs Return / Esc.
 private final class KeyPanel: NSPanel {
     init() {
@@ -103,6 +112,31 @@ private final class KeyPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// The mark Pinlet's engine puts on every mouse and key event it injects
+    /// (`PINLET_EVENT_TAG` in pinlet/hal/macos.py).
+    static let injectedTag: Int64 = 0x444F_4242
+
+    /// Clicks and keys an AI sent through Pinlet never reach the card.
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp,
+             .keyDown, .keyUp:
+            if let cg = event.cgEvent {
+                if cg.getIntegerValueField(.eventSourceUserData) == KeyPanel.injectedTag {
+                    NSLog("Pinlet: ignored injected input on the Allow/Deny card")
+                    return
+                }
+                if event.type == .leftMouseDown || event.type == .keyDown {
+                    // 0 is the keyboard or mouse itself; anything else is a process that posted the event.
+                    let source = cg.getIntegerValueField(.eventSourceUnixProcessID)
+                    if source != 0 { NSLog("Pinlet: card input posted by process %lld", source) }
+                }
+            }
+        default: break
+        }
+        super.sendEvent(event)
+    }
 }
 
 struct PromptCard: View {
@@ -119,6 +153,8 @@ struct PromptCard: View {
     @State private var explaining = false
     @State private var reason = ""
     @FocusState private var reasonFocused: Bool
+    /// Allow wakes up a moment after the card appears, so a click or key already on its way cannot land on it.
+    @State private var armed = false
 
     private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
@@ -181,6 +217,7 @@ struct PromptCard: View {
                         .buttonStyle(.borderedProminent)
                         .tint(prompt.isAccess ? accent : danger)
                         .controlSize(.large)
+                        .disabled(!armed)
                 }
                 .padding(.top, 4)
             }
@@ -191,7 +228,12 @@ struct PromptCard: View {
         .padding(10)  // room for the shadow
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pinlet asks: \(prompt.text)")
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + PromptCard.armDelay) { armed = true }
+        }
     }
+
+    static let armDelay: TimeInterval = 0.6
 }
 
 /// "Denies in 0:24", ticking.

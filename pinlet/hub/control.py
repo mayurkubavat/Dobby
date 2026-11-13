@@ -43,13 +43,16 @@ and the Linux tray draw the same thing.
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from . import sessions
+
+log = logging.getLogger("pinlet.hub.control")
 
 ACTION_KEYS = (
     "pause_toggle",
@@ -256,13 +259,55 @@ def topbar() -> dict[str, Any]:
     return _view(tb.Hiding.load()).to_dict()
 
 
-def handle(request: dict[str, Any], quit_cb: Callable[[], None] | None = None) -> dict[str, Any]:
+# Requests that stand for the person: answering a question, speaking to the AI
+# as the person, and letting a paused AI go on. Only Pinlet.app may send them.
+_PERSON_ACTIONS = frozenset({"allow", "resume", "resume_all", "pause_toggle"})
+NOT_THE_APP = "only Pinlet.app can do this, for the person at the Mac"
+
+
+def from_app(peer_pid: int | None, env: Mapping[str, str] | None = None) -> bool:
+    """True when a control connection may speak for the person.
+
+    When Pinlet.app owns this engine it passes its process id in
+    ``PINLET_APP_PID``; the kernel says which process is on the other end of
+    the socket, so only the app itself passes. Any other process of the same
+    user (an AI's shell command, a script) can still read status and Pause or
+    Stop, but cannot Allow, Resume or "tell". Without the app (Linux, a
+    private ``pinlet serve``) there is nothing to compare with and every
+    connection is taken as the person's, as before.
+    """
+    from pinlet.overlay.offlimits import app_pid
+
+    app = app_pid(env)
+    if app is None:
+        return True
+    return peer_pid is not None and int(peer_pid) == app
+
+
+def _needs_person(request: Mapping[str, Any]) -> bool:
+    op = request.get("op")
+    if op in ("answer", "tell"):
+        return True
+    return op == "action" and str(request.get("key") or "") in _PERSON_ACTIONS
+
+
+def handle(
+    request: dict[str, Any],
+    quit_cb: Callable[[], None] | None = None,
+    trusted: bool = True,
+) -> dict[str, Any]:
     """Answers one request on the control socket.
+
+    ``trusted`` is False for a connection that is not Pinlet.app's (see
+    :func:`from_app`): requests that stand for the person are refused.
 
     Never raises: errors come back as ``{"ok": False, "error": ...}``.
     """
     rid = request.get("id")
     op = request.get("op")
+    if not trusted and _needs_person(request):
+        log.warning("refused control request %r from a process that is not Pinlet.app", op)
+        return {"id": rid, "ok": False, "error": NOT_THE_APP}
     try:
         if op == "status":
             body = status()
