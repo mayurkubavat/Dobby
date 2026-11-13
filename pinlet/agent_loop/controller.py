@@ -60,6 +60,10 @@ def _is_sliver(bbox: Any) -> bool:
     return bbox.width < _MIN_CLIP_SIDE or bbox.height < _MIN_CLIP_SIDE
 
 
+# Default for _remember_click: look the window up at the moment of recording.
+_ACTIVE_WINDOW: Any = object()
+
+
 class FeedbackLoopController:
     """Coordinates perception, action execution, and post-action verification.
 
@@ -628,6 +632,57 @@ class FeedbackLoopController:
         result["region"] = list(region) if region else None
         return result
 
+    def _harvest_journal(self, action_name: str, ui_target_text: str, t_start: float) -> None:
+        """While a skill is being recorded, ties this action to what the app logged after it."""
+        if not self.journal_correlator.is_recording:
+            return
+        try:
+            self.journal_correlator.harvest_post_quiescence(
+                action_id=f"{action_name}_{int(t_start * 1000)}",
+                gui_intent=action_name,
+                ui_target_text=ui_target_text,
+                t_start=t_start,
+            )
+        except Exception as e:
+            logger.debug(f"Failed to harvest post-quiescence journal entries: {e}")
+
+    def _remember_click(
+        self,
+        app_key: str,
+        query: str,
+        elem_res: Any,
+        center: tuple[int, int],
+        window_info: Any = _ACTIVE_WINDOW,
+    ) -> None:
+        """Saves a click that just worked in the action cache, with a picture of the element.
+
+        Args:
+            app_key: The app the element belongs to.
+            query: What the caller searched for.
+            elem_res: The find result whose element was clicked.
+            center: Where the click landed.
+            window_info: The window it was in. Read from the HAL after the
+                capture when not given.
+        """
+        crop = None
+        try:
+            fresh_screen = self.hal.capture_screen()
+            eb = elem_res.element.bbox
+            crop = fresh_screen.crop((eb.x, eb.y, eb.right, eb.bottom))
+        except Exception:
+            pass
+        self.action_cache.record(
+            app_key=app_key,
+            query=query,
+            bbox=elem_res.element.bbox,
+            center_coords=center,
+            role=elem_res.element.role,
+            window_info=(
+                self.hal.get_active_window() if window_info is _ACTIVE_WINDOW else window_info
+            ),
+            visual_crop=crop,
+        )
+
     def execute_with_verification(
         self,
         action_name: str,
@@ -647,16 +702,7 @@ class FeedbackLoopController:
             t_action_start = time.monotonic()
             try:
                 action_func()
-                if self.journal_correlator.is_recording:
-                    try:
-                        self.journal_correlator.harvest_post_quiescence(
-                            action_id=f"{action_name}_{int(t_action_start * 1000)}",
-                            gui_intent=action_name,
-                            ui_target_text=ui_target_text,
-                            t_start=t_action_start,
-                        )
-                    except Exception as e:
-                        logger.debug(f"Failed to harvest post-quiescence journal entries: {e}")
+                self._harvest_journal(action_name, ui_target_text, t_action_start)
 
                 return ActionVerificationResult(
                     success=True,
@@ -768,16 +814,7 @@ class FeedbackLoopController:
             except Exception:
                 pass
 
-        if self.journal_correlator.is_recording:
-            try:
-                self.journal_correlator.harvest_post_quiescence(
-                    action_id=f"{action_name}_{int(t_action_start * 1000)}",
-                    gui_intent=action_name,
-                    ui_target_text=ui_target_text,
-                    t_start=t_action_start,
-                )
-            except Exception as e:
-                logger.debug(f"Failed to harvest post-quiescence journal entries: {e}")
+        self._harvest_journal(action_name, ui_target_text, t_action_start)
 
         details_msg = (
             f" | Contract details: {'; '.join(contract_details)}" if contract_details else ""
@@ -959,23 +996,7 @@ class FeedbackLoopController:
 
         # 4. Save newly verified coordinates into cache with visual crop and window info
         if res.success and (not verify_delta or res.delta_detected) and CONFIG.enable_action_cache:
-            crop = None
-            try:
-                fresh_screen = self.hal.capture_screen()
-                eb = elem_res.element.bbox
-                crop = fresh_screen.crop((eb.x, eb.y, eb.right, eb.bottom))
-            except Exception:
-                pass
-
-            self.action_cache.record(
-                app_key=app_key,
-                query=query,
-                bbox=elem_res.element.bbox,
-                center_coords=(target_x, target_y),
-                role=elem_res.element.role,
-                window_info=current_win,
-                visual_crop=crop,
-            )
+            self._remember_click(app_key, query, elem_res, (target_x, target_y), current_win)
 
         return res
 
@@ -1038,22 +1059,7 @@ class FeedbackLoopController:
                     verify_delta=verify_delta,
                 )
                 if res.delta_detected:
-                    crop = None
-                    try:
-                        fresh_screen = self.hal.capture_screen()
-                        eb = elem_res.element.bbox
-                        crop = fresh_screen.crop((eb.x, eb.y, eb.right, eb.bottom))
-                    except Exception:
-                        pass
-                    self.action_cache.record(
-                        app_key=app_key,
-                        query=query,
-                        bbox=elem_res.element.bbox,
-                        center_coords=(target_x, target_y),
-                        role=elem_res.element.role,
-                        window_info=self.hal.get_active_window(),
-                        visual_crop=crop,
-                    )
+                    self._remember_click(app_key, query, elem_res, (target_x, target_y))
 
         return res
 
