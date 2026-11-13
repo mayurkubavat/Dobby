@@ -682,15 +682,18 @@ def test_modern_bar_without_liquid_glass_is_frosted(make):
     assert c.pill.backdrop is not None and c.pill.backdrop.superview() is c.pill.view
 
 
-def test_modern_working_bar_shows_step_and_timer_with_icons(make):
+def test_modern_working_bar_shows_step_timer_and_pause_in_words(make):
     c, _ = _modern(make)
     c.handle({"op": "intent", "text": "Click ‘Send’"})
     text = c.pill.label.stringValue()
     assert c.pill.mode == "working" and text.startswith(
         "Pinlet is working · Click ‘Send’ · step 1 · 0:0"
     )
-    assert c.pill.primary.image() is not None and c.pill.secondary.image() is not None
-    assert c.pill.secondary.toolTip().startswith("Stop")
+    # One choice while it works, in words: Pause. Stop is on its key and in the menu.
+    assert c.pill.primary.image() is None and c.pill.primary.title() == "Pause"
+    assert not c.pill.primary.isHidden() and c.pill.secondary.isHidden()
+    c.handle({"op": "goal", "text": "Reply to Sam"})
+    assert c.pill.label.stringValue().startswith("Pinlet: Reply to Sam · Click ‘Send’ · step 1")
     assert not c.pill.menu_btn.isHidden()
 
 
