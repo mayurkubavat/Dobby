@@ -70,6 +70,7 @@ from .barlock import (  # noqa: E402
     waiting_dir,
 )
 from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
+from .text import short  # noqa: E402
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "color": "#0EA5C6",
@@ -103,8 +104,7 @@ HOTKEY_LABELS: dict[str, str] = {}
 
 
 def _rgb(value: str) -> tuple[float, float, float]:
-    v = value.lstrip("#")
-    return tuple(int(v[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
+    return style.hex_rgb01(value)
 
 
 # Palette "Frost": the card follows the desktop's light/dark
@@ -271,8 +271,7 @@ def _confirm_window(
 
 
 def _short(text: str, n: int = 48) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= n else text[: n - 1] + "…"
+    return short(text, n)
 
 
 class _Panel(Gtk.Window):

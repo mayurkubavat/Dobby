@@ -22,6 +22,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from .text import short as _short
+
 if TYPE_CHECKING:  # pragma: no cover
     from pinlet.personality import Voice
 
@@ -209,11 +211,6 @@ def fmt_elapsed(secs: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def _short(text: str, limit: int) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
 def working_text(
     step: str,
     steps: int,
@@ -394,11 +391,6 @@ def bar_spec(
     return BarSpec(mode, text, buttons + (_HIDE, _MENU), color, dot_alpha)
 
 
-def _clip(text: str, limit: int) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
 def app_label(app: str | None) -> str:
     """A short display name for an app: "Vivado", not "vivado.bin" or "com.apple.Mail"."""
     name = " ".join(str(app or "").split())
@@ -412,7 +404,7 @@ def app_label(app: str | None) -> str:
         name = name.rsplit(".", 1)[-1]
     if name.islower():
         name = name[:1].upper() + name[1:]
-    return _clip(name, 18)
+    return _short(name, 18)
 
 
 def action_text(verb: str, name: str | None = None, app: str | None = None) -> str:
@@ -421,7 +413,7 @@ def action_text(verb: str, name: str | None = None, app: str | None = None) -> s
     The element's name comes from the accessibility hit test, the app from
     the window under the point. Either may be missing.
     """
-    text = f"{verb} ‘{_clip(name, 32)}’" if name else verb
+    text = f"{verb} ‘{_short(name, 32)}’" if name else verb
     where = app_label(app)
     return f"{text} in {where}" if where else text
 

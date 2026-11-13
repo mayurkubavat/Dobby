@@ -27,6 +27,8 @@ import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
+from .text import short as _short
+
 STATUS_DIR = os.path.expanduser("~/.pinlet/overlay/status")
 HIDDEN_PATH = os.path.expanduser("~/.pinlet/overlay/menu_hidden.json")
 ICON_DIR = os.path.expanduser("~/.pinlet/overlay/icons")
@@ -332,11 +334,6 @@ def _clock(secs: float) -> str:
         if secs < 3600
         else f"{secs // 3600}h {secs % 3600 // 60:02d}m"
     )
-
-
-def _short(text: str, limit: int) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _state_of(agent: Mapping[str, object], status: Mapping[str, object]) -> str:

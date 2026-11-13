@@ -10,13 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from .text import short as _short
+
 Entry = tuple[str, str | None, bool | None]  # title, action selector, checkmark
 SEPARATOR: Entry = ("-", None, None)
-
-
-def _short(text: str, limit: int) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def status_of(paused: bool, takeover: bool, working: bool, turbo: bool) -> tuple[str, str]:

@@ -153,6 +153,7 @@ from .menu import (
     status_of,
     takes_over,
 )
+from .text import short
 
 _kCGEventSourceUserData = 42
 PINLET_EVENT_TAG = 0x444F4242  # same value as pinlet.hal.macos.PINLET_EVENT_TAG
@@ -283,8 +284,7 @@ def _reduce_motion() -> bool:
 
 
 def _short(text: str, limit: int = 42) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
+    return short(text, limit)
 
 
 # --------------------------------------------------------------------- AX

@@ -36,6 +36,7 @@ from .client import NullOverlay
 from .grants import AppBlocked, AppGrants
 from .protocol import OVERLAY_WINDOW_TITLE
 from .style import action_text, app_label
+from .text import short as _clip
 
 ToPoints = Callable[[float, float], tuple[float, float]]
 
@@ -144,11 +145,6 @@ def typed_label(text: str, limit: int = 24) -> str:
     if len(one_line) > limit:
         one_line = one_line[: limit - 1] + "…"
     return f"Type “{one_line}”"
-
-
-def _clip(text: str, limit: int) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 _VERBS = {
