@@ -302,10 +302,23 @@ def test_server_sends_instructions_with_every_handoff_kind():
 
 
 # ------------------------------------------------------------------ mode
-def test_turbo_is_the_default_and_secure_is_opt_in():
-    from pinlet.mode import security_mode
+def test_ask_for_risky_is_the_default():
+    from pinlet.mode import default_mode, mode_for_client, requested_mode, security_mode
 
-    assert security_mode(env={}, argv=["pinlet"]) == "turbo"
+    assert security_mode(env={}, argv=["pinlet"]) == "careful"
+    assert security_mode(env={}, argv=["pinlet", "--turbo"]) == "turbo"
+    assert security_mode(env={"PINLET_MODE": "turbo"}, argv=["pinlet"]) == "turbo"
+    assert security_mode(env={"PINLET_DEFAULT_MODE": "turbo"}, argv=["pinlet"]) == "turbo"
+    assert (
+        security_mode(env={"PINLET_DEFAULT_MODE": "turbo"}, argv=["pinlet", "--secure"]) == "secure"
+    )
+    assert default_mode({"PINLET_DEFAULT_MODE": "junk"}) == "careful"
+    # A connector reports only what its own config names; the shared Pinlet picks the rest.
+    assert requested_mode({}, ["pinlet"]) == ""
+    assert requested_mode({}, ["pinlet", "--turbo"]) == "turbo"
+    assert mode_for_client("", "Some Tool") == "careful"
+    assert mode_for_client("turbo", "Some Tool") == "turbo"
+    assert mode_for_client("secure", "Some Tool") == "secure"
     assert security_mode(env={}, argv=["pinlet", "--secure"]) == "secure"
     assert security_mode(env={"PINLET_MODE": "secure"}, argv=["pinlet"]) == "secure"
     assert security_mode(env={"PINLET_SECURE": "1"}, argv=["pinlet"]) == "secure"
@@ -314,7 +327,9 @@ def test_turbo_is_the_default_and_secure_is_opt_in():
 def test_overlay_config_follows_the_mode():
     from pinlet.overlay import overlay_config
 
-    assert overlay_config({}).get("turbo") is True
+    assert "turbo" not in overlay_config({})  # the default asks before risky steps
+    assert overlay_config({"PINLET_MODE": "turbo"}).get("turbo") is True
+    assert overlay_config({"PINLET_DEFAULT_MODE": "turbo"}).get("turbo") is True
     assert "turbo" not in overlay_config({"PINLET_MODE": "secure"})
     assert "turbo" not in overlay_config({"PINLET_OVERLAY_TURBO": "0"})
 
@@ -327,14 +342,14 @@ def test_turbo_hal_never_prompts(tmp_path):
     assert not [c for c in ov.calls if c[0] == "confirm"]
 
 
-def test_wrap_hal_turns_prompts_on_only_in_secure(monkeypatch):
+def test_wrap_hal_reads_the_level_per_call(monkeypatch):
     import pinlet.overlay as overlay_pkg
 
     class Live(Overlay):
         pass
 
     monkeypatch.setattr("sys.argv", ["pinlet"])
-    monkeypatch.delenv("PINLET_MODE", raising=False)
+    monkeypatch.setenv("PINLET_MODE", "turbo")
     monkeypatch.delenv("PINLET_SECURE", raising=False)
     hal = overlay_pkg.wrap_hal(Desk(), Live())
     assert not hal.secure and not hal._danger_prompts()

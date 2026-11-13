@@ -23,6 +23,8 @@ final class AppSettings: ObservableObject {
     @Published var borrowWhenIdle: Bool = false { didSet { store("borrowWhenIdle", borrowWhenIdle) } }
     /// "" (human: steps at a speed a person can follow and stop) or "fast".
     @Published var pace: String = "" { didSet { store("pace", pace) } }
+    /// "" (ask before risky steps), "turbo" (ask nothing) or "secure" (ask everything).
+    @Published var defaultLevel: String = "" { didSet { store("defaultLevel", defaultLevel) } }
 
     /// The values as `pinlet serve` reads them. Only what was changed here.
     func engineEnvironment() -> [String: String] {
@@ -35,6 +37,7 @@ final class AppSettings: ObservableObject {
         if !appPrompts { env["PINLET_APP_PROMPTS"] = "0" }
         if restingBar { env["PINLET_OVERLAY_PILL"] = "always" }
         if !pace.isEmpty { env["PINLET_PACE"] = pace }
+        if !defaultLevel.isEmpty { env["PINLET_DEFAULT_MODE"] = defaultLevel }
         if background {
             env["PINLET_BACKGROUND"] = "1"
             if borrowWhenIdle { env["PINLET_BACKGROUND_POINTER"] = "idle" }
@@ -56,6 +59,7 @@ final class AppSettings: ObservableObject {
         background = defaults.object(forKey: "background") as? Bool ?? false
         borrowWhenIdle = defaults.object(forKey: "borrowWhenIdle") as? Bool ?? false
         pace = defaults.string(forKey: "pace") ?? ""
+        defaultLevel = defaults.string(forKey: "defaultLevel") ?? ""
     }
 
     /// The look of Pinlet's own windows (the Allow/Deny card): dark unless the
@@ -231,7 +235,7 @@ struct SettingsView: View {
             .modifier(SettingsForm())
             .tabItem { Label("AI Tools", systemImage: "sparkles") }
 
-            PermissionsTab(model: PermissionsModel.shared)
+            PermissionsTab(model: PermissionsModel.shared, settings: settings) { changed = true }
                 .tabItem { Label("Permissions", systemImage: "hand.raised") }
 
             DiagnosticsView(model: diagnostics)

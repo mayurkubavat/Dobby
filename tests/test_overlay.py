@@ -145,11 +145,10 @@ def test_overlay_config():
         "color_fixed": True,
         "speed": 0.0,
         "label": "D",
-        "turbo": True,
     }
-    assert overlay_config({"PINLET_OVERLAY_SPEED": "fast"}) == {
+    assert overlay_config({"PINLET_OVERLAY_SPEED": "fast", "PINLET_MODE": "turbo"}) == {
         "turbo": True
-    }  # turbo is the default
+    }
     assert overlay_config({"PINLET_OVERLAY_CAPTURE_VISIBLE": "0", "PINLET_MODE": "secure"}) == {
         "capture_visible": False
     }

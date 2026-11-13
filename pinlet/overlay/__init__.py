@@ -180,9 +180,7 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
     if not _admin_secure() and (
         turbo_flag in _TRUE or (turbo_flag not in _FALSE and not asks_risky(env))
     ):
-        cfg["turbo"] = (
-            True  # default: turbo; ``--secure`` / PINLET_MODE=secure turns the prompts on
-        )
+        cfg["turbo"] = True  # asked for: the default (careful) keeps the prompts on
     if is_false(env, "PINLET_OVERLAY_TRAIL"):
         cfg["trail"] = False
     pill = env.get("PINLET_OVERLAY_PILL", "").strip().lower()

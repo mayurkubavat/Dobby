@@ -284,13 +284,15 @@ When Pinlet acts you see it:
   **Pause** and **Stop**. When two or more Pinlets are busy at once it also
   shows one coloured dot per Pinlet ("2 Pinlets"); click them to pause or stop one.
 
-**Turbo or secure.** By default Pinlet runs in **turbo**: no permission
-prompts, and it keeps going if you touch the mouse (Stop and Pause still
-work). Three things hold in every mode: an AI cannot press Pinlet's own
+**How much Pinlet asks.** By default Pinlet **asks before risky steps**
+(careful): Send, Delete, Publish, quit and the like show Allow/Deny, and it
+pauses when you take over. `pinlet --turbo`, `PINLET_MODE=turbo`, or
+Settings > Permissions > Ask before > Nothing turns the prompts off
+(`PINLET_DEFAULT_MODE` sets the default for every client). Three things hold in every mode: an AI cannot press Pinlet's own
 buttons or answer its questions, Pinlet never types into a password field or
 answers a macOS security prompt, and it stops at a payment button and hands
 that click to you. Start it with `pinlet --secure` (or `PINLET_MODE=secure` in the client's
-`env`) to turn on everything below.
+`env`) to also ask once per app, as described next.
 
 **In secure mode Pinlet asks before it uses an app.** The first time it clicks or types in an
 app it shows "Let Pinlet use Vivado?" once; your answer lasts until Pinlet's

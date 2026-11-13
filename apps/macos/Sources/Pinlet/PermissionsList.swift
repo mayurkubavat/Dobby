@@ -47,10 +47,38 @@ final class PermissionsModel: ObservableObject {
 
 struct PermissionsTab: View {
     @ObservedObject var model: PermissionsModel
+    @ObservedObject var settings: AppSettings
+    /// The level changed: it applies after a relaunch.
+    var levelChanged: () -> Void = {}
     @State private var confirmAll = false
+
+    /// Asking less is a standing permission, so "Nothing" takes Touch ID first.
+    private var level: Binding<String> {
+        Binding(get: { settings.defaultLevel }, set: { new in
+            guard new != settings.defaultLevel else { return }
+            if new == "turbo" {
+                PersonCheck.confirm("let every AI work without asking first") { passed in
+                    if passed { settings.defaultLevel = new; levelChanged() }
+                }
+            } else {
+                settings.defaultLevel = new
+                levelChanged()
+            }
+        })
+    }
 
     var body: some View {
         Form {
+            Section {
+                Picker("Ask before", selection: level) {
+                    Text("Risky steps (default)").tag("")
+                    Text("Every app and risky step").tag("secure")
+                    Text("Nothing").tag("turbo")
+                }
+            } footer: {
+                SettingsFooter("Risky steps are Send, Delete, Publish, installing, signing out, quitting and the like. Each AI tool can be stricter or looser in AI Tools. Whatever you choose, Pinlet never touches passwords, payment buttons, macOS security prompts, its own windows or a locked screen.")
+            }
+
             Section {
                 if model.rules.isEmpty {
                     Text(model.reachable ? "Nothing saved. Pinlet asks before each risky step."

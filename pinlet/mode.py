@@ -1,14 +1,16 @@
-"""How much Pinlet asks before it acts: turbo (default), careful or secure.
+"""How much Pinlet asks before it acts: turbo, careful (default) or secure.
 
 A ladder of three levels, from least to most asking:
 
-* ``turbo`` (Full, the default): no permission prompts. Pinlet does not ask
+* ``turbo`` (Full): no permission prompts. Pinlet does not ask
   before using an app, before risky shortcuts or before clicking Send / Delete
   / Pay, and it keeps going when the person touches the mouse. Stop and Pause
   still work.
-* ``careful`` (Ask for risky): Allow/Deny for risky shortcuts and
-  consequential buttons, no typing into password fields, and Pinlet pauses
-  when the person takes over. No "Let Pinlet use …?" question per app.
+* ``careful`` (Ask for risky, the default): Allow/Deny for risky shortcuts
+  and consequential buttons, with "Don't ask again" on the card
+  (``pinlet.overlay.rules``), and Pinlet pauses when the person takes over.
+  No "Let Pinlet use …?" question per app. ``PINLET_DEFAULT_MODE`` names
+  another default.
 * ``secure`` (Ask everything): all of careful, plus "Let Pinlet use …?" once
   per app (``pinlet.overlay.grants``, ``~/.pinlet/apps.json``).
 
@@ -16,6 +18,7 @@ Where a client's level comes from, the strictest wins:
 
 * the client's own config: ``pinlet --careful`` / ``--secure`` / ``--turbo``,
   or ``PINLET_MODE`` (``PINLET_SECURE=1`` works too);
+* with neither of these two, the default;
 * the person's per-client choice in ``~/.pinlet/modes.json``
   (``pinlet mode cursor careful``; see :func:`client_modes`);
 * an admin policy's ``"mode"`` (see ``pinlet.policy``), which no client can go
@@ -39,6 +42,14 @@ from pinlet.envflags import is_true
 TURBO, CAREFUL, SECURE = "turbo", "careful", "secure"
 LEVELS = (TURBO, CAREFUL, SECURE)  # least to most asking
 LABELS = {TURBO: "Full", CAREFUL: "Ask for risky", SECURE: "Ask everything"}
+DEFAULT = CAREFUL
+
+
+def default_mode(env: Mapping[str, str] | None = None) -> str:
+    """The level when nobody chose one: careful, or ``PINLET_DEFAULT_MODE``."""
+    env = os.environ if env is None else env
+    named = env.get("PINLET_DEFAULT_MODE", "").strip().lower()
+    return named if named in LEVELS else DEFAULT
 
 
 def level(mode: str | None) -> int:
@@ -68,7 +79,8 @@ def session_mode(mode: str | None) -> Iterator[None]:
         _SESSION_MODE.reset(token)
 
 
-def _requested(env: Mapping[str, str], argv: Sequence[str]) -> str:
+def requested_mode(env: Mapping[str, str], argv: Sequence[str]) -> str:
+    """The level this client's own config names, or "" when it names none."""
     if "--secure" in argv:
         return SECURE
     if "--careful" in argv:
@@ -80,7 +92,7 @@ def _requested(env: Mapping[str, str], argv: Sequence[str]) -> str:
         return mode
     if is_true(env, "PINLET_SECURE"):
         return SECURE
-    return TURBO
+    return ""
 
 
 def security_mode(env: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> str:
@@ -99,7 +111,7 @@ def security_mode(env: Mapping[str, str] | None = None, argv: Sequence[str] | No
             return strictest(current, floor)
     env = os.environ if env is None else env
     argv = sys.argv if argv is None else argv
-    return strictest(_requested(env, argv), floor)
+    return strictest(requested_mode(env, argv) or default_mode(env), floor)
 
 
 def is_secure(env: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> bool:
@@ -155,14 +167,15 @@ def set_client_mode(key: str, mode: str | None, path: Path | None = None) -> dic
 def mode_for_client(requested: str | None, client_name: str | None) -> str:
     """The level a newly connected client gets.
 
-    The strictest of its request, the person's choice for it and the admin
-    policy's floor.
+    The strictest of its request and the person's choice for it, or the
+    default when there is neither, and never below the admin policy's floor.
     """
     from pinlet.clients import profile_for
     from pinlet.policy import current as _admin_policy
 
     chosen = client_modes().get(profile_for(client_name).key)
-    return strictest(requested, chosen, _admin_policy().floor)
+    named = [m for m in (requested, chosen) if m in LEVELS]
+    return strictest(*(named or [default_mode()]), _admin_policy().floor)
 
 
 def mode_key(setup_key: str) -> str:

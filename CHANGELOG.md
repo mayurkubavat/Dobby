@@ -98,6 +98,11 @@ The first public release will be 0.1.0. It contains:
 
 ### Changed
 
+- The default level is now "Ask for risky" (careful) instead of turbo: Send,
+  Delete, Publish and risky shortcuts ask Allow/Deny, and Pinlet pauses when
+  the person takes over. `--turbo`, `PINLET_MODE=turbo`, a per-client level, or
+  Settings > Permissions > Ask before > Nothing (Touch ID) asks nothing again;
+  `PINLET_DEFAULT_MODE` sets the default for every client.
 - New look, "Frost": the app icon is a white frosted tile with a pearl pointer
   and a cyan star, and the Linux tray tile matches it. Buttons, the screen glow,
   the glass rim and the pointer move from violet to cool cyan (fill `#0E7490`,

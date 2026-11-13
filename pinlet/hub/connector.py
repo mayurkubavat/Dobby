@@ -48,9 +48,10 @@ def shared_enabled(env: dict[str, str] | None = None) -> bool:
 
 
 def _mode(argv: Sequence[str]) -> str:
-    from pinlet.mode import security_mode  # stdlib-only module
+    # What this client's config names, or "": the shared Pinlet then picks the default.
+    from pinlet.mode import requested_mode  # stdlib-only module
 
-    return security_mode(argv=list(argv), env=os.environ)
+    return requested_mode(os.environ, list(argv))
 
 
 def _parent_name() -> str | None:

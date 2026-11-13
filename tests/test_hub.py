@@ -44,7 +44,7 @@ def test_shared_can_be_turned_off():
 def test_session_mode_is_per_context():
     with session_mode("secure"):
         assert security_mode() == "secure"
-    assert security_mode(env={}, argv=["pinlet"]) == "turbo"
+    assert security_mode(env={}, argv=["pinlet"]) == "careful"
 
 
 def test_sessions_registry():
