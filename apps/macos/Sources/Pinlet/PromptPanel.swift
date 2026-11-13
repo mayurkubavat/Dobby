@@ -144,6 +144,13 @@ struct PromptCard: View {
                     Toggle("Always allow in \(prompt.app)", isOn: $always)
                         .toggleStyle(.checkbox)
                         .font(.subheadline)
+                        .onChange(of: always) { _ in DispatchQueue.main.async { resized() } }
+                    if always {
+                        Label("Needs Touch ID or your password. Pinlet asks again after a month.",
+                              systemImage: "touchid")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 if explaining {
                     // Return here denies with the reason; it never allows.

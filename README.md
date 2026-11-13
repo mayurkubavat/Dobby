@@ -302,6 +302,11 @@ apps you trust, or to limit an app, write `~/.pinlet/apps.json`:
 `full` lets Pinlet click and type, `click` allows only clicks and scrolling,
 `read` only looking. `"default": "full"` never asks.
 
+Ticking **Always allow in …** on the question saves the app there for you. In
+Pinlet.app that takes Touch ID or your password, and the saved rule lapses
+after 30 days (`PINLET_ALWAYS_DAYS`), so Pinlet asks again. Rules you write
+by hand do not lapse.
+
 In secure mode, risky steps (quit, close, delete, log out, and clicking buttons such as
 **Send**, **Delete**, **Pay** or **Publish**) turn red and ask you to
 **Allow** or **Deny** first, and if you click, scroll or type while Pinlet works,

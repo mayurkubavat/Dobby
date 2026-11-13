@@ -124,6 +124,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Questions whose "Always allow" is waiting for Touch ID.
+    private var confirming = Set<Int>()
+    /// The open questions as of the last poll (to name the app in the Touch ID sheet).
+    private var lastPrompts: [Prompt] = []
+
     private func poll() {
         guard !polling else { return }
         polling = true
@@ -143,13 +148,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                  waiting: prompts.filter(\.missed))
                 self.activity.update(view ?? TopbarView.empty, reachable: view != nil)
                 // One card at a time, the oldest question first; the rest wait their turn.
-                self.promptPanel.update(prompts.first(where: { !$0.missed }), palette: view?.palette ?? [:])
+                self.lastPrompts = prompts
+                self.confirming.formIntersection(prompts.map(\.id))
+                self.promptPanel.update(prompts.first(where: { !$0.missed && !self.confirming.contains($0.id) }),
+                                        palette: view?.palette ?? [:])
                 self.notifier.update(prompts: prompts, rows: view?.rows ?? [])
             }
         }
     }
 
     private func answer(_ promptID: Int, ok: Bool, always: Bool = false, reason: String = "") {
+        if ok && always && !confirming.contains(promptID) {
+            // A standing permission takes proof of a person (Touch ID). Until macOS
+            // answers, the question stays open and its card stays put away.
+            let app = lastPrompts.first(where: { $0.id == promptID })?.app ?? ""
+            confirming.insert(promptID)
+            promptPanel.hide()
+            PersonCheck.confirm("always allow Pinlet to use \(app.isEmpty ? "this app" : app)") { [weak self] passed in
+                guard let self else { return }
+                if passed {
+                    self.answer(promptID, ok: true, always: true, reason: reason)
+                } else {
+                    // Cancelled or failed: nothing is saved and the question is asked again.
+                    self.confirming.remove(promptID)
+                    self.poll()
+                }
+            }
+            return
+        }
+        confirming.remove(promptID)
         if promptPanel.shown?.id == promptID { promptPanel.hide() }
         control.queue.async { [weak self] in
             self?.control.answer(promptID, ok: ok, always: always, reason: reason)

@@ -47,6 +47,9 @@ The first public release will be 0.1.0. It contains:
   runs: the card hands it to the menu, where it waits with Allow and Deny for
   up to `PINLET_PROMPT_HOLD` seconds (default 300). "Let Pinlet use …?" cards
   and menu rows offer "Always allow in …", saved in `~/.pinlet/apps.json`.
+- "Always allow in …" now takes Touch ID (or your password) in Pinlet.app, and
+  the saved rule lapses after 30 days (`PINLET_ALWAYS_DAYS`; 0 keeps it), after
+  which Pinlet asks about that app again.
 - Pinlet.app: the menu bar icon breathes while a Pinlet works (not with Reduce
   Motion); optional finish sound and trackpad tap; VoiceOver hears when a
   Pinlet starts, needs you, pauses or is done.

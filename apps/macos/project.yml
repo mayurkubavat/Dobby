@@ -33,3 +33,4 @@ targets:
       - sdk: UserNotifications.framework
       - sdk: AppIntents.framework
       - sdk: Carbon.framework
+      - sdk: LocalAuthentication.framework

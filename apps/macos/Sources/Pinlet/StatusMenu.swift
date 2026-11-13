@@ -149,7 +149,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(head)
             menu.addItem(promptItem(prompt.allow, id: prompt.id, ok: true, always: false))
             if prompt.isAccess && !prompt.app.isEmpty {
-                menu.addItem(promptItem("Always Allow in \(prompt.app)", id: prompt.id, ok: true, always: true))
+                menu.addItem(promptItem("Always Allow in \(prompt.app)…", id: prompt.id, ok: true, always: true))
             }
             menu.addItem(promptItem(prompt.deny, id: prompt.id, ok: false, always: false))
         }

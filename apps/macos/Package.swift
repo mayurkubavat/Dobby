@@ -12,7 +12,8 @@ let package = Package(
             path: "Sources/Pinlet",
             linkerSettings: [.linkedFramework("AppKit"), .linkedFramework("ServiceManagement"),
                              .linkedFramework("SwiftUI"), .linkedFramework("UserNotifications"),
-                             .linkedFramework("AppIntents"), .linkedFramework("Carbon")]
+                             .linkedFramework("AppIntents"), .linkedFramework("Carbon"),
+                             .linkedFramework("LocalAuthentication")]
         ),
         .testTarget(name: "PinletTests", dependencies: ["Pinlet"], path: "Tests/PinletTests"),
     ]

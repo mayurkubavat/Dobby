@@ -401,3 +401,54 @@ def test_payment_rule_can_be_lifted(monkeypatch):
     ov, desk = Overlay(answers=[True]), Desk()
     OverlayHAL(desk, ov, hit_test=hit).mouse_click(150, 10)
     assert desk.done == [("click", 150, 10)]
+
+
+def test_always_allow_lapses_after_a_month(tmp_path, monkeypatch):
+    import time
+
+    from pinlet.overlay import grants
+
+    path = tmp_path / "apps.json"
+    path.write_text(json.dumps({"apps": {"Terminal": "click"}}))
+    grants.remember("Vivado", path=path)
+    saved = json.loads(path.read_text())
+    assert saved["apps"] == {"Terminal": "click", "Vivado": "full"}
+    assert abs(saved["remembered"]["Vivado"] - time.time()) < 5
+    g = AppGrants(path=path, env={})
+    assert g.standing("Vivado") == "full"
+    real = time.time
+    monkeypatch.setattr(grants.time, "time", lambda: real() + 29 * 86400)
+    assert g.standing("vivado") == "full"
+    monkeypatch.setattr(grants.time, "time", lambda: real() + 31 * 86400)
+    assert g.standing("vivado") is None  # asks again
+    assert g.standing("Terminal") == "click"  # written by hand: no age
+    assert g.snapshot()["lapsed"] == ["vivado"]
+    asked = []
+    g.check("Vivado", "click", lambda app, detail: asked.append(app) or True)
+    assert asked == ["Vivado"]
+    # Saving another app clears the lapsed one out of the file.
+    grants.remember("Slack", path=path)
+    saved = json.loads(path.read_text())
+    assert set(saved["apps"]) == {"Terminal", "Slack"} and set(saved["remembered"]) == {"Slack"}
+
+
+def test_always_days_setting(tmp_path, monkeypatch):
+    import time
+
+    from pinlet.overlay import grants
+
+    path = tmp_path / "apps.json"
+    path.write_text(
+        json.dumps({"apps": {"Vivado": "full"}, "remembered": {"Vivado": time.time() - 3 * 86400}})
+    )
+    assert AppGrants(path=path, env={}).standing("Vivado") == "full"
+    assert AppGrants(path=path, env={"PINLET_ALWAYS_DAYS": "2"}).standing("Vivado") is None
+    old = {"apps": {"Vivado": "full"}, "remembered": {"Vivado": 1.0}}
+    path.write_text(json.dumps(old))
+    assert AppGrants(path=path, env={"PINLET_ALWAYS_DAYS": "0"}).standing("Vivado") == "full"
+    assert grants.always_seconds({"PINLET_ALWAYS_DAYS": "junk"}) == 30 * 86400
+    # A date far in the future does not keep a rule alive.
+    path.write_text(
+        json.dumps({"apps": {"Vivado": "full"}, "remembered": {"Vivado": time.time() + 9e7}})
+    )
+    assert AppGrants(path=path, env={}).standing("Vivado") is None
