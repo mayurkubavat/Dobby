@@ -265,6 +265,20 @@ def takes_over(
     return not (turbo and not paused)
 
 
+GOAL_SECS = 180.0  # the goal leaves the bar after this long with no step
+
+
+def goal_over(goal: str, since_action: float, goal_secs: float = GOAL_SECS) -> bool:
+    """True when the AI's stated goal is stale and should leave the bar.
+
+    The goal belongs to the whole task, and an AI often thinks for a good
+    while between stating it and its first step, or between two steps. So it
+    outlives the pointer (``idle_cleanup``) and goes only after a long quiet,
+    or when the AI releases control.
+    """
+    return bool(goal) and since_action > max(0.0, goal_secs)
+
+
 def idle_cleanup(
     *,
     since_action: float,

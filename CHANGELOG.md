@@ -11,6 +11,7 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- The goal an AI gives stays on the bar while it thinks between steps (it went away with the pointer after about half a minute, and on Linux after eight seconds), and one agent letting go of control no longer clears another agent's goal. It leaves after three minutes without a step or when the AI releases control.
 - `pinlet://settings/permissions` (or `/appearance`, `/ai-tools`…) opens
   Settings on that tab, and Settings > Appearance can let screenshots and
   recordings show the bar.

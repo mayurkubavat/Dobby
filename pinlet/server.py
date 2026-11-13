@@ -2124,6 +2124,8 @@ def request_control(max_wait_s: float | None = None, goal: str = "") -> dict[str
     """
     if goal.strip():
         _show_goal(goal)
+    elif _goal_owner and _goal_owner != _session_tag():
+        _show_goal("")  # another agent's goal must not sit over this one's work
     ctl = _control_or_none()
     if ctl is None:
         return dict(_CONTROL_OFF)
@@ -2135,6 +2137,9 @@ def request_control(max_wait_s: float | None = None, goal: str = "") -> dict[str
     return {"ok": True, "you_hold_control": True, **ctl.status()}
 
 
+_goal_owner = ""  # which agent's goal is on the bar ("" when none)
+
+
 def _show_goal(goal: str) -> None:
     """Put the AI's one-line goal on the bar (best effort)."""
     from pinlet.overlay import find_overlay_hal
@@ -2142,6 +2147,8 @@ def _show_goal(goal: str) -> None:
     ov_hal = find_overlay_hal(hal)
     if ov_hal is None:
         return
+    global _goal_owner
+    _goal_owner = _session_tag() if goal.strip() else ""
     with contextlib.suppress(Exception):
         ov_hal.overlay.goal(goal)
     tool_log.info("%sgoal: %s", _session_tag(), " ".join(goal.split())[:160])
@@ -2382,10 +2389,17 @@ def release_control() -> dict[str, Any]:
     from pinlet.overlay import find_overlay_hal
 
     ov_hal = find_overlay_hal(hal)
-    if ov_hal is not None:  # done for now: the pointer label stops saying "Thinking…"
+    global _goal_owner
+    # Only the agent that was working puts its own goal away: another agent's
+    # release_control must not wipe the bar of the one that holds control.
+    mine = _goal_owner in ("", _session_tag())
+    if ov_hal is not None and (released or mine):
         with contextlib.suppress(Exception):
-            ov_hal.overlay.state("idle")
-            ov_hal.overlay.goal("")
+            if released:  # done for now: the pointer label stops saying "Thinking…"
+                ov_hal.overlay.state("idle")
+            if mine:
+                ov_hal.overlay.goal("")
+                _goal_owner = ""
     return {"ok": True, "released": released, **ctl.status()}
 
 

@@ -136,9 +136,11 @@ from .mac_views import (  # noqa: F401 - _liquid_glass and _BAR_RADIUS are used 
     _white_symbol,
 )
 from .menu import (
+    GOAL_SECS,
     bar_click,
     bar_tip,
     bar_view,
+    goal_over,
     idle_cleanup,
     label_click,
     menu_entries,
@@ -173,6 +175,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # After active_secs + this of quiet the task is over: the "thinking"
     # sweep stops and the agent pointer and its tag are put away.
     "linger_secs": 20.0,
+    "goal_secs": GOAL_SECS,  # the AI's goal stays on the bar this long without a step
     "awake_secs": 120.0,  # woken from the bar: stays awake this long without a task
     "wake_note_secs": 4.0,  # woken while no AI waits: says so this long, then sleeps
     # Control bar at the top: "auto" (default: only while Pinlet works, asks or
@@ -957,8 +960,11 @@ class OverlayController:
             self.cursor_state = "idle"
             self._refresh_tag()
             self._refresh_pill()  # also refreshes the glow
+        if goal_over(self.goal, now - self.last_action, float(self.cfg["goal_secs"])):
+            self.goal = ""  # long quiet: that task is over
+            self._refresh_tag()
+            self._refresh_pill()
         if hide_pointer:
-            self.goal = ""  # that task is over; the next one states its own goal
             self._set_pointer_visible(False)
             self.cursor = None  # the next task glides in from the real mouse
             self._clear_box()

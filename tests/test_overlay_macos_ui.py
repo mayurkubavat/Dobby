@@ -748,6 +748,21 @@ def test_modern_tag_keeps_the_action_until_idle(make):
     assert c.intent_text == "" and c._tag_parts()[1] == ""
 
 
+def test_modern_goal_outlives_the_pointer_and_goes_after_a_long_quiet(make):
+    c, _ = _modern(make)
+    c.handle({"op": "goal", "text": "Reply to Sam"})
+    c._set_pointer_visible(True)
+    quiet = float(c.cfg["active_secs"]) + float(c.cfg["linger_secs"]) + 1
+    c.last_action = time.monotonic() - quiet  # the AI thinks before its next step
+    c.on_tick()
+    assert not c.pointer_visible and c.goal == "Reply to Sam"
+    c.handle({"op": "intent", "text": "Click ‘Send’"})
+    assert c.pill.label.stringValue().startswith("Pinlet: Reply to Sam · Click ‘Send’")
+    c.last_action = time.monotonic() - float(c.cfg["goal_secs"]) - 1
+    c.on_tick()
+    assert c.goal == ""
+
+
 def test_modern_fixed_colour_ignores_registry(make):
     c, _ = _modern(make, color="#00AA00", color_fixed=True)
     c.server_pid = 222

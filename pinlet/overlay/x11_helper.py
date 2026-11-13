@@ -69,7 +69,7 @@ from .barlock import (  # noqa: E402
     showing_dir,
     waiting_dir,
 )
-from .menu import bar_click, bar_view, idle_cleanup, label_click  # noqa: E402
+from .menu import GOAL_SECS, bar_click, bar_view, goal_over, idle_cleanup, label_click  # noqa: E402
 from .protocol import ACTING_STATES  # noqa: E402
 from .text import short  # noqa: E402
 
@@ -1398,6 +1398,11 @@ class X11Overlay:
             self.state = "idle"
             self._layout_tag()
             self._refresh_bar()
+        if goal_over(
+            self.goal, now - self.last_action, float(self.cfg.get("goal_secs", GOAL_SECS))
+        ):
+            self.goal = ""  # long quiet: that task is over
+            self._refresh_bar()
         if hide_pointer:
             self.pointer.hide()
             self.tag.hide()
@@ -1448,7 +1453,6 @@ class X11Overlay:
         now = time.monotonic()
         if now - self.last_action > float(self.cfg["active_secs"]):
             self.task_started = now  # a new task: step count and timer start over
-            self.goal = ""
             self.task_steps = 0
             self.current_step = ""
         self.last_action = now

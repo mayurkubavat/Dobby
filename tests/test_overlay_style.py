@@ -396,3 +396,11 @@ def test_tag_says_what_a_question_is_about():
         "Press ⌘Q (quit the app)"
     )
     assert style.tag_detail("", "thinking", True, asking=True) == "Thinking…"
+
+
+def test_goal_stays_through_a_pause_in_the_work():
+    from pinlet.overlay import menu
+
+    assert not menu.goal_over("Reply to Sam", 60.0)
+    assert menu.goal_over("Reply to Sam", menu.GOAL_SECS + 1)
+    assert not menu.goal_over("", 10_000.0)
