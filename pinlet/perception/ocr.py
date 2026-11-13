@@ -252,7 +252,7 @@ class CachedOCR(OCREngine):
 
     @override
     def recognize(self, image: Image.Image) -> list[OCRLine]:
-        from pinlet.vdom.gemma3_sidecar import compute_dhash
+        from pinlet.imagehash import compute_dhash
 
         if image.width < 8 or image.height < 8:
             return []

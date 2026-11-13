@@ -124,7 +124,7 @@ def draw_marks(
 
 
 def _patch_dhash(image: Image.Image, box: Box) -> int:
-    from pinlet.vdom.gemma3_sidecar import compute_dhash
+    from pinlet.imagehash import compute_dhash
 
     x, y, w, h = box
     pad = 3

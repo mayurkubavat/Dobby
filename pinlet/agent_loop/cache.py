@@ -24,29 +24,10 @@ import numpy as np
 from PIL import Image
 from pydantic import BaseModel, Field
 
+from pinlet.imagehash import compute_dhash, hamming_distance
 from pinlet.types import BoundingBox, WindowInfo
 
 logger = logging.getLogger(__name__)
-
-
-def compute_dhash(image: Image.Image) -> int:
-    """Computes a 64-bit difference hash (dHash) for an image crop in < 0.4ms.
-
-    Captures structural gradient morphology invariant to slight brightness shifts.
-    """
-    try:
-        resized = image.convert("L").resize((9, 8), Image.Resampling.BILINEAR)
-        arr = np.array(resized)
-        diff = arr[:, 1:] > arr[:, :-1]
-        return int.from_bytes(np.packbits(diff.flatten()), "big")
-    except Exception as e:
-        logger.debug(f"Error computing dHash: {e}")
-        return 0
-
-
-def hamming_distance(h1: int, h2: int) -> int:
-    """Computes the Hamming distance (number of differing bits) between two 64-bit hashes."""
-    return (h1 ^ h2).bit_count()
 
 
 def image_to_base64_thumbnail(image: Image.Image, max_dim: int = 256) -> str:

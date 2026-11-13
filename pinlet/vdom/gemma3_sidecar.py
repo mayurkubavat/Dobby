@@ -13,11 +13,11 @@ import time
 from collections import OrderedDict
 from typing import Any
 
-import numpy as np
 from PIL import Image
 
 from pinlet.config import CONFIG
 from pinlet.gemma.client import GemmaClient, GemmaError, encode_image
+from pinlet.imagehash import compute_dhash, hamming_distance
 from pinlet.types import (
     BoundingBox,
     GroundingSource,
@@ -28,28 +28,6 @@ from pinlet.types import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def compute_dhash(image: Image.Image) -> int:
-    """Computes a 64-bit difference hash (dHash) for an image crop in < 0.6ms.
-
-    Captures structural gradient morphology invariant to slight brightness/contrast shifts.
-    """
-    try:
-        # Resize to 9x8 grayscale
-        resized = image.convert("L").resize((9, 8), Image.Resampling.BILINEAR)
-        arr = np.array(resized)
-        # Compare adjacent columns
-        diff = arr[:, 1:] > arr[:, :-1]
-        return int.from_bytes(np.packbits(diff.flatten()), "big")
-    except Exception as e:
-        logger.debug(f"Error computing dHash: {e}")
-        return 0
-
-
-def hamming_distance(h1: int, h2: int) -> int:
-    """Computes the Hamming distance (number of differing bits) between two 64-bit hashes."""
-    return (h1 ^ h2).bit_count()
 
 
 class SemanticROICache:
