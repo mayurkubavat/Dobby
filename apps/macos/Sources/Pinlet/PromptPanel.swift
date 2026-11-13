@@ -100,7 +100,9 @@ private final class KeyPanel: NSPanel {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 440, height: 120),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isFloatingPanel = true
-        level = .statusBar
+        // Above Pinlet's own drawing layer (screen saver level), whose glow around the
+        // window being worked in would otherwise run across the card's text.
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)) + 1)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         isOpaque = false
         backgroundColor = .clear
@@ -242,16 +244,7 @@ struct PromptCard: View {
                         .onAppear { reasonFocused = true }
                 }
                 HStack(spacing: 8) {
-                    Countdown(deadline: deadline)
                     Spacer(minLength: 12)
-                    if !explaining {
-                        Button("Deny and say why…") {
-                            explaining = true
-                            grow()
-                        }
-                            .buttonStyle(.link)
-                            .font(.subheadline)
-                    }
                     Button(prompt.deny) { answer(PromptAnswer(ok: false, reason: reason)) }
                         .keyboardShortcut(.cancelAction)
                         .controlSize(.large)
@@ -268,6 +261,21 @@ struct PromptCard: View {
                         .disabled(!armed)
                 }
                 .padding(.top, 4)
+                // Its own line, so neither the hint nor the link is ever cut short.
+                HStack(spacing: 8) {
+                    Countdown(deadline: deadline)
+                        .fixedSize()
+                    Spacer(minLength: 12)
+                    if !explaining {
+                        Button("Deny and say why…") {
+                            explaining = true
+                            grow()
+                        }
+                            .buttonStyle(.link)
+                            .font(.subheadline)
+                            .fixedSize()
+                    }
+                }
                 if canRemember && !explaining {
                     Divider().opacity(0.5)
                     // Every risky step by this AI until its task ends or Stop. Never payments,

@@ -389,3 +389,10 @@ def test_pointer_label_keeps_the_goal_while_thinking():
     assert style.tag_detail("", "thinking", True) == "Thinking…"
     assert style.tag_detail("", "thinking", True, "Reply to Sam") == "Thinking… · Reply to Sam"
     assert style.tag_detail("Click ‘Send’", "idle", True, "Reply to Sam") == "Click ‘Send’"
+
+
+def test_tag_says_what_a_question_is_about():
+    assert style.tag_detail("Press ⌘Q (quit the app)", "thinking", True, "x", asking=True) == (
+        "Press ⌘Q (quit the app)"
+    )
+    assert style.tag_detail("", "thinking", True, asking=True) == "Thinking…"

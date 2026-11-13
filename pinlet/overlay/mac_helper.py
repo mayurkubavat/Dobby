@@ -415,7 +415,7 @@ class OverlayController:
             self.intent_text if (self.intent_text and time.monotonic() < self.intent_until) else ""
         )
         return self.agent_label, style.tag_detail(
-            detail, self.cursor_state, self.narrate, self.goal
+            detail, self.cursor_state, self.narrate, self.goal, self.risk_level == "danger"
         )
 
     def _refresh_tag(self) -> None:
