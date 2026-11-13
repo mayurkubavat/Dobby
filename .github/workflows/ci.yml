@@ -4,6 +4,8 @@ on:
   push:
     branches: [master]
   pull_request:
+  # Run by hand on any branch: Actions > CI > Run workflow.
+  workflow_dispatch:
 
 permissions:
   contents: read
