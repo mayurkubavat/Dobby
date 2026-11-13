@@ -111,9 +111,9 @@ surface or say in the commit message why it does not apply.
 | CLI | `pinlet/cli.py` and the command's `main()` | Add `--json` when Pinlet.app needs to read it. |
 | Shared Pinlet control ops | `pinlet/hub/control.py` (docstring lists the ops) | Anything the app shows comes through here. |
 | Menu (Mac and Linux) | `pinlet/overlay/topbar.py` builds it; `apps/macos/Sources/Pinlet/StatusMenu.swift`, Linux tray in `pinlet/overlay/x11_helper.py` draw it | New row fields go in `Row`, then `Model.swift` parses them. |
-| Activity panel | `apps/macos/Sources/Pinlet/ActivityPanel.swift`, control op `activity` | |
+| Activity panel | `apps/macos/Sources/Pinlet/ActivityPanel.swift`, `ActivityModel.swift`, control op `activity` | |
 | Allow/Deny card and notifications | `PromptPanel.swift`, `Notifier.swift`, `pinlet/hub/prompts.py` | A new "needs you" moment needs a banner too. |
-| Settings | `apps/macos/Sources/Pinlet/Settings.swift`, `AITools.swift` | A new preference also needs its CLI or env var. |
+| Settings | `apps/macos/Sources/Pinlet/Settings.swift`, `AITools.swift`, `Diagnostics.swift` | A new preference also needs its CLI or env var. |
 | Permission levels and policy | `pinlet/mode.py`, `pinlet/policy.py` (`KNOWN_KEYS`), `docs/admin-policy.md` | Unknown policy keys fail closed, so add new keys to `KNOWN_KEYS`. |
 | Activity journal | `pinlet/journal.py` | Log who, what tool, where and the outcome. Never arguments or typed text. |
 | Doctor | `pinlet/doctor.py` | Anything that can be set up wrong gets a check with a fix. |
