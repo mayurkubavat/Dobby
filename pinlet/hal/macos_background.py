@@ -37,8 +37,8 @@ from pinlet.hal.background import (
     ax_scroll_at,
     ax_select_all,
     ax_window_id,
-    focused_field,
     enable_web_content,
+    focused_field,
     window_at,
     window_frame,
 )
