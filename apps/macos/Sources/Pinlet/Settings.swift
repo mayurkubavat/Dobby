@@ -25,6 +25,10 @@ final class AppSettings: ObservableObject {
     @Published var pace: String = "" { didSet { store("pace", pace) } }
     /// "" (ask before risky steps), "turbo" (ask nothing) or "secure" (ask everything).
     @Published var defaultLevel: String = "" { didSet { store("defaultLevel", defaultLevel) } }
+    /// Look: "" (each AI its own colour) or one colour for all, as "#rrggbb".
+    @Published var color: String = "" { didSet { store("color", color) } }
+    @Published var minimalText: Bool = false { didSet { store("minimalText", minimalText) } }
+    @Published var clickTrail: Bool = true { didSet { store("clickTrail", clickTrail) } }
 
     /// The values as `pinlet serve` reads them. Only what was changed here.
     func engineEnvironment() -> [String: String] {
@@ -38,6 +42,9 @@ final class AppSettings: ObservableObject {
         if restingBar { env["PINLET_OVERLAY_PILL"] = "always" }
         if !pace.isEmpty { env["PINLET_PACE"] = pace }
         if !defaultLevel.isEmpty { env["PINLET_DEFAULT_MODE"] = defaultLevel }
+        if !color.isEmpty { env["PINLET_OVERLAY_COLOR"] = color }
+        if minimalText { env["PINLET_OVERLAY_NARRATE"] = "0" }
+        if !clickTrail { env["PINLET_OVERLAY_TRAIL"] = "0" }
         if background {
             env["PINLET_BACKGROUND"] = "1"
             if borrowWhenIdle { env["PINLET_BACKGROUND_POINTER"] = "idle" }
@@ -60,7 +67,24 @@ final class AppSettings: ObservableObject {
         borrowWhenIdle = defaults.object(forKey: "borrowWhenIdle") as? Bool ?? false
         pace = defaults.string(forKey: "pace") ?? ""
         defaultLevel = defaults.string(forKey: "defaultLevel") ?? ""
+        color = defaults.string(forKey: "color") ?? ""
+        minimalText = defaults.object(forKey: "minimalText") as? Bool ?? false
+        clickTrail = defaults.object(forKey: "clickTrail") as? Bool ?? true
     }
+
+    /// One colour for every AI, in macOS's own palette. Frost is Pinlet's icon colour.
+    struct Swatch: Identifiable {
+        let name: String
+        let hex: String
+        var id: String { hex }
+    }
+
+    static let colors: [Swatch] = [
+        Swatch(name: "Frost", hex: "#0ea5c6"), Swatch(name: "Blue", hex: "#0a84ff"),
+        Swatch(name: "Indigo", hex: "#5e5ce6"), Swatch(name: "Mint", hex: "#63e6e2"),
+        Swatch(name: "Green", hex: "#30d158"), Swatch(name: "Orange", hex: "#ff9f0a"),
+        Swatch(name: "Pink", hex: "#ff375f"), Swatch(name: "Graphite", hex: "#8e8e93"),
+    ]
 
     /// The look of Pinlet's own windows (the Allow/Deny card): dark unless the
     /// theme says light, or nil to follow macOS ("auto").
@@ -129,26 +153,6 @@ struct SettingsView: View {
                     .onChange(of: settings.personality) { _ in changed = true }
                 }
                 Section {
-                    Picker("Look", selection: $settings.theme) {
-                        Text("Default (dark)").tag("")
-                        Text("Dark").tag("dark")
-                        Text("Light").tag("light")
-                        Text("Match macOS").tag("auto")
-                    }
-                    .onChange(of: settings.theme) { _ in changed = true }
-                    Picker("Bar glass", selection: $settings.glass) {
-                        Text("Default").tag("")
-                        Text("Always clear").tag("clear")
-                        Text("Always regular").tag("regular")
-                        Text("Frosted (no glass)").tag("0")
-                    }
-                    .onChange(of: settings.glass) { _ in changed = true }
-                    Toggle("Show the bar while Pinlet rests", isOn: $settings.restingBar)
-                        .onChange(of: settings.restingBar) { _ in changed = true }
-                } footer: {
-                    SettingsFooter("Default glass is clear at rest and regular with text. With the bar off at rest, wake Pinlet from the menu or with ⌃⌥Space.")
-                }
-                Section {
                     Picker("Pace", selection: $settings.pace) {
                         Text("Human (default)").tag("")
                         Text("Fast").tag("fast")
@@ -170,6 +174,51 @@ struct SettingsView: View {
             }
             .modifier(SettingsForm())
             .tabItem { Label("General", systemImage: "gearshape") }
+
+            Form {
+                Section {
+                    Picker("Look", selection: $settings.theme) {
+                        Text("Default (dark)").tag("")
+                        Text("Dark").tag("dark")
+                        Text("Light").tag("light")
+                        Text("Match macOS").tag("auto")
+                    }
+                    .onChange(of: settings.theme) { _ in changed = true }
+                    Picker("Bar glass", selection: $settings.glass) {
+                        Text("Default").tag("")
+                        Text("Always clear").tag("clear")
+                        Text("Always regular").tag("regular")
+                        Text("Frosted (no glass)").tag("0")
+                    }
+                    .onChange(of: settings.glass) { _ in changed = true }
+                    Toggle("Show the bar while Pinlet rests", isOn: $settings.restingBar)
+                        .onChange(of: settings.restingBar) { _ in changed = true }
+                } footer: {
+                    SettingsFooter("Default glass is clear at rest and regular with text. With the bar off at rest, wake Pinlet from the menu or with ⌃⌥Space.")
+                }
+                Section {
+                    Picker("Colour", selection: $settings.color) {
+                        Text("One per AI (default)").tag("")
+                        ForEach(AppSettings.colors) { c in
+                            Label {
+                                Text(c.name)
+                            } icon: {
+                                Image(systemName: "circle.fill").foregroundStyle(Color(hex: c.hex))
+                            }
+                            .tag(c.hex)
+                        }
+                    }
+                    .onChange(of: settings.color) { _ in changed = true }
+                    Toggle("Minimal text", isOn: $settings.minimalText)
+                        .onChange(of: settings.minimalText) { _ in changed = true }
+                    Toggle("Leave a trail of clicks", isOn: $settings.clickTrail)
+                        .onChange(of: settings.clickTrail) { _ in changed = true }
+                } footer: {
+                    SettingsFooter("Colour tints the pointer, its label, the glow and the bar. Minimal text drops “Pinlet is working” and shows each action only briefly. On macOS 26 and later the bar and Pinlet's cards are Liquid Glass.")
+                }
+            }
+            .modifier(SettingsForm())
+            .tabItem { Label("Appearance", systemImage: "paintbrush") }
 
             Form {
                 Section {
@@ -276,5 +325,15 @@ struct SettingsFooter: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension Color {
+    /// "#rrggbb" as a colour (grey when it is not one).
+    init(hex: String) {
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        let value = UInt32(digits, radix: 16) ?? 0x8e8e93
+        self.init(red: Double((value >> 16) & 0xff) / 255, green: Double((value >> 8) & 0xff) / 255,
+                  blue: Double(value & 0xff) / 255)
     }
 }

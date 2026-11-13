@@ -360,7 +360,7 @@ it. Settings go in the client's `env`:
 | `PINLET_OVERLAY_THEME=light` | The light bar and prompts instead of the default dark look; `auto` follows the desktop's light or dark mode |
 | `PINLET_OVERLAY_GLASS=clear` | On macOS 26 and later, pin clear Liquid Glass (the default is clear while the bar sleeps and regular once it has text); `regular` pins regular; `0` keeps the older frosted bar |
 | `PINLET_OVERLAY_NARRATE=0` | Quieter modern look: no "Pinlet is working" text, the tag shows each action only briefly, unnumbered trail dots, a dot for every running Pinlet |
-| `PINLET_MODE=secure` | Same as `pinlet --secure`: app grants, Allow/Deny prompts, no typing into password fields, pause on take-over. Default `turbo` |
+| `PINLET_MODE=secure` | Same as `pinlet --secure`: app grants, Allow/Deny prompts, no typing into password fields, pause on take-over. Default `careful` (asks before risky steps); `turbo` asks nothing |
 | `PINLET_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |
 | `PINLET_APP_GRANTS=off` | Secure mode without the per-app question |
 | `PINLET_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |

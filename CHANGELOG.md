@@ -11,6 +11,9 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- Settings > Appearance: light or dark look, bar glass, one colour for every AI
+  from macOS's palette, minimal text, and the click trail.
+- Return in a chat, reply or comment box asks like the Send button does.
 - The bar while an AI works has one button, the word **Pause**; paused, it
   offers **Resume** or **Cancel task**. Stop stays on ⌃⌥⎋ and in the menu.
 - The bar leads with the AI's goal ("Pip: Reply to Sam · Click ‘Send’ · step 7
