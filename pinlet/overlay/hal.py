@@ -28,6 +28,7 @@ Anything not listed here is forwarded untouched through ``__getattr__``.
 from __future__ import annotations
 
 import contextlib
+import inspect
 import os
 import re
 from collections.abc import Callable, Iterator, Sequence
@@ -217,6 +218,10 @@ class OverlayHAL:
         # per app (secure, not careful). None: the same as ``secure``.
         self._access_policy = access_policy
         self._turbo_sent: bool | None = None
+        from .pace import Pacer
+
+        self._pacer = Pacer()
+        self._pace = None
         self._confirm_clicks = confirm_clicks
         self._field: dict | None = None  # last element clicked, for "Type … into ‘Search’"
         # HAL coordinates -> global points. Identity when the HAL already
@@ -338,6 +343,31 @@ class OverlayHAL:
         except AppBlocked as exc:
             self.overlay.intent(f"Not allowed in {app_label(app) or app}", ms=2500)
             raise OverlayBlocked(str(exc), app=app, tier=exc.tier) from None
+
+    # ------------------------------------------------- locked screen, pace
+    def _before_action(self) -> None:
+        """Every action starts here: never on a locked screen, and never faster than the pace."""
+        locked = getattr(self._inner, "screen_locked", None)
+        try:
+            is_locked = bool(locked()) if locked is not None else False
+        except Exception:  # noqa: BLE001 - cannot tell: carry on
+            is_locked = False
+        if is_locked:
+            self._refuse(
+                "The screen is locked. Pinlet does nothing on a locked screen: wait for the "
+                "person to unlock it (wait_for_wake), then carry on.",
+                say="Screen locked: Pinlet waits",
+            )
+        from . import pace
+
+        self._pace = pace.current()
+        self._pacer.before(self._pace)
+
+    def _dwell(self) -> None:
+        """Human pace: let the person see the target (or read the step) before it happens."""
+        pace = getattr(self, "_pace", None)
+        if pace is not None:
+            self._pacer.dwell(pace.quiet_dwell_s if self._quiet else pace.dwell_s)
 
     # ---------------------------------------------------------- off limits
     def _own_pids(self) -> set[int]:
@@ -518,12 +548,14 @@ class OverlayHAL:
         if press is None:
             return False
         self._point_to(x, y, verb=verb, probe=True, app=app)
+        self._dwell()
         try:
             done = bool(press(x, y, self._tracked))
         except Exception:  # noqa: BLE001 - fall back to the real mouse
             done = False
         if done:
             self.overlay.click(button=button, count=click_count)
+            self._pacer.done()
         return done
 
     def _after_keys(self) -> None:
@@ -570,11 +602,13 @@ class OverlayHAL:
     @contextlib.contextmanager
     def _passing(self) -> Iterator[None]:
         """Let this action's real input past the input lock (X11 shield)."""
+        self._dwell()
         self.overlay.input_pass(True)
         try:
             yield
         finally:
             self.overlay.input_pass(False)
+            self._pacer.done()
 
     @contextlib.contextmanager
     def step(self, text: str, risk: str | None = None, confirm: bool = False) -> Iterator[None]:
@@ -587,6 +621,7 @@ class OverlayHAL:
 
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         self.overlay.intent(text, ms=60000)
         if risk:
             self.overlay.risk(risk)
@@ -609,6 +644,7 @@ class OverlayHAL:
         """Shows the move on the overlay, then moves the real pointer."""
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         self._point_to(x, y, verb="Move")
         with self._passing():
             return self._inner.mouse_move(x, y, *args, **kwargs)
@@ -619,6 +655,7 @@ class OverlayHAL:
         """Checks the app and target, shows the click, asks if risky, then clicks."""
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         verb = _VERBS.get((button, click_count), "Click")
         self._guard_point(x, y)
         app = self._window_app_at(x, y)
@@ -651,6 +688,7 @@ class OverlayHAL:
         """Checks the app, shows the drag on the overlay, then drags."""
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         self._guard_point(start_x, start_y)
         self._guard_point(end_x, end_y)
         app = self._window_app_at(start_x, start_y)
@@ -670,6 +708,7 @@ class OverlayHAL:
         """Shows the scroll on the overlay, then scrolls."""
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         self._reclaim_target()
         app = self._active_app()
         self._gate(app, "scroll")
@@ -689,6 +728,7 @@ class OverlayHAL:
 
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         self._reclaim_target()
         self._guard_keys()
         app = self._active_app()
@@ -707,6 +747,10 @@ class OverlayHAL:
         self._intent(label)
         self.overlay.state("typing")
         try:
+            if self._pace is not None and not args and "delay_ms" not in kwargs:
+                with contextlib.suppress(TypeError, ValueError):
+                    if "delay_ms" in inspect.signature(self._inner.keyboard_type).parameters:
+                        kwargs["delay_ms"] = self._pace.typing_delay_ms(text)
             with self._passing():
                 return self._inner.keyboard_type(text, *args, **kwargs)
         finally:
@@ -716,6 +760,7 @@ class OverlayHAL:
         """Shows the key on the overlay, then presses it."""
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         self._reclaim_target()
         self._guard_keys()
         app = self._active_app()
@@ -737,6 +782,7 @@ class OverlayHAL:
 
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         self._reclaim_target()
         self._guard_keys()
         app = self._active_app()
@@ -767,6 +813,7 @@ class OverlayHAL:
         """Focuses the window and points the overlay at it."""
         self._sync_turbo()
         self.overlay.checkpoint()
+        self._before_action()
         ok = self._inner.focus_window(window_id, *args, **kwargs)
         if ok:
             self._field = None

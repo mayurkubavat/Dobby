@@ -11,6 +11,8 @@ from pinlet.types import BoundingBox, WindowInfo
 
 # Tests never write to the person's activity journal (tests that need one set their own).
 os.environ["PINLET_JOURNAL"] = "0"
+# Tests run at full speed; tests of the human pace set PINLET_PACE themselves.
+os.environ["PINLET_PACE"] = "fast"
 
 
 class MockDesktopHAL(IDesktopHAL):

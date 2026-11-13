@@ -194,3 +194,57 @@ def test_other_processes_can_still_look_and_stop():
     assert control._needs_person({"op": "action", "key": "stop_all"}) is False
     assert control._needs_person({"op": "action", "key": "pause_all"}) is False
     assert control._needs_person({"op": "action", "key": "deny", "prompt_id": 1}) is False
+
+
+# ------------------------------------------------------- locked screen, pace
+def test_nothing_runs_on_a_locked_screen(monkeypatch):
+    hal, desk = _hal(monkeypatch)
+    desk.screen_locked = lambda: True
+    for act in (
+        lambda: hal.mouse_click(1500, 900),
+        lambda: hal.mouse_drag(1500, 900, 1400, 800),
+        lambda: hal.keyboard_type("hello"),
+        lambda: hal.keyboard_press_key("return"),
+        lambda: hal.keyboard_hotkey(["cmd", "s"]),
+    ):
+        with pytest.raises(OverlayBlocked) as err:
+            act()
+        assert "locked" in str(err.value)
+    assert desk.done == []
+    desk.screen_locked = lambda: False
+    hal.mouse_click(1500, 900)
+    assert desk.done == [("click", 1500, 900)]
+
+
+def test_human_pace_waits_between_steps_and_before_a_click(monkeypatch):
+    from pinlet.overlay import pace
+
+    assert pace.current({}).name == "human" and pace.current({"PINLET_PACE": "FAST"}).name == "fast"
+    assert pace.current({"PINLET_PACE": "warp"}).name == "human"
+    human = pace.PACES["human"]
+    assert human.typing_delay_ms("hi") == 45.0
+    assert (
+        human.typing_delay_ms("x" * 2000) == 8.0
+    )  # long text speeds up, never slower than 8 s in all
+    assert pace.PACES["fast"].typing_delay_ms("hi") == 12.0
+
+    now, slept = [100.0], []
+
+    def sleep(s):
+        slept.append(round(s, 3))
+        now[0] += s
+
+    hal, _desk = _hal(monkeypatch)
+    monkeypatch.setenv("PINLET_PACE", "human")
+    hal._pacer = pace.Pacer(clock=lambda: now[0], sleep=sleep)
+    hal.mouse_click(1500, 900)
+    assert slept == [0.25]  # the pointer rests on the target first
+    now[0] += 0.2
+    hal.mouse_click(1500, 900)
+    assert slept == [0.25, 0.5, 0.25]  # 0.7 s since the last step ended, then the rest
+    now[0] += 5.0
+    hal.keyboard_press_key("tab")
+    assert slept[3:] == [0.25]  # the AI was slow enough by itself: no extra gap
+    monkeypatch.setenv("PINLET_PACE", "fast")
+    hal.mouse_click(1500, 900)
+    assert len(slept) == 4

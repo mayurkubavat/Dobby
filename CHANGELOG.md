@@ -54,6 +54,11 @@ The first public release will be 0.1.0. It contains:
   AI cannot click or type into Pinlet's own card, bar, menu or windows, or a
   macOS login, Touch ID or privacy prompt; Pinlet never types into a password
   field; and it stops at a payment button ("Your turn") instead of pressing it.
+- Pinlet does nothing while the Mac's screen is locked.
+- Human pace is the default (`PINLET_PACE=human`, Settings > General > Pace):
+  at least 0.7 s between steps, the pointer rests on its target before a click
+  and text is typed at a readable speed, so a person can follow and press
+  Stop. `PINLET_PACE=fast` is the old behaviour.
 - Only Pinlet.app can Allow, Resume or "tell" on the control socket: the engine
   checks the connecting process against the app's own process id. The
   `pinlet://resume`, `resume-all` and `toggle` links are gone (Pause and Stop

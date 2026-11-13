@@ -498,6 +498,23 @@ class MacHAL(IDesktopHAL):
         opts = scope | _kCGWindowListExcludeDesktopElements
         return list(self.Q.CGWindowListCopyWindowInfo(opts, _kCGNullWindowID) or [])
 
+    def screen_locked(self) -> bool:
+        """True while the Mac is locked or this login is not the one on screen.
+
+        Pinlet does nothing then (``pinlet.overlay.hal``). False when macOS
+        will not say.
+        """
+        try:
+            info = self.Q.CGSessionCopyCurrentDictionary()
+        except Exception:  # noqa: BLE001
+            return False
+        if not info:
+            return False
+        if info.get("CGSSessionScreenIsLocked"):
+            return True
+        on_console = info.get("kCGSSessionOnConsoleKey")
+        return on_console is not None and not on_console
+
     def window_records(self) -> list[dict[str, Any]]:
         """Every on-screen window on every layer, front to back, as Quartz records.
 

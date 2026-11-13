@@ -21,6 +21,8 @@ final class AppSettings: ObservableObject {
     @Published var restingBar: Bool = false { didSet { store("restingBar", restingBar) } }  // keep the bar while resting
     @Published var background: Bool = false { didSet { store("background", background) } }  // work in one window, leave the screen alone
     @Published var borrowWhenIdle: Bool = false { didSet { store("borrowWhenIdle", borrowWhenIdle) } }
+    /// "" (human: steps at a speed a person can follow and stop) or "fast".
+    @Published var pace: String = "" { didSet { store("pace", pace) } }
 
     /// The values as `pinlet serve` reads them. Only what was changed here.
     func engineEnvironment() -> [String: String] {
@@ -32,6 +34,7 @@ final class AppSettings: ObservableObject {
         if hideIdleMinutes >= 0 { env["PINLET_MENU_HIDE_IDLE"] = String(hideIdleMinutes * 60) }
         if !appPrompts { env["PINLET_APP_PROMPTS"] = "0" }
         if restingBar { env["PINLET_OVERLAY_PILL"] = "always" }
+        if !pace.isEmpty { env["PINLET_PACE"] = pace }
         if background {
             env["PINLET_BACKGROUND"] = "1"
             if borrowWhenIdle { env["PINLET_BACKGROUND_POINTER"] = "idle" }
@@ -52,6 +55,7 @@ final class AppSettings: ObservableObject {
         restingBar = defaults.object(forKey: "restingBar") as? Bool ?? false
         background = defaults.object(forKey: "background") as? Bool ?? false
         borrowWhenIdle = defaults.object(forKey: "borrowWhenIdle") as? Bool ?? false
+        pace = defaults.string(forKey: "pace") ?? ""
     }
 
     /// The look of Pinlet's own windows (the Allow/Deny card): dark unless the
@@ -139,6 +143,16 @@ struct SettingsView: View {
                         .onChange(of: settings.restingBar) { _ in changed = true }
                 } footer: {
                     SettingsFooter("Default glass is clear at rest and regular with text. With the bar off at rest, wake Pinlet from the menu or with ⌃⌥Space.")
+                }
+                Section {
+                    Picker("Pace", selection: $settings.pace) {
+                        Text("Human (default)").tag("")
+                        Text("Fast").tag("fast")
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: settings.pace) { _ in changed = true }
+                } footer: {
+                    SettingsFooter("Human: each step waits a moment, the pointer rests on its target before a click and text is typed at a readable speed, so you can follow along and press Stop (⌃⌥⎋) in time. Pinlet never acts while the screen is locked.")
                 }
                 Section {
                     Toggle("Work in the background", isOn: $settings.background)
