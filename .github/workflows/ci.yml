@@ -59,6 +59,16 @@ jobs:
           PINLET_PERF_SCALE: "3"
         run: python -m pytest -q
 
+  app:
+    name: Mac app (swift build)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Pinlet.app's sources
+        working-directory: apps/macos
+        run: swift build
+
   audit:
     name: dependency audit
     runs-on: ubuntu-latest

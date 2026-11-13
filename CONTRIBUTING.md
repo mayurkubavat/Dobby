@@ -63,6 +63,40 @@ no display.
 - Don't add a network call that sends screen content off the machine without
   an explicit opt-in.
 
+## Layers
+
+The Python package is layered. A module imports, at the top of the file, only
+from its own area and the areas below it. `tests/test_layering.py` checks this
+and lists the allowed imports for every area.
+
+| Layer | Areas | What lives there |
+| --- | --- | --- |
+| Entry points | `server.py`, `cli.py`, `doctor.py`, `agent_setup.py`, `adk/` | The MCP tools and the `pinlet` commands. Nothing imports these. |
+| Engine | `agent_loop/` | Find, act, verify; the action cache and trajectories. |
+| Coordination | `hub/`, `control/`, `overlay/` | The shared Pinlet, who may act, and what the person sees. |
+| Seeing | `perception/`, `vdom/`, `screen_state/`, `crystallization/`, `gemma/`, `plugins/` | Reading the screen and local models. |
+| Desktop | `hal/` | Capture, input and windows for each platform. |
+| Leaves | `types.py`, `config.py`, `envflags.py`, `imagehash.py`, `skills.py`, `runtime.py`, `overlay/text.py`, `overlay/palette.py` | Stdlib (plus Pillow and numpy where named) only. |
+
+Some code has to reach sideways or upwards, for example `control` telling the
+overlay who holds the desktop, or the HAL factory wrapping a HAL with the
+overlay. Those are written as an import inside the function that needs it,
+with a comment saying why. Do the same for a new one rather than adding a
+top-level import, and keep it rare: every such import is a place where two
+areas cannot be understood apart.
+
+Three things must stay where they are, because tools and tests find them by
+name:
+
+- Every MCP tool and `_TOOL_DOMAINS` stay in `pinlet/server.py`, in order.
+  `scripts/build_skill_refs.py` reads that file to write the skill references.
+  Plumbing that is not a tool goes in `pinlet/server_support.py`.
+- `pinlet/overlay/__init__.py` and `pinlet/control/__init__.py` hold real code
+  (`wrap_hal`, `control_root`) that the rest of the package and the tests
+  reach through the package name.
+- `pinlet/overlay/topbar.py` exports the icon functions that now live in
+  `topbar_icons.py`; both helpers call them as `topbar.render_icon`.
+
 ## Hit every surface
 
 Pinlet shows the same things in several places. When a change adds or alters
