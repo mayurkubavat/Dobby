@@ -185,6 +185,20 @@ def test_capture_places_a_menu_that_hangs_below_the_window():
     assert shot.getpixel((300, 400)) == shot.getpixel((5, 5))  # beside the menu: backdrop
 
 
+def test_see_through_menu_edges_do_not_paint_black_over_the_window():
+    menu = _win(9, "TextEdit", "", MINE, 150, 80, 120, 320, layer=101)  # hangs 50 pt below
+    hal, _, _ = _hal(windows=[menu, *_windows()])
+    both = Image.new("RGB", (800, 700), "black")
+    both.paste(Image.new("RGB", (800, 600), "white"), (0, 0))
+    both.paste(Image.new("RGB", (240, 20), "black"), (100, 60))  # the menu's clear top edge
+    both.paste(Image.new("RGB", (240, 620), "blue"), (100, 80))
+    hal._capture_window = lambda wid: both
+    hal.focus_window("2")
+    shot = hal.capture_screen()
+    assert shot.getpixel((200, 200)) == (0, 0, 255)  # the menu
+    assert shot.getpixel((200, 82)) != (0, 0, 0)  # its clear edge leaves no black strip
+
+
 def test_capture_of_an_unexpected_size_is_shown_as_the_window():
     hal, _, _ = _hal()
     hal._capture_window = lambda wid: Image.new("RGB", (613, 377), "white")
@@ -222,7 +236,7 @@ def test_typing_and_keys_go_to_the_targets_app_only():
     hal.focus_window("2")
     hal.keyboard_type("hi")
     hal.keyboard_press_key("enter")
-    hal.keyboard_hotkey(["cmd", "s"])
+    hal.keyboard_hotkey(["shift", "tab"])
     assert q.posted == []  # nothing into the shared input stream
     assert {pid for pid, _ in q.to_pid} == {MINE}
     assert [e["unicode"] for _, e in q.to_pid if "unicode" in e] == ["h", "h", "i", "i"]
@@ -412,8 +426,35 @@ def test_shortcut_without_an_enabled_menu_item_is_sent_as_keys_to_the_app():
     ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar(enabled=False)}})
     hal, q, _ = _hal(ax=ax)
     hal.focus_window("2")
-    hal.keyboard_hotkey(["cmd", "a"])  # disabled item
-    hal.keyboard_hotkey(["cmd", "k"])  # no such item
-    hal.keyboard_hotkey(["shift", "tab"])  # not a Cmd shortcut
-    assert ax.performed == []
+    hal.keyboard_hotkey(["shift", "tab"])  # not a Cmd shortcut: plain keys reach the app
     assert q.posted == [] and {pid for pid, _ in q.to_pid} == {MINE}
+    for keys in (["cmd", "a"], ["cmd", "k"]):  # a disabled item, and no such item
+        with pytest.raises(NeedsPointer, match="not in front"):
+            hal.keyboard_hotkey(keys)
+    assert ax.performed == []
+
+
+def test_cmd_a_selects_the_focused_fields_text_when_the_menu_item_is_disabled():
+    field = _el("AXTextArea", AXNumberOfCharacters=11, settable=("AXSelectedTextRange",))
+    ax = AX(
+        {MINE: {"pid": MINE, "AXMenuBar": _menu_bar(enabled=False), "AXFocusedUIElement": field}}
+    )
+    ax.kAXValueCFRangeType = 4
+    ax.AXValueCreate = lambda kind, value: ("range", *value)
+    hal, q, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    hal.keyboard_hotkey(["cmd", "a"])
+    assert field["AXSelectedTextRange"] == ("range", 0, 11)
+    assert q.posted == [] and q.to_pid == []
+
+
+def test_idle_mode_sends_a_cmd_shortcut_with_the_app_in_front(monkeypatch):
+    monkeypatch.setenv("PINLET_BACKGROUND_POINTER", "idle")
+    hal, q, _ = _hal()
+    for w in q.windows:
+        w["kCGWindowIsOnscreen"] = True
+    hal.focus_window("2")
+    q.idle = 10.0
+    hal.keyboard_hotkey(["cmd", "k"])
+    assert [e["code"] for e in q.posted if e["kind"] == "key" and e["down"]] == [55, 40]
+    assert hal._appkit.activated == [MINE, THEIRS]

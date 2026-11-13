@@ -30,7 +30,13 @@ from PIL import Image
 from typing_extensions import override
 
 from pinlet.hal import target
-from pinlet.hal.background import ax_action_at, ax_click_at, ax_menu_shortcut, ax_scroll_at
+from pinlet.hal.background import (
+    ax_action_at,
+    ax_click_at,
+    ax_menu_shortcut,
+    ax_scroll_at,
+    ax_select_all,
+)
 from pinlet.hal.macos import MacHAL, _load_ax, _screencapture
 from pinlet.types import WindowInfo
 
@@ -272,7 +278,12 @@ class BackgroundMacHAL(MacHAL):
                 size = (max(1, b.width), max(1, b.height))
                 if piece.size != size:
                     piece = piece.resize(size, Image.LANCZOS)
-                canvas.paste(piece, (b.x, b.y))
+                if b is win.bbox:
+                    canvas.paste(piece, (b.x, b.y))
+                else:
+                    # A menu's rectangle has see-through edges, captured as pure black.
+                    solid = piece.convert("L").point(lambda v: 255 if v else 0)
+                    canvas.paste(piece, (b.x, b.y), solid)
         if region:
             x, y, w, h = (int(v) for v in region)
             return canvas.crop((x, y, x + max(1, w), y + max(1, h)))
@@ -358,13 +369,23 @@ class BackgroundMacHAL(MacHAL):
         if self._borrowing:
             return super().keyboard_hotkey(keys)
         chosen = self._need_target()
-        # An app that is not in front ignores Cmd shortcuts sent as keys, so
-        # pick the menu item that has the shortcut instead.
-        if ax_menu_shortcut(self._ax_api(), chosen.pid, keys):
+        names = [str(k).lower().strip() for k in keys]
+        if not any(k in ("cmd", "command", "super", "meta", "win") for k in names):
+            with self._to_app(chosen.pid):  # Tab, arrows, Ctrl chords: plain keys reach the app
+                return super().keyboard_hotkey(keys)
+        # An app that is not in front ignores Cmd shortcuts sent as keys and
+        # disables most of its menu, so do what the shortcut means another way.
+        ax = self._ax_api()
+        done = ax_menu_shortcut(ax, chosen.pid, keys)
+        if not done and sorted(names) == ["a", "cmd"]:
+            done = ax_select_all(ax, chosen.pid)
+        if done:
             self._cooldown()
             return None
-        with self._to_app(chosen.pid):
-            return super().keyboard_hotkey(keys)
+        return self._borrow(
+            f"the shortcut {'+'.join(keys)} (apps ignore Cmd shortcuts while they are not in front)",
+            lambda: MacHAL.keyboard_hotkey(self, keys),
+        )
 
     @override
     def release_modifiers(self) -> None:
@@ -387,10 +408,10 @@ class BackgroundMacHAL(MacHAL):
         chosen = self._need_target()
         if target.pointer_mode() != "idle":
             raise NeedsPointer(
-                f"Background mode cannot do {what}: it needs the real pointer, and the person "
-                "is using it. Try another way (a keyboard shortcut, a menu item or button "
-                "found with get_accessibility_tree or find_element), or tell the person this "
-                "step needs them."
+                f"Background mode cannot do {what}: it needs the window in front with the "
+                "real pointer or keyboard, and the person is using them. Try another way (a "
+                "button, field or menu item found with get_accessibility_tree or "
+                "find_element), or tell the person this step needs them."
             )
         waited = 0.0
         while self.person_idle_secs() < _IDLE_SECS:

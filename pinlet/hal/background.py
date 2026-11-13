@@ -306,3 +306,30 @@ def ax_menu_shortcut(ax: Any, pid: int, keys: list[str]) -> bool:
     if item is None or _attr(ax, item, "AXEnabled") is False:
         return False
     return _perform(ax, item, "AXPress")
+
+
+def ax_select_all(ax: Any, pid: int) -> bool:
+    """Selects all the text in the field of app ``pid`` that has the keyboard.
+
+    What Cmd+A does in a text field, for an app that is not in front (its
+    Select All menu item is disabled then). False when no text field has the
+    keyboard or the selection could not be set.
+    """
+    try:
+        app = ax.AXUIElementCreateApplication(int(pid))
+    except Exception:  # noqa: BLE001
+        return False
+    el = _attr(ax, app, "AXFocusedUIElement")
+    if el is None or _attr(ax, el, "AXRole") not in EDITABLE:
+        return False
+    count = _number(_attr(ax, el, "AXNumberOfCharacters"))
+    if count is None:
+        value = _attr(ax, el, "AXValue")
+        if not isinstance(value, str):
+            return False
+        count = len(value.encode("utf-16-le")) // 2
+    try:
+        whole = ax.AXValueCreate(ax.kAXValueCFRangeType, (0, int(count)))
+    except Exception:  # noqa: BLE001
+        return False
+    return whole is not None and _set(ax, el, "AXSelectedTextRange", whole)

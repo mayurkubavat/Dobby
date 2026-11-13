@@ -225,8 +225,9 @@ the screen. First call list_windows (it lists windows on every Desktop), then
 focus_window(window_id) for the one window you will work in. Nothing comes to the front. From then
 on screenshots show only that window (the rest is blank), clicks press, focus or select through
 accessibility, and typing and keys go to that window's app. Prefer buttons, fields, menu items and
-keyboard shortcuts. Hovering does nothing, and drags or clicks on a canvas may be refused because
-they need the real pointer: try another way, or tell the person the step needs them. After a
+plain keys (Tab, Return, arrows). Hovering does nothing. Drags, clicks on a canvas and most Cmd
+shortcuts may be refused because they need the window in front: try another way (Cmd+A in a text
+field does work), or tell the person the step needs them. After a
 click or key, check that it took effect before going on. To work in another window, call
 focus_window again. If you need an app that is not open, ask the person to open it.
 """
