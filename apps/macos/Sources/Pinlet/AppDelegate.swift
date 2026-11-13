@@ -84,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 continue
             }
             switch PinletURL.window(for: url) {  // pinlet://settings, pinlet://welcome, pinlet://activity
-            case "settings": settingsWindow.show()
+            case "settings": settingsWindow.show(tab: PinletURL.settingsTab(for: url))
             case "welcome": welcome.show()
             case "activity": activity.show()
             default: break

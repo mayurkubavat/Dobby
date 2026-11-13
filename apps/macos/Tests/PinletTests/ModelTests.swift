@@ -38,6 +38,10 @@ import Testing
     #expect(PinletURL.action(for: URL(string: "pinlet://stop?pid=7")!)?.pid == 7)
     #expect(PinletURL.action(for: URL(string: "pinlet://stop")!) == nil)
     #expect(PinletURL.action(for: URL(string: "https://pause-all")!) == nil)
+    #expect(PinletURL.window(for: URL(string: "pinlet://settings/permissions")!) == "settings")
+    #expect(PinletURL.settingsTab(for: URL(string: "pinlet://settings/permissions")!) == "permissions")
+    #expect(PinletURL.settingsTab(for: URL(string: "pinlet://settings")!) == nil)
+    #expect(PinletURL.settingsTab(for: URL(string: "pinlet://activity/permissions")!) == nil)
 }
 
 @Test func promptsDecodePythonJSON() throws {

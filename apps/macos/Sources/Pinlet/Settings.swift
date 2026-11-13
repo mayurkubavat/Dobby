@@ -19,6 +19,11 @@ final class AppSettings: ObservableObject {
     @Published var hideIdleMinutes: Int = -1 { didSet { store("hideIdleMinutes", hideIdleMinutes) } }  // -1 = default
     @Published var appPrompts: Bool = true { didSet { store("appPrompts", appPrompts) } }
     @Published var restingBar: Bool = false { didSet { store("restingBar", restingBar) } }  // keep the bar while resting
+    /// Let screenshots and screen recordings show the bar (for demos and for checking its look).
+    @Published var barInRecordings: Bool = false { didSet { store("barInRecordings", barInRecordings) } }
+    /// The Settings tab in front ("general", "appearance", "permissions"…). Not saved.
+    @Published var tab: String = "general"
+    static let tabs = ["general", "appearance", "notifications", "menu", "ai-tools", "permissions", "diagnostics"]
     @Published var background: Bool = false { didSet { store("background", background) } }  // work in one window, leave the screen alone
     @Published var borrowWhenIdle: Bool = false { didSet { store("borrowWhenIdle", borrowWhenIdle) } }
     /// "" (human: steps at a speed a person can follow and stop) or "fast".
@@ -40,6 +45,7 @@ final class AppSettings: ObservableObject {
         if hideIdleMinutes >= 0 { env["PINLET_MENU_HIDE_IDLE"] = String(hideIdleMinutes * 60) }
         if !appPrompts { env["PINLET_APP_PROMPTS"] = "0" }
         if restingBar { env["PINLET_OVERLAY_PILL"] = "always" }
+        if barInRecordings { env["PINLET_OVERLAY_PILL_RECORD"] = "1" }
         if !pace.isEmpty { env["PINLET_PACE"] = pace }
         if !defaultLevel.isEmpty { env["PINLET_DEFAULT_MODE"] = defaultLevel }
         if !color.isEmpty { env["PINLET_OVERLAY_COLOR"] = color }
@@ -63,6 +69,7 @@ final class AppSettings: ObservableObject {
         hideIdleMinutes = defaults.object(forKey: "hideIdleMinutes") as? Int ?? -1
         appPrompts = defaults.object(forKey: "appPrompts") as? Bool ?? true
         restingBar = defaults.object(forKey: "restingBar") as? Bool ?? false
+        barInRecordings = defaults.object(forKey: "barInRecordings") as? Bool ?? false
         background = defaults.object(forKey: "background") as? Bool ?? false
         borrowWhenIdle = defaults.object(forKey: "borrowWhenIdle") as? Bool ?? false
         pace = defaults.string(forKey: "pace") ?? ""
@@ -111,8 +118,10 @@ final class SettingsWindowController {
     var restartEngine: () -> Void = {}
     private var window: NSWindow?
 
-    func show() {
+    /// `tab`: one of `AppSettings.tabs` to bring to the front (`pinlet://settings/permissions`).
+    func show(tab: String? = nil) {
         AppSettings.shared.load()
+        if let tab, AppSettings.tabs.contains(tab) { AppSettings.shared.tab = tab }
         if window == nil {
             let view = SettingsView(settings: AppSettings.shared, restart: { [weak self] in self?.restartEngine() })
             let w = NSWindow(contentViewController: NSHostingController(rootView: view))
@@ -139,7 +148,7 @@ struct SettingsView: View {
     @StateObject private var diagnostics = DiagnosticsModel()
 
     var body: some View {
-        TabView {
+        TabView(selection: $settings.tab) {
             Form {
                 Section {
                     Toggle("Open at login", isOn: $loginItem)
@@ -174,6 +183,7 @@ struct SettingsView: View {
             }
             .modifier(SettingsForm())
             .tabItem { Label("General", systemImage: "gearshape") }
+            .tag("general")
 
             Form {
                 Section {
@@ -193,6 +203,8 @@ struct SettingsView: View {
                     .onChange(of: settings.glass) { _ in changed = true }
                     Toggle("Show the bar while Pinlet rests", isOn: $settings.restingBar)
                         .onChange(of: settings.restingBar) { _ in changed = true }
+                    Toggle("Show the bar in screenshots and recordings", isOn: $settings.barInRecordings)
+                        .onChange(of: settings.barInRecordings) { _ in changed = true }
                 } footer: {
                     SettingsFooter("Default glass is clear at rest and regular with text. With the bar off at rest, wake Pinlet from the menu or with ⌃⌥Space.")
                 }
@@ -219,6 +231,7 @@ struct SettingsView: View {
             }
             .modifier(SettingsForm())
             .tabItem { Label("Appearance", systemImage: "paintbrush") }
+            .tag("appearance")
 
             Form {
                 Section {
@@ -246,6 +259,7 @@ struct SettingsView: View {
             }
             .modifier(SettingsForm())
             .tabItem { Label("Notifications", systemImage: "bell.badge") }
+            .tag("notifications")
 
             Form {
                 Section {
@@ -263,6 +277,7 @@ struct SettingsView: View {
             }
             .modifier(SettingsForm())
             .tabItem { Label("Menu", systemImage: "list.bullet") }
+            .tag("menu")
 
             Form {
                 Section {
@@ -283,12 +298,15 @@ struct SettingsView: View {
             }
             .modifier(SettingsForm())
             .tabItem { Label("AI Tools", systemImage: "sparkles") }
+            .tag("ai-tools")
 
             PermissionsTab(model: PermissionsModel.shared, settings: settings) { changed = true }
                 .tabItem { Label("Permissions", systemImage: "hand.raised") }
+            .tag("permissions")
 
             DiagnosticsView(model: diagnostics)
                 .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
+            .tag("diagnostics")
         }
         .frame(width: 540)
         .safeAreaInset(edge: .bottom) {

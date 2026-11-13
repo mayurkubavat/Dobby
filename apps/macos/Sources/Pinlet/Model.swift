@@ -192,7 +192,15 @@ enum PinletURL {
     static func window(for url: URL) -> String? {
         guard url.scheme?.lowercased() == "pinlet" else { return nil }
         let name = (url.host ?? url.path).trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+        if name.hasPrefix("settings/") { return "settings" }
         return ["settings", "welcome", "activity"].contains(name) ? name : nil
+    }
+
+    /// `pinlet://settings/permissions`: the Settings tab to show. Opening a tab changes nothing.
+    static func settingsTab(for url: URL) -> String? {
+        guard window(for: url) == "settings" else { return nil }
+        let tab = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+        return tab.isEmpty ? nil : tab
     }
 }
 

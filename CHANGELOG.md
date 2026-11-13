@@ -11,6 +11,9 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- `pinlet://settings/permissions` (or `/appearance`, `/ai-tools`…) opens
+  Settings on that tab, and Settings > Appearance can let screenshots and
+  recordings show the bar.
 - Settings > Appearance: light or dark look, bar glass, one colour for every AI
   from macOS's palette, minimal text, and the click trail.
 - Return in a chat, reply or comment box asks like the Send button does.
