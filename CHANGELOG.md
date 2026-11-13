@@ -20,7 +20,9 @@ The first public release will be 0.1.0. It contains:
 - Background mode with apps that have several windows: the accessibility tree
   covers only the agent's window, a click that the app would give to another of
   its windows is refused, and picking a window asks Chromium and Electron apps
-  for their page elements.
+  for their page elements. Windows are told apart by the window server's id, so
+  two windows of one app at the same place are not mixed, and Cmd+A works in
+  web and Electron text fields.
 - Background mode on macOS (`PINLET_BACKGROUND=1`): the AI works in one window
   without taking the screen. `focus_window` picks the window without bringing
   it forward, screenshots show that window alone (even when it is covered or

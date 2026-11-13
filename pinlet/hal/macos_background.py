@@ -38,6 +38,7 @@ from pinlet.hal.background import (
     ax_select_all,
     ax_window_id,
     enable_web_content,
+    focused_element,
     focused_field,
     window_at,
     window_frame,
@@ -466,9 +467,10 @@ class BackgroundMacHAL(MacHAL):
         # Select All first by the field itself: a menu item acts on whichever of the
         # app's windows is its main one, which may be the person's.
         done = select_all and ax_select_all(ax, chosen.pid)
-        if not done and select_all and focused_field(ax, chosen.pid) is not None:
-            # A web page's field does not take a selection by accessibility. The text
-            # system's own keys do the same in one paragraph: line start, then
+        if not done and select_all and self._text_keys_select(ax, chosen.pid):
+            # A web page's field does not take a selection by accessibility, and an
+            # Electron app names no focused element while it is not in front. The
+            # text system's own keys do the same in one paragraph: line start, then
             # select to line end.
             with self._to_app(chosen.pid):
                 super().keyboard_hotkey(["ctrl", "a"])
@@ -483,6 +485,11 @@ class BackgroundMacHAL(MacHAL):
             f"the shortcut {'+'.join(keys)} (apps ignore Cmd shortcuts while they are not in front)",
             lambda: MacHAL.keyboard_hotkey(self, keys),
         )
+
+    @staticmethod
+    def _text_keys_select(ax: Any, pid: int) -> bool:
+        """Whether Select All should be typed as text keys: a field, or no focus named."""
+        return focused_element(ax, pid) is None or focused_field(ax, pid) is not None
 
     @override
     def release_modifiers(self) -> None:

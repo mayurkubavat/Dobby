@@ -424,7 +424,8 @@ def _menu_bar(enabled=True):
 
 
 def test_cmd_shortcut_picks_the_menu_item_instead_of_sending_keys():
-    ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar()}})
+    table = _el("AXTable")
+    ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar(), "AXFocusedUIElement": table}})
     hal, q, _ = _hal(ax=ax)
     hal.focus_window("2")
     hal.keyboard_hotkey(["cmd", "a"])
@@ -435,7 +436,10 @@ def test_cmd_shortcut_picks_the_menu_item_instead_of_sending_keys():
 
 
 def test_shortcut_without_an_enabled_menu_item_is_sent_as_keys_to_the_app():
-    ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar(enabled=False)}})
+    button = _el("AXButton", AXTitle="OK")  # the keyboard is on something that is not text
+    ax = AX(
+        {MINE: {"pid": MINE, "AXMenuBar": _menu_bar(enabled=False), "AXFocusedUIElement": button}}
+    )
     hal, q, _ = _hal(ax=ax)
     hal.focus_window("2")
     hal.keyboard_hotkey(["shift", "tab"])  # not a Cmd shortcut: plain keys reach the app
@@ -612,3 +616,13 @@ def test_cmd_a_in_a_web_field_uses_the_text_keys_not_the_menu():
     assert q.posted == [] and {pid for pid, _ in q.to_pid} == {MINE}
     downs = [e["code"] for _, e in q.to_pid if e["kind"] == "key" and e["down"]]
     assert downs.count(0) == 1 and downs.count(14) == 1  # A, then E
+
+
+def test_cmd_a_with_no_focused_element_named_uses_the_text_keys():
+    ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar()}})  # Electron in the background
+    hal, q, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    hal.keyboard_hotkey(["cmd", "a"])
+    assert ax.performed == [] and q.posted == []
+    downs = [e["code"] for _, e in q.to_pid if e["kind"] == "key" and e["down"]]
+    assert downs.count(0) == 1 and downs.count(14) == 1

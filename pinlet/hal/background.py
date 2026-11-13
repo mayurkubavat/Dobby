@@ -334,13 +334,22 @@ def ax_select_all(ax: Any, pid: int) -> bool:
     return whole is not None and _set(ax, el, "AXSelectedTextRange", whole)
 
 
-def focused_field(ax: Any, pid: int) -> Any:
-    """The text field of app ``pid`` that has the keyboard, or None."""
+def focused_element(ax: Any, pid: int) -> Any:
+    """The element of app ``pid`` that has the keyboard, or None.
+
+    Electron apps report none while they are not in front, even with the
+    caret in a field.
+    """
     try:
         app = ax.AXUIElementCreateApplication(int(pid))
     except Exception:  # noqa: BLE001
         return None
-    el = _attr(ax, app, "AXFocusedUIElement")
+    return _attr(ax, app, "AXFocusedUIElement")
+
+
+def focused_field(ax: Any, pid: int) -> Any:
+    """The text field of app ``pid`` that has the keyboard, or None."""
+    el = focused_element(ax, pid)
     if el is None or _attr(ax, el, "AXRole") not in EDITABLE:
         return None
     return el
