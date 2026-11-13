@@ -20,6 +20,7 @@ from typing import Any
 
 from pinlet.config import CONFIG
 from pinlet.hal import target
+from pinlet.hal.background import ax_window_id
 from pinlet.perception.atspi import INTERACTABLE_ROLES
 from pinlet.types import BoundingBox, UIElement
 
@@ -246,6 +247,7 @@ class AXInspector:
         deadline = time.monotonic() + self.max_seconds
         # Background mode: the agent's own window only (an app's other windows may be
         # the person's), and no menu bar, which belongs to the app in front.
+        chosen = target.get()
         own = target.current_frame()
         if CONFIG.ax_include_menu_bar and apps and target.get() is None:
             # Top-level menu bar items of the first (frontmost) app only: depth 2 stops
@@ -265,8 +267,11 @@ class AXInspector:
                 )
         for root in apps:
             windows = list(self._attr(root, "AXWindows") or [])
-            if own is not None:
-                mine = [w for w in windows if target.same_frame(self._frame(w), own)]
+            if chosen is not None:
+                # By the window's own id; by its frame when the id cannot be read.
+                mine = [w for w in windows if ax_window_id(w) == chosen.window_id]
+                if not mine and own is not None:
+                    mine = [w for w in windows if target.same_frame(self._frame(w), own)]
                 windows = mine or windows
             for win in windows:
                 self._walk(

@@ -313,14 +313,11 @@ def ax_select_all(ax: Any, pid: int) -> bool:
 
     What Cmd+A does in a text field, for an app that is not in front (its
     Select All menu item is disabled then). False when no text field has the
-    keyboard or the selection could not be set.
+    keyboard, the field does not say how long its text is (web pages often do
+    not), or the selection did not take.
     """
-    try:
-        app = ax.AXUIElementCreateApplication(int(pid))
-    except Exception:  # noqa: BLE001
-        return False
-    el = _attr(ax, app, "AXFocusedUIElement")
-    if el is None or _attr(ax, el, "AXRole") not in EDITABLE:
+    el = focused_field(ax, pid)
+    if el is None:
         return False
     count = _number(_attr(ax, el, "AXNumberOfCharacters"))
     if count is None:
@@ -328,6 +325,8 @@ def ax_select_all(ax: Any, pid: int) -> bool:
         if not isinstance(value, str):
             return False
         count = len(value.encode("utf-16-le")) // 2
+    if int(count) <= 0:
+        return False  # empty, or a web field that hides its text: the caller uses keys
     try:
         whole = ax.AXValueCreate(ax.kAXValueCFRangeType, (0, int(count)))
     except Exception:  # noqa: BLE001
@@ -335,16 +334,69 @@ def ax_select_all(ax: Any, pid: int) -> bool:
     return whole is not None and _set(ax, el, "AXSelectedTextRange", whole)
 
 
-def window_frame_at(ax: Any, pid: int, x: float, y: float) -> tuple[int, int, int, int] | None:
-    """The frame of the app window that owns the element at (x, y), or None when unknown.
+def focused_field(ax: Any, pid: int) -> Any:
+    """The text field of app ``pid`` that has the keyboard, or None."""
+    try:
+        app = ax.AXUIElementCreateApplication(int(pid))
+    except Exception:  # noqa: BLE001
+        return None
+    el = _attr(ax, app, "AXFocusedUIElement")
+    if el is None or _attr(ax, el, "AXRole") not in EDITABLE:
+        return None
+    return el
 
-    An app answers a hit test for whichever of its windows is on top at that
-    point, which may not be the one the agent works in.
+
+def _native_window_id(win: Any) -> int | None:
+    """The window server's id for an accessibility window element, or None.
+
+    Accessibility has no public attribute for it; the system's own
+    ``_AXUIElementGetWindow`` gives it. Without it windows are told apart by
+    their frame, which fails for two windows of one app at the same place.
     """
+    global _get_window
+    if _get_window is False:
+        return None
+    try:
+        import ctypes
+
+        import objc  # type: ignore
+
+        if _get_window is None:
+            lib = ctypes.cdll.LoadLibrary(
+                "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices"
+            )
+            fn = lib._AXUIElementGetWindow
+            fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+            fn.restype = ctypes.c_int32
+            _get_window = fn
+        out = ctypes.c_uint32(0)
+        err = _get_window(objc.pyobjc_id(win), ctypes.byref(out))
+        return int(out.value) if err == 0 and out.value else None
+    except Exception:  # noqa: BLE001 - not a Mac, or the call is gone: use frames
+        if _get_window is None:
+            _get_window = False
+        return None
+
+
+_get_window: Any = None
+
+
+def ax_window_id(win: Any) -> str | None:
+    """The id ``list_windows`` uses for an accessibility window element, or None when unknown."""
+    wid = _native_window_id(win)
+    return str(wid) if wid else None
+
+
+def window_at(ax: Any, pid: int, x: float, y: float) -> Any:
+    """The window of app ``pid`` that owns the element at (x, y), or None when unknown."""
     el = element_at(ax, pid, x, y)
     if el is None:
         return None
-    win = el if _attr(ax, el, "AXRole") == "AXWindow" else _attr(ax, el, "AXWindow")
+    return el if _attr(ax, el, "AXRole") == "AXWindow" else _attr(ax, el, "AXWindow")
+
+
+def window_frame(ax: Any, win: Any) -> tuple[int, int, int, int] | None:
+    """An accessibility window's frame (x, y, width, height), or None when unknown."""
     if win is None:
         return None
     try:
@@ -355,6 +407,15 @@ def window_frame_at(ax: Any, pid: int, x: float, y: float) -> tuple[int, int, in
     if not (ok1 and ok2):
         return None
     return int(p.x), int(p.y), int(s.width), int(s.height)
+
+
+def window_frame_at(ax: Any, pid: int, x: float, y: float) -> tuple[int, int, int, int] | None:
+    """The frame of the app window that owns the element at (x, y), or None when unknown.
+
+    An app answers a hit test for whichever of its windows is on top at that
+    point, which may not be the one the agent works in.
+    """
+    return window_frame(ax, window_at(ax, pid, x, y))
 
 
 def enable_web_content(ax: Any, pid: int, browser: bool = False) -> bool:

@@ -583,3 +583,32 @@ def test_a_chromium_browser_gets_the_screen_reader_switch_and_other_apps_do_not(
     assert "AXEnhancedUserInterface" not in chrome
     assert enable_web_content(ax, MINE, browser=True) is True
     assert chrome["AXEnhancedUserInterface"] is True
+
+
+def test_two_windows_at_the_same_place_are_told_apart_by_their_id(monkeypatch):
+    theirs = _framed_window((100, 50, 400, 300), "Their project")  # same frame as ours
+    theirs["wid"] = 9
+    own = _framed_window((100, 50, 400, 300), "Draft")
+    own["wid"] = 2
+    monkeypatch.setattr("pinlet.hal.background._native_window_id", lambda win: win.get("wid"))
+    buy = _el("AXLink", AXTitle="Open", AXEnabled=True, actions=["AXPress"], AXWindow=theirs)
+    save = _el("AXButton", AXTitle="Save", AXEnabled=True, actions=["AXPress"], AXWindow=own)
+    ax = AX({MINE: {"pid": MINE}}, at={(MINE, 120, 80): buy, (MINE, 200, 100): save})
+    hal, q, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    with pytest.raises(NeedsPointer, match="another window"):
+        hal.mouse_click(120, 80)
+    hal.mouse_click(200, 100)
+    assert ax.performed == [("Save", "AXPress")] and q.posted == []
+
+
+def test_cmd_a_in_a_web_field_uses_the_text_keys_not_the_menu():
+    field = _el("AXComboBox")  # a web page's field: no length, no settable selection
+    ax = AX({MINE: {"pid": MINE, "AXMenuBar": _menu_bar(), "AXFocusedUIElement": field}})
+    hal, q, _ = _hal(ax=ax)
+    hal.focus_window("2")
+    hal.keyboard_hotkey(["cmd", "a"])
+    assert ax.performed == []  # the menu item would act on the app's main window
+    assert q.posted == [] and {pid for pid, _ in q.to_pid} == {MINE}
+    downs = [e["code"] for _, e in q.to_pid if e["kind"] == "key" and e["down"]]
+    assert downs.count(0) == 1 and downs.count(14) == 1  # A, then E

@@ -36,8 +36,11 @@ from pinlet.hal.background import (
     ax_menu_shortcut,
     ax_scroll_at,
     ax_select_all,
+    ax_window_id,
+    focused_field,
     enable_web_content,
-    window_frame_at,
+    window_at,
+    window_frame,
 )
 from pinlet.hal.macos import MacHAL, _load_ax, _screencapture
 from pinlet.types import WindowInfo
@@ -134,10 +137,20 @@ class BackgroundMacHAL(MacHAL):
         Raises:
             NeedsPointer: Another window of the same app is on top at the point.
         """
-        hit = window_frame_at(self._ax_api(), chosen.pid, x, y)
+        ax = self._ax_api()
+        win = window_at(ax, chosen.pid, x, y)
+        hit = window_frame(ax, win)
         own = self._target_frame(chosen)
-        if hit is None or own is None or target.same_frame(hit, own):
+        if hit is None or own is None:
             return
+        wid = ax_window_id(win)
+        if wid == chosen.window_id:
+            return
+        if target.same_frame(hit, own):
+            if wid is None:
+                return
+            # Same place, another window: the app's other document sits on ours.
+            raise self._covered(chosen, x, y)
         # A sheet or popover of our window sits inside it; another document does not.
         inside = (
             hit[0] >= own[0] - 2
@@ -147,7 +160,11 @@ class BackgroundMacHAL(MacHAL):
         )
         if inside:
             return
-        raise NeedsPointer(
+        raise self._covered(chosen, x, y)
+
+    @staticmethod
+    def _covered(chosen: target.Target, x: int, y: int) -> NeedsPointer:
+        return NeedsPointer(
             f"Background mode cannot click at ({x}, {y}): another window of "
             f"{chosen.app_name or 'the same app'} is on top there, and the click would go to "
             "it. Use a window that is not covered by the app's other windows; for a browser, "
@@ -247,8 +264,9 @@ class BackgroundMacHAL(MacHAL):
             if len(wins) < 2:
                 return
             b = info.bbox
-            for win in wins:
-                if self._ax_frame(ax, win) == (b.x, b.y, b.width, b.height):
+            by_id = [w for w in wins if ax_window_id(w) == info.window_id]
+            for win in by_id or wins:
+                if by_id or self._ax_frame(ax, win) == (b.x, b.y, b.width, b.height):
                     ax.AXUIElementSetAttributeValue(win, "AXMain", True)
                     return
         except Exception:  # noqa: BLE001 - keys still reach the app
@@ -444,9 +462,20 @@ class BackgroundMacHAL(MacHAL):
         # An app that is not in front ignores Cmd shortcuts sent as keys and
         # disables most of its menu, so do what the shortcut means another way.
         ax = self._ax_api()
-        done = ax_menu_shortcut(ax, chosen.pid, keys)
-        if not done and sorted(names) == ["a", "cmd"]:
-            done = ax_select_all(ax, chosen.pid)
+        select_all = sorted(names) == ["a", "cmd"]
+        # Select All first by the field itself: a menu item acts on whichever of the
+        # app's windows is its main one, which may be the person's.
+        done = select_all and ax_select_all(ax, chosen.pid)
+        if not done and select_all and focused_field(ax, chosen.pid) is not None:
+            # A web page's field does not take a selection by accessibility. The text
+            # system's own keys do the same in one paragraph: line start, then
+            # select to line end.
+            with self._to_app(chosen.pid):
+                super().keyboard_hotkey(["ctrl", "a"])
+                super().keyboard_hotkey(["ctrl", "shift", "e"])
+            done = True
+        if not done:
+            done = ax_menu_shortcut(ax, chosen.pid, keys)
         if done:
             self._cooldown()
             return None
