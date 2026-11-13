@@ -73,24 +73,6 @@ def test_invisible_windows_do_not_count():
     assert offlimits.refusal({"pid": 9, "owner": "Mail"}, {APP}) is None
 
 
-@pytest.mark.parametrize(
-    "name",
-    ["Pay", "Pay now", "Pay $42.00", "Buy Now", "Place your order", "Complete Purchase",
-     "Checkout", "Proceed to checkout", "Confirm and pay", "Subscribe", "Send money", "Buy with Apple Pay"],
-)  # fmt: skip
-def test_payment_buttons(name):
-    assert offlimits.payment_label("button", name) == name
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["Send", "Payment methods", "Buyer protection", "Paste", "Transferring files", "Continue"],
-)
-def test_not_payment_buttons(name):
-    assert offlimits.payment_label("button", name) is None
-    assert offlimits.payment_label("static text", "Pay now") is None
-
-
 class _Desk:
     """A HAL with a card of Pinlet.app's on screen."""
 
@@ -161,7 +143,7 @@ def test_payment_button_is_handed_to_the_person_in_turbo_too(monkeypatch):
     hal, desk = _hal(monkeypatch, hit=hit)
     with pytest.raises(OverlayBlocked) as err:
         hal.mouse_click(1500, 900)
-    assert "payment step" in str(err.value) and "Place your order" in str(err.value)
+    assert "payment button" in str(err.value) and "Place your order" in str(err.value)
     assert desk.done == []
 
 

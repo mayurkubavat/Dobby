@@ -418,18 +418,6 @@ class OverlayHAL:
         if why:
             self._refuse(why, app=name)
 
-    def _guard_payment(self, hit: dict | None, app: str | None) -> None:
-        """Hand a payment button to the person instead of pressing it. Every level."""
-        from . import offlimits
-
-        label = offlimits.payment_label(hit.get("role"), hit.get("name")) if hit else None
-        if label:
-            self._refuse(
-                offlimits.PAYMENT_REFUSAL.format(label=f"‘{label}’"),
-                app=app,
-                say=f"Your turn: press ‘{_clip(label, 24)}’",
-            )
-
     def _probe(self, x: float, y: float) -> dict | None:
         if self._hit_test is None:
             return None

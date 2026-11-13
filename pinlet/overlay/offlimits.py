@@ -19,7 +19,6 @@ runs (and is tested) anywhere.
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -46,33 +45,9 @@ SECURITY_PANES = (
     ("system settings", "login password"),
 )
 
-# Buttons that spend money. Narrower than the "consequential" list: these are
-# never clicked by Pinlet, not even after a question.
-_PAYMENT = re.compile(
-    r"^\W*("
-    r"pay( now| with\b.*| \W?[\d$€£₹¥].*)?|buy( now| with\b.*| it now)?|purchase|"
-    r"place (your |the )?order|complete (your |the )?(purchase|order|payment)|"
-    r"confirm (and pay|purchase|payment|order|transfer)|submit (payment|order)|"
-    r"check ?out( now)?|proceed to (checkout|payment)|subscribe( now| & pay)?|"
-    r"send money|transfer( money| funds| now)?|donate( now)?|place (bid|trade)|"
-    r"(buy|sell) (shares|stock|order)|confirm trade|top up|add funds"
-    r")\W*$",
-    re.I,
-)
-_PRESSABLE = ("button", "menu item", "link")
-
 # A helper panel taller than this is one of the click-through drawing layers
 # (glow, pointer); shorter ones are the bar and its hotspots.
 _DRAWING_LAYER_MIN_H = 120.0
-
-
-def payment_label(role: str | None, name: str | None) -> str | None:
-    """The button's text when pressing it pays for something, else None."""
-    name = " ".join(str(name or "").split())
-    role = str(role or "").lower()
-    if not name or len(name) > 48 or not any(r in role for r in _PRESSABLE):
-        return None
-    return name if _PAYMENT.match(name) else None
 
 
 def app_pid(env: Mapping[str, str] | None = None) -> int | None:
@@ -172,9 +147,3 @@ def refusal(window: Mapping[str, Any] | None, own_pids: Iterable[int | None] = (
         bool(window.get("overlay")),
         {int(p) for p in own_pids if p},
     )
-
-
-PAYMENT_REFUSAL = (
-    "This is a payment step ({label}). Pinlet does not press payment buttons: everything is "
-    "ready for the person, so ask them to press it, then carry on."
-)
