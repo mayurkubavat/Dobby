@@ -11,6 +11,7 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- macOS: keys are no longer refused as "Pinlet's own window" in other apps. The key guard read the frontmost app from a value that never updates in the engine, so after a restart that left Pinlet in front every key press and shortcut was refused.
 - The bar stops saying Pinlet is working the moment the AI lets go of control. After Pinlet restarts in the middle of a task, the bar's timer and step count carry on. The glow now also appears around the window when a task only uses the keyboard.
 - The bar can sit at the bottom of the screen, above the Dock, so it does not cover a window's title bar: Settings > Appearance > "Keep the bar at the bottom of the screen", or `PINLET_OVERLAY_PILL_POS=bottom`.
 - When Pinlet quits in good order, a call it had already answered may be sent again after the restart. Only calls cut off by the restart, or answered in its last two seconds, are still held back once.

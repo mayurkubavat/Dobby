@@ -328,6 +328,9 @@ def test_frontmost_is_read_fresh_not_from_nsworkspace_cache():
         capture_fn=lambda r: None,
     )
     assert broken.get_active_window().window_id == "7"  # falls back to NSWorkspace
+    # The key guard asks the same way: a stale answer made Pinlet refuse keys in
+    # every app as "Pinlet's own window" after a restart that left Pinlet in front.
+    assert hal.frontmost_app()[0] == 77 and broken.frontmost_app()[0] == 42
 
 
 def test_lsappinfo_front_pid_parses_both_output_styles(monkeypatch):

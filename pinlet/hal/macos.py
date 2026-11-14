@@ -524,14 +524,24 @@ class MacHAL(IDesktopHAL):
         return [dict(w) for w in self._window_dicts()]
 
     def frontmost_app(self) -> tuple[int | None, str]:
-        """The frontmost app's process id and name ("" when unknown)."""
+        """The frontmost app's process id and name ("" when unknown).
+
+        Asked fresh through :meth:`_frontmost_pid`: this process runs no
+        AppKit run loop, so ``NSWorkspace.frontmostApplication()`` keeps
+        naming whichever app was in front when Pinlet started.
+        """
         try:
-            app = self.AK.NSWorkspace.sharedWorkspace().frontmostApplication()
-            if app is None:
+            pid = self._frontmost_pid()
+            if pid is None:
                 return None, ""
-            return int(app.processIdentifier()), str(app.localizedName() or "")
         except Exception:  # noqa: BLE001 - best effort
             return None, ""
+        try:
+            app = self.AK.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+            name = str(app.localizedName() or "") if app is not None else ""
+        except Exception:  # noqa: BLE001 - the pid alone still tells Pinlet's own apps apart
+            name = ""
+        return int(pid), name
 
     def list_windows(self) -> list[WindowInfo]:
         """Normal on-screen windows (layer 0), front to back. The frontmost app's top window is active."""
