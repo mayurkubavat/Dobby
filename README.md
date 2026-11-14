@@ -289,7 +289,7 @@ When Pinlet acts you see it:
 pauses when you take over. `pinlet --turbo`, `PINLET_MODE=turbo`, or
 Settings > Permissions > Ask before > Nothing turns the prompts off
 (`PINLET_DEFAULT_MODE` sets the default for every client). Three things hold in every mode: an AI cannot press Pinlet's own
-buttons or answer its questions, Pinlet never types into a password field or
+buttons or answer its questions (it may use the Settings window, except the Permissions tab), Pinlet never types into a password field or
 answers a macOS security prompt, and it stops at a payment button and hands
 that click to you. Start it with `pinlet --secure` (or `PINLET_MODE=secure` in the client's
 `env`) to also ask once per app, as described next.
@@ -365,6 +365,7 @@ it. Settings go in the client's `env`:
 | `PINLET_OVERLAY_TURBO=0` | Keep turbo's no-prompt default but still pause when you take over |
 | `PINLET_APP_GRANTS=off` | Secure mode without the per-app question |
 | `PINLET_CONFIRM_CLICKS=0` | Secure mode without the Send/Delete/Pay prompt |
+| `PINLET_SETTINGS_BY_AI=0` | An AI may look at and change Pinlet's Settings window (never its Permissions tab, the card, bar or menu). `0` makes Settings the person's alone again |
 | `PINLET_BLOCK_PAYMENTS=0` | Pinlet never clicks a button that pays (Pay, Buy, Place order, Checkout, Subscribe…) in any mode; it tells the AI to hand that click to you. `0` lifts the rule |
 | `PINLET_ALLOW_SHELL=1` | Let the AI run shell commands (`run_terminal_command`). Off by default |
 | `PINLET_INPUT_LOCK=window` | Keep your clicks out of the window Pinlet works in; buttons are then pressed through accessibility so your pointer stays put (macOS and Linux). `PINLET_BACKGROUND_CLICKS=0` uses the real mouse instead |

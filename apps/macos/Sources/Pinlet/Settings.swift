@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Pinlet's settings, kept in the app's UserDefaults. The ones the engine
@@ -125,6 +126,14 @@ final class AppSettings: ObservableObject {
 final class SettingsWindowController {
     var restartEngine: () -> Void = {}
     private var window: NSWindow?
+    private var tabWatch: AnyCancellable?
+
+    /// The window's title. An AI may use the window by this exact title
+    /// (pinlet/overlay/offlimits.py), so the Permissions tab, which is the
+    /// person's alone, gets another one.
+    static func title(for tab: String) -> String {
+        tab == "permissions" ? "Pinlet Settings: Permissions" : "Pinlet Settings"
+    }
 
     /// `tab`: one of `AppSettings.tabs` to bring to the front (`pinlet://settings/permissions`).
     func show(tab: String? = nil) {
@@ -133,7 +142,10 @@ final class SettingsWindowController {
         if window == nil {
             let view = SettingsView(settings: AppSettings.shared, restart: { [weak self] in self?.restartEngine() })
             let w = NSWindow(contentViewController: NSHostingController(rootView: view))
-            w.title = "Pinlet Settings"
+            w.title = SettingsWindowController.title(for: AppSettings.shared.tab)
+            tabWatch = AppSettings.shared.$tab.sink { [weak w] tab in
+                w?.title = SettingsWindowController.title(for: tab)
+            }
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.center()
@@ -211,7 +223,7 @@ struct SettingsView: View {
                     .onChange(of: settings.glass) { _ in changed = true }
                     Toggle("Show the bar while Pinlet rests", isOn: $settings.restingBar)
                         .onChange(of: settings.restingBar) { _ in changed = true }
-                    Toggle("Show the bar in screenshots and recordings", isOn: $settings.barInRecordings)
+                    Toggle("Show the bar and companion in screenshots and recordings", isOn: $settings.barInRecordings)
                         .onChange(of: settings.barInRecordings) { _ in changed = true }
                     Toggle("Keep the bar at the bottom of the screen", isOn: $settings.barAtBottom)
                         .onChange(of: settings.barAtBottom) { _ in changed = true }

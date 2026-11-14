@@ -3,9 +3,13 @@
 Three things are off limits whatever the mode (turbo included), whatever
 ``apps.json`` says and whatever the person ticked:
 
-* **Pinlet itself.** Its Allow/Deny card, bar, menu, Settings and Activity
-  windows. Text on the screen can steer an AI, so nothing an AI can click may
-  count as the person's consent.
+* **Pinlet itself.** Its Allow/Deny card, bar, menu and Activity window.
+  Text on the screen can steer an AI, so nothing an AI can click may count as
+  the person's consent. The Settings window is the exception: an AI may look
+  at it and change the look, the companion and the like (what loosens a
+  permission there takes Touch ID). Its Permissions tab stays the person's:
+  the app gives the window another title while that tab is in front.
+  ``PINLET_SETTINGS_BY_AI=0`` closes Settings to AIs again.
 * **macOS security prompts.** The login/administrator sheet, privacy
   ("would like to control…") prompts and the Privacy & Security pane.
 * **Payments.** Pinlet does everything up to the Pay button and then hands
@@ -45,6 +49,10 @@ SECURITY_PANES = (
     ("system settings", "login password"),
 )
 
+# Pinlet.app's Settings window, by its exact title. On the Permissions tab the
+# app titles it "Pinlet Settings: Permissions", which is not this.
+SETTINGS_TITLE = "Pinlet Settings"
+
 # A helper panel taller than this is one of the click-through drawing layers
 # (glow, pointer); shorter ones are the bar and its hotspots.
 _DRAWING_LAYER_MIN_H = 120.0
@@ -61,6 +69,22 @@ def app_pid(env: Mapping[str, str] | None = None) -> int | None:
         return None
 
 
+def settings_open(env: Mapping[str, str] | None = None) -> bool:
+    """Whether an AI may use Pinlet's Settings window (``PINLET_SETTINGS_BY_AI=0`` says no)."""
+    env = os.environ if env is None else env
+    return str(env.get("PINLET_SETTINGS_BY_AI", "1")).strip().lower() not in {
+        "0",
+        "off",
+        "false",
+        "no",
+    }
+
+
+def is_settings(title: str, pid: int, own: set[int]) -> bool:
+    """True for Pinlet's Settings window, off its Permissions tab, while AIs may use it."""
+    return pid in own and " ".join(title.split()) == SETTINGS_TITLE and settings_open()
+
+
 def _owner(w: Mapping[str, Any]) -> str:
     return " ".join(str(w.get("kCGWindowOwnerName", "") or "").split())
 
@@ -72,6 +96,8 @@ OWN_REFUSAL = (
 
 
 def _why(owner: str, title: str, pid: int, overlay: bool, own: set[int]) -> str | None:
+    if not overlay and is_settings(title, pid, own):
+        return None
     low, title = owner.lower(), title.lower()
     if overlay or pid in own:
         return OWN_REFUSAL
@@ -106,6 +132,19 @@ def refusal_at(
     layers are passed over.
     """
     own = {int(p) for p in own_pids if p}
+    for owner, title, pid, layer, drawing in _under(records, x, y, helper_pid):
+        why = _why(owner, title, pid, drawing, own)
+        if why:
+            return why, owner
+        if layer == 0:
+            return None  # an ordinary window takes the click
+    return None
+
+
+def _under(
+    records: Iterable[Mapping[str, Any]], x: float, y: float, helper_pid: int | None
+) -> Iterable[tuple[str, str, int, int, bool]]:
+    """The windows under a point, front to back: (owner, title, pid, layer, is the overlay's)."""
     for w in records:
         b = w.get("kCGWindowBounds") or {}
         try:
@@ -126,13 +165,46 @@ def refusal_at(
         )
         if drawing and wh > _DRAWING_LAYER_MIN_H:
             continue
-        owner = _owner(w)
-        why = _why(owner, title, pid, drawing, own)
-        if why:
-            return why, owner
-        if layer == 0:
-            return None  # an ordinary window takes the click
-    return None
+        yield _owner(w), title, pid, layer, drawing
+
+
+def settings_at(
+    records: Iterable[Mapping[str, Any]],
+    x: float,
+    y: float,
+    own_pids: Iterable[int | None] = (),
+    helper_pid: int | None = None,
+) -> bool:
+    """True when the window that takes a click at (x, y) is Pinlet's Settings window, open to AIs."""
+    own = {int(p) for p in own_pids if p}
+    for _owner_name, title, pid, layer, drawing in _under(records, x, y, helper_pid):
+        if not drawing and is_settings(title, pid, own):
+            return True
+        if layer == 0 or drawing or pid in own:
+            return False
+    return False
+
+
+def settings_in_front(
+    records: Iterable[Mapping[str, Any]], pid: int | None, own_pids: Iterable[int | None] = ()
+) -> bool:
+    """True when the frontmost ordinary window of app ``pid`` is Pinlet's Settings window, open to AIs."""
+    own = {int(p) for p in own_pids if p}
+    if not pid or int(pid) not in own:
+        return False
+    for w in records:
+        try:
+            if (
+                int(w.get("kCGWindowOwnerPID", -1)) != int(pid)
+                or int(w.get("kCGWindowLayer", 0)) != 0
+            ):
+                continue
+            if float(w.get("kCGWindowAlpha", 1.0)) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        return is_settings(str(w.get("kCGWindowName", "") or ""), int(pid), own)
+    return False
 
 
 def own_element(hit: Mapping[str, Any] | None, own_pids: Iterable[int | None] = ()) -> str | None:

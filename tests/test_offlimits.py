@@ -57,9 +57,57 @@ def test_what_a_click_would_land_on(point, word):
     assert (found is None) if word is None else (word in found[0])
 
 
-def test_pinlet_settings_in_front_is_off_limits():
+def test_an_ai_may_use_settings_but_not_its_permissions_tab(monkeypatch):
+    monkeypatch.delenv("PINLET_SETTINGS_BY_AI", raising=False)
     front = [SCREEN[-1], *SCREEN[:-1]]
+    assert offlimits.refusal_at(front, 1500, 900, {APP}) is None
+    assert offlimits.settings_at(front, 1500, 900, {APP})
+    assert offlimits.settings_in_front(front, APP, {APP})
+    assert not offlimits.settings_at(SCREEN, 1500, 900, {APP})  # Mail is in front there
+    assert not offlimits.settings_at(front, 660, 150, {APP})  # the card is never Settings
+    assert not offlimits.settings_in_front(front, 99, {APP})  # another app's window by that name
+
+    # The app retitles the window on the Permissions tab: the person's again.
+    perms = [_w(APP, "Pinlet", "Pinlet Settings: Permissions", 1200, 600, 400, 400), *SCREEN[:-1]]
+    assert "Pinlet's own window" in offlimits.refusal_at(perms, 1500, 900, {APP})[0]
+    assert not offlimits.settings_at(perms, 1500, 900, {APP})
+    assert not offlimits.settings_in_front(perms, APP, {APP})
+    # A window of another app that calls itself "Pinlet Settings" earns nothing, and no title, no pass.
+    assert not offlimits.is_settings("Pinlet Settings", 99, {APP})
+    assert not offlimits.is_settings("", APP, {APP})
+
+    monkeypatch.setenv("PINLET_SETTINGS_BY_AI", "0")
     assert "Pinlet's own window" in offlimits.refusal_at(front, 1500, 900, {APP})[0]
+    assert not offlimits.settings_at(front, 1500, 900, {APP})
+    assert not offlimits.settings_in_front(front, APP, {APP})
+
+
+def test_clicks_and_keys_reach_settings_only(monkeypatch):
+    monkeypatch.delenv("PINLET_SETTINGS_BY_AI", raising=False)
+    front = [SCREEN[-1], *SCREEN[:-1]]
+    hit = lambda x, y: {
+        "role": "check box",
+        "name": "Show the companion",
+        "secure": False,
+        "pid": APP,
+    }
+    hal, desk = _hal(monkeypatch, hit=hit)
+    desk.records = front
+    hal.mouse_click(1500, 900)  # a switch in Settings
+    desk.front = (APP, "Pinlet")
+    hal.keyboard_press_key("tab")
+    assert desk.done == [("click", 1500, 900), ("key", "tab")]
+    with pytest.raises(OverlayBlocked):
+        hal.mouse_click(660, 150)  # the card, even with Settings open
+    desk.records = [
+        _w(APP, "Pinlet", "Pinlet Settings: Permissions", 1200, 600, 400, 400),
+        *SCREEN[:-1],
+    ]
+    with pytest.raises(OverlayBlocked):
+        hal.mouse_click(1500, 900)
+    with pytest.raises(OverlayBlocked):
+        hal.keyboard_press_key("return")
+    assert len(desk.done) == 2
 
 
 def test_invisible_windows_do_not_count():
@@ -79,9 +127,10 @@ class _Desk:
     def __init__(self):
         self.done = []
         self.front = (99, "Mail")
+        self.records = SCREEN
 
     def window_records(self):
-        return SCREEN
+        return self.records
 
     def frontmost_app(self):
         return self.front
@@ -125,6 +174,7 @@ def test_an_ai_cannot_click_the_card_at_any_level(monkeypatch):
 
 def test_no_keys_while_pinlet_or_a_security_prompt_is_in_front(monkeypatch):
     hal, desk = _hal(monkeypatch)
+    desk.records = SCREEN[:-1]  # Pinlet.app in front with a window that is not Settings
     hal.keyboard_press_key("return")
     for front in ((APP, "Pinlet"), (77, "SecurityAgent"), (78, "coreautha")):
         desk.front = front

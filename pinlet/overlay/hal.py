@@ -420,15 +420,36 @@ class OverlayHAL:
         if found:
             self._refuse(found[0], app=found[1])
 
-    def _guard_element(self, hit: dict | None) -> None:
-        """Refuse a click on an element of Pinlet's own, such as its menu bar icon."""
+    def _guard_element(
+        self, hit: dict | None, x: float | None = None, y: float | None = None
+    ) -> None:
+        """Refuse a click on an element of Pinlet's own, such as its menu bar icon.
+
+        An element of the Settings window passes while that window is open to AIs.
+        """
         from . import offlimits
 
         if self._quiet:
             return
         why = offlimits.own_element(hit, self._own_pids())
+        if why and x is not None and y is not None and self._in_settings(x, y):
+            return
         if why:
             self._refuse(why, app="Pinlet")
+
+    def _in_settings(self, x: float, y: float) -> bool:
+        from . import offlimits
+
+        lister = getattr(self._inner, "window_records", None)
+        if lister is None:
+            return False
+        try:
+            px, py = self._to_points(x, y)
+            return offlimits.settings_at(
+                lister(), px, py, self._own_pids(), getattr(self.overlay, "pid", None)
+            )
+        except Exception:  # noqa: BLE001 - when in doubt it stays off limits
+            return False
 
     def _guard_keys(self) -> None:
         """Refuse keys while Pinlet.app or a macOS security prompt is the frontmost app."""
@@ -440,6 +461,13 @@ class OverlayHAL:
         try:
             pid, name = front()
             why = offlimits.refusal({"pid": pid, "owner": name, "title": ""}, self._own_pids())
+            lister = getattr(self._inner, "window_records", None)
+            if (
+                why
+                and lister is not None
+                and offlimits.settings_in_front(lister(), pid, self._own_pids())
+            ):
+                return  # typing in Pinlet's Settings window
         except Exception:  # noqa: BLE001
             return
         if why:
@@ -774,7 +802,7 @@ class OverlayHAL:
         app = self._window_app_at(x, y)
         self._gate(app, "click")
         hit = self._probe(x, y)
-        self._guard_element(hit)
+        self._guard_element(hit, x, y)
         self._field = hit
         self._refuse_payment(hit, app)
         self._confirm_consequential(hit, verb, app)

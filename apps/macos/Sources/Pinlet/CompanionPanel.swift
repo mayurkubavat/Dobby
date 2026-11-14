@@ -67,6 +67,7 @@ final class CompanionPanel {
         } ?? ""
         if state.target != target { state.target = target }
         if !isShown { show() }
+        panel?.followRecordingSetting()
         apply(mood)
         refit()
     }
@@ -230,7 +231,7 @@ final class CompanionState: ObservableObject {
 }
 
 /// A clear panel that can take the keyboard for the ask field but never
-/// activates Pinlet.app. Not on full-screen Spaces, and left out of screen sharing.
+/// activates Pinlet.app. Not on full-screen Spaces.
 private final class CompanionWindow: NSPanel {
     var onEscape: () -> Void = {}
 
@@ -247,6 +248,13 @@ private final class CompanionWindow: NSPanel {
         isReleasedWhenClosed = false
         becomesKeyOnlyIfNeeded = true
         sharingType = .none
+    }
+
+    /// Left out of screenshots, recordings and screen sharing unless Settings >
+    /// Appearance says to show the bar and companion there.
+    func followRecordingSetting(defaults: UserDefaults = .standard) {
+        let wanted: NSWindow.SharingType = defaults.bool(forKey: "barInRecordings") ? .readOnly : .none
+        if sharingType != wanted { sharingType = wanted }
     }
 
     override var canBecomeKey: Bool { true }

@@ -83,6 +83,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
+    /// Opening Pinlet again while it runs (Spotlight, Finder, `open -a Pinlet`) shows Settings:
+    /// a menu bar app has no other window to bring forward.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        settingsWindow.show()
+        return false
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             if let (key, pid) = PinletURL.action(for: url) {

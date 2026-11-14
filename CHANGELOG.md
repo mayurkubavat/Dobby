@@ -14,6 +14,11 @@ The first public release will be 0.1.0. It contains:
 - The bar stops saying Pinlet is working the moment the AI lets go of control. After Pinlet restarts in the middle of a task, the bar's timer and step count carry on. The glow now also appears around the window when a task only uses the keyboard.
 - The bar can sit at the bottom of the screen, above the Dock, so it does not cover a window's title bar: Settings > Appearance > "Keep the bar at the bottom of the screen", or `PINLET_OVERLAY_PILL_POS=bottom`.
 - When Pinlet quits in good order, a call it had already answered may be sent again after the restart. Only calls cut off by the restart, or answered in its last two seconds, are still held back once.
+- An AI can now use Pinlet's Settings window: look at it in screenshots and
+  change the look, the companion and the like. The Permissions tab, the
+  Allow/Deny card, the bar and the menu stay the person's alone
+  (`PINLET_SETTINGS_BY_AI=0` closes Settings again). Opening Pinlet again
+  while it runs (Spotlight, `open -a Pinlet`) shows Settings.
 - The goal an AI gives stays on the bar while it thinks between steps (it went away with the pointer after about half a minute, and on Linux after eight seconds), and one agent letting go of control no longer clears another agent's goal. It leaves after three minutes without a step or when the AI releases control. It also comes back when Pinlet restarts in the middle of a task (an update, for one).
 - `pinlet://settings/permissions` (or `/appearance`, `/ai-tools`…) opens
   Settings on that tab, and Settings > Appearance can let screenshots and
@@ -24,7 +29,8 @@ The first public release will be 0.1.0. It contains:
   asking, paused, done, in trouble, locked). Click it or press ⌃⌥Space to
   tell your AI something; drag it anywhere. It only mirrors state: Allow and
   Deny stay on the card, clicks pass through it while an AI works, and it is
-  left out of screen sharing. `Pinlet --companion-sheet out.png` draws every
+  left out of screenshots and screen sharing unless Settings > Appearance says
+  to show the bar and companion there. `Pinlet --companion-sheet out.png` draws every
   mood.
 - Settings > Appearance: light or dark look, bar glass, one colour for every AI
   from macOS's palette, minimal text, and the click trail.
@@ -86,7 +92,8 @@ The first public release will be 0.1.0. It contains:
   the saved rule lapses after 30 days (`PINLET_ALWAYS_DAYS`; 0 keeps it), after
   which Pinlet asks about that app again.
 - Off limits at every level, turbo included (`pinlet/overlay/offlimits.py`): an
-  AI cannot click or type into Pinlet's own card, bar, menu or windows, or a
+  AI cannot click or type into Pinlet's own card, bar, menu, Activity window or
+  the Permissions tab of Settings, or a
   macOS login, Touch ID or privacy prompt; Pinlet never types into a password
   field; and it stops at a payment button ("Your turn") instead of pressing it.
 - Pinlet does nothing while the Mac's screen is locked.

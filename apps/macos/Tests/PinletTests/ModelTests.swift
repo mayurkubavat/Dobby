@@ -270,3 +270,11 @@ private func companionView(_ rows: [(Int, String, String, Int)]) -> TopbarView {
     let png = try #require(CompanionArt.sheet(scale: 1))
     #expect(png.count > 2000)
 }
+
+@Test func settingsTitleKeepsThePermissionsTabThePersons() {
+    // pinlet/overlay/offlimits.py lets an AI use the window titled exactly "Pinlet Settings".
+    #expect(SettingsWindowController.title(for: "general") == "Pinlet Settings")
+    #expect(SettingsWindowController.title(for: "companion") == "Pinlet Settings")
+    #expect(SettingsWindowController.title(for: "permissions") != "Pinlet Settings")
+    #expect(AppSettings.tabs.contains("companion"))
+}
