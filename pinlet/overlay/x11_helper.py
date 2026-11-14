@@ -16,6 +16,9 @@ What it draws:
   available, else the legacy notification area): Pinlet's mark, the number of
   running Pinlets and a menu with one row per Pinlet (what it does, Pause /
   Resume / Stop); only the bar owner shows it;
+* Rime, the companion (``x11_companion``, ``PINLET_COMPANION=1``), which
+  stands in for the bar while it is on screen: a thought cloud with the AI's
+  step, click to freeze, a menu with Resume / Let one step run / Cancel task;
 * the control bar at the top of the screen (same states as macOS, from
   ``menu.bar_view``): "Pinlet is sleeping" with Pause / Stop, "working",
   "paused", "stopped"; click the bar itself to wake Pinlet or put it back to
@@ -57,8 +60,9 @@ gi.require_version("Gdk", "3.0")
 import cairo  # noqa: E402
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
+from .. import envflags  # noqa: E402
 from ..personality import Voice  # noqa: E402
-from . import geometry, inputlock, protocol, style, topbar  # noqa: E402
+from . import companion_scene, geometry, inputlock, protocol, style, topbar  # noqa: E402
 from .barlock import (  # noqa: E402
     BAR_LOCK,
     BarOwner,
@@ -811,6 +815,18 @@ class X11Overlay:
         self.tray: _Tray | None = None
         self.tray_next = 0.0
         self.publish_next = 0.0
+        # Rime, the companion that stands in for the bar (PINLET_COMPANION=1).
+        self.companion = None
+        self.companion_off = False  # "Show the bar instead", until the helper restarts
+        self.done_until = 0.0
+        self.file_paused = False  # paused through the control file (One step, the menu)
+        self.file_checked = 0.0
+        if self.cfg.get("companion") or envflags.is_true(os.environ, "PINLET_COMPANION"):
+            from .x11_companion import X11Companion
+
+            self.companion = X11Companion(
+                self.composited, on_menu=self.companion_menu, on_freeze=self.companion_freeze
+            )
 
         self.pointer = _Panel(self.composited, 26, 28, painter=self._paint_pointer)
         self.tag = _Panel(self.composited, 120, 26, painter=self._paint_tag)
@@ -985,7 +1001,9 @@ class X11Overlay:
             self.box.hide()
             if self.bar is not None and self.capture_hidden:
                 self.bar.hide(keep_mode=True)  # never in screenshots
+            self._refresh_companion()
             return
+        self._refresh_companion()
         if self.bar is not None and not self.bar.visible:
             self._refresh_bar()
         if self.cursor is not None:
@@ -1319,9 +1337,14 @@ class X11Overlay:
 
     def _refresh_bar(self) -> None:
         self._publish_status()
+        self._refresh_companion()
         if self.bar is None:
             return
         if self.capture_hidden:
+            return
+        if self.companion is not None and self.companion.visible:
+            if self.bar.visible:
+                self.bar.hide(keep_mode=True)  # Rime stands in for the bar
             return
         if self.bar.mode == "stopped" and time.monotonic() < self.stopped_until:
             return
@@ -1419,6 +1442,7 @@ class X11Overlay:
 
     def _bar_tick(self) -> bool:
         now = time.monotonic()
+        self._refresh_companion()
         if now >= self.agents_next:
             self.agents_next = now + 2.0
             self._refresh_agents()
@@ -1572,9 +1596,91 @@ class X11Overlay:
         self.send_event("stop")
         self.send_event("user_idle")
         self._set_intent("Stopped", 1500)
-        if self.bar is not None:
+        if self.bar is not None and not (self.companion is not None and self.companion.visible):
             self.bar.show("stopped", "Pinlet stopped", "OK", "Hide", _rgb(self.cfg["danger_color"]))
             self.stopped_until = time.monotonic() + 2.0
+
+    # ------------------------------------------------------------- companion
+    def _control_paused(self) -> bool:
+        """Whether the control file holds this Pinlet paused (checked twice a second)."""
+        now = time.monotonic()
+        if self.server_pid and now >= self.file_checked:
+            self.file_checked = now + 0.5
+            try:
+                from pinlet.control import commands, control_root
+
+                self.file_paused = bool(commands.read(control_root(), self.server_pid)["paused"])
+            except Exception:  # noqa: BLE001
+                self.file_paused = False
+        return self.file_paused
+
+    def _refresh_companion(self) -> None:
+        """Rime's mood and bubble from what this helper knows; hides it for captures."""
+        rime = self.companion
+        if rime is None:
+            return
+        working = self._working()
+        paused = self.paused or self._control_paused()
+        confirming = self.pending_confirm is not None
+        m = companion_scene.mood(
+            working=working,
+            paused=paused,
+            confirming=confirming,
+            thinking=self.state == "thinking",
+            done=time.monotonic() < self.done_until,
+        )
+        bubble = companion_scene.bubble(
+            m,
+            goal=self.goal,
+            step=self.current_step if working else "",
+            thought=self.thought if working else "",
+            steps=self.task_steps if working else 0,
+            quiet=rime.quiet,
+        )
+        show = (
+            not self.companion_off
+            and not self.capture_hidden
+            and self.user_visible
+            and (self.bar_owner.owned or working or paused or confirming)
+        )
+        was = rime.visible
+        rime.update(m, bubble, show)
+        if was and not rime.visible and self.bar is not None and not self.capture_hidden:
+            GLib.idle_add(lambda: (self._refresh_bar(), False)[1])  # the bar comes back
+
+    def companion_freeze(self) -> None:
+        """The first click on Rime while the AI works: freeze it."""
+        self.set_paused(True)
+
+    def companion_menu(self, key: str) -> None:
+        """A choice from Rime's menu. Nothing here answers an Allow / Deny card."""
+        from pinlet.control import commands, control_root
+
+        root = control_root()
+        if key == companion_scene.RESUME:
+            if self.server_pid and self._control_paused():
+                commands.set_paused(root, self.server_pid, False)
+                self.file_paused = False
+            self.resume()
+        elif key == companion_scene.STEP:
+            if self.server_pid:
+                # The control file lets one action through and holds the next one.
+                commands.step_once(root, self.server_pid)
+                self.file_paused = True
+            if self.paused:
+                self.set_paused(False)
+        elif key == companion_scene.CANCEL:
+            self.request_stop()
+            if self.server_pid and self._control_paused():
+                commands.set_paused(root, self.server_pid, False)
+                self.file_paused = False
+        elif key == companion_scene.FREEZE:
+            self.set_paused(True)
+        elif key == companion_scene.WAKE:
+            self.wake()
+        elif key == companion_scene.BAR:
+            self.companion_off = True
+        self._refresh_bar()
 
     # ------------------------------------------------------------- confirm
     def _start_confirm(
@@ -1679,6 +1785,8 @@ class X11Overlay:
                 ms = geometry.glide_ms(self.cursor, target, speed=float(self.cfg["speed"]))
             if self.state == "thinking":
                 self.state = "idle"
+            if self.companion is not None:
+                self.companion.avoid(target)  # flash step: out of the AI's way
             self._glide(target, self._duration(ms), msg_id)
         elif op == "cursor.click":
             self._mark_active()
@@ -1723,6 +1831,8 @@ class X11Overlay:
         elif op == "task.end":  # the AI let go: stop saying "working" now
             quiet = time.monotonic() - float(self.cfg["active_secs"]) - 0.01
             self.last_action = min(self.last_action, quiet)
+            if self.goal or self.task_steps:
+                self.done_until = time.monotonic() + 4.0  # Rime says "Done" for a moment
             self.goal = ""
             self.thought = ""
             self.state = "idle"

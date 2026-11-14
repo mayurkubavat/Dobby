@@ -11,6 +11,10 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- Rime can stand in for the floating bar (Settings > Companion > "Show progress with: Rime", the default once the companion is on). Rime shows the AI's step in a thought cloud, with the AI's optional `why` from action tools such as `click(why="to open the draft")`; a speech bubble points at the Allow / Deny card, a burst shows trouble and ice shows a pause. The first click on Rime while an AI works freezes it, with frost at the screen edges, and opens a ring: Resume, Let one step run, Cancel task (hold for a moment), Tell, Show what it sees (brackets on what the AI saw last) and Quieter cloud. Nothing on Rime approves anything. Rime steps aside when the AI's pointer heads for it, an ice thread joins it to the AI's pointer, small orbs stand for other AIs, its face hardens on a risky step, and it keeps a mission log of the last task's steps. Control-Option-P pauses every AI from anywhere. Optional: shake the pointer to call Rime over, tuck it behind a screen edge, and say "Rime, wait" to freeze (on-device speech, off by default). If the app stops answering, the bar comes back within two seconds.
+- Linux (X11): Rime with `PINLET_COMPANION=1`: thought cloud, click to freeze, a menu with Resume, Let one step run and Cancel task, and it steps out of the AI's way. The bar stays on Wayland.
+- "Let one step run" for a paused AI: the next action goes ahead and the one after it waits.
+
 - macOS: keys are no longer refused as "Pinlet's own window" in other apps. The key guard read the frontmost app from a value that never updates in the engine, so after a restart that left Pinlet in front every key press and shortcut was refused.
 - The bar stops saying Pinlet is working the moment the AI lets go of control. After Pinlet restarts in the middle of a task, the bar's timer and step count carry on. The glow now also appears around the window when a task only uses the keyboard.
 - The bar can sit at the bottom of the screen, above the Dock, so it does not cover a window's title bar: Settings > Appearance > "Keep the bar at the bottom of the screen", or `PINLET_OVERLAY_PILL_POS=bottom`.

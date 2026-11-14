@@ -26,6 +26,7 @@ LEAVES = {
     "overlay.geometry": set(),
     "overlay.protocol": set(),
     "overlay.menu": {"overlay.text"},
+    "overlay.companion_scene": {"overlay.text"},
     "overlay.topbar_icons": {"overlay.palette"},
 }
 
