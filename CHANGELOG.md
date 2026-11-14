@@ -15,8 +15,9 @@ The first public release will be 0.1.0. It contains:
 - The bar can sit at the bottom of the screen, above the Dock, so it does not cover a window's title bar: Settings > Appearance > "Keep the bar at the bottom of the screen", or `PINLET_OVERLAY_PILL_POS=bottom`.
 - When Pinlet quits in good order, a call it had already answered may be sent again after the restart. Only calls cut off by the restart, or answered in its last two seconds, are still held back once.
 - An AI can now use Pinlet's Settings window: look at it in screenshots and
-  change the look, the companion and the like. The Permissions tab, the
-  Allow/Deny card, the bar and the menu stay the person's alone
+  change the Appearance, Companion, Notifications and Menu tabs. The General,
+  Permissions, AI Tools and Diagnostics tabs, the Allow/Deny card, the bar
+  and the menu stay the person's alone
   (`PINLET_SETTINGS_BY_AI=0` closes Settings again). Opening Pinlet again
   while it runs (Spotlight, `open -a Pinlet`) shows Settings.
 - The goal an AI gives stays on the bar while it thinks between steps (it went away with the pointer after about half a minute, and on Linux after eight seconds), and one agent letting go of control no longer clears another agent's goal. It leaves after three minutes without a step or when the AI releases control. It also comes back when Pinlet restarts in the middle of a task (an update, for one).
@@ -93,7 +94,7 @@ The first public release will be 0.1.0. It contains:
   which Pinlet asks about that app again.
 - Off limits at every level, turbo included (`pinlet/overlay/offlimits.py`): an
   AI cannot click or type into Pinlet's own card, bar, menu, Activity window or
-  the Permissions tab of Settings, or a
+  the General, Permissions, AI Tools and Diagnostics tabs of Settings, or a
   macOS login, Touch ID or privacy prompt; Pinlet never types into a password
   field; and it stops at a payment button ("Your turn") instead of pressing it.
 - Pinlet does nothing while the Mac's screen is locked.

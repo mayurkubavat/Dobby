@@ -128,11 +128,21 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private var tabWatch: AnyCancellable?
 
-    /// The window's title. An AI may use the window by this exact title
-    /// (pinlet/overlay/offlimits.py), so the Permissions tab, which is the
-    /// person's alone, gets another one.
+    /// The tabs an AI may change: how Pinlet looks and what it tells you. The
+    /// rest (pace, background work, AI tools, permissions, diagnostics) can
+    /// weaken a gate or rewrite other apps' settings, so they are the person's.
+    static let aiTabs: Set<String> = ["appearance", "companion", "notifications", "menu"]
+
+    /// The window's title. An AI may use the window by the exact title
+    /// "Pinlet Settings" (pinlet/overlay/offlimits.py), so a tab that is the
+    /// person's alone gets another one.
     static func title(for tab: String) -> String {
-        tab == "permissions" ? "Pinlet Settings: Permissions" : "Pinlet Settings"
+        aiTabs.contains(tab) ? "Pinlet Settings" : "Pinlet Settings: " + tab.capitalized
+    }
+
+    /// Opening Pinlet again while it runs: Settings, on a tab anyone may use.
+    func showFromReopen() {
+        show(tab: SettingsWindowController.aiTabs.contains(AppSettings.shared.tab) ? nil : "appearance")
     }
 
     /// `tab`: one of `AppSettings.tabs` to bring to the front (`pinlet://settings/permissions`).

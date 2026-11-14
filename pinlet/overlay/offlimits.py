@@ -6,9 +6,10 @@ Three things are off limits whatever the mode (turbo included), whatever
 * **Pinlet itself.** Its Allow/Deny card, bar, menu and Activity window.
   Text on the screen can steer an AI, so nothing an AI can click may count as
   the person's consent. The Settings window is the exception: an AI may look
-  at it and change the look, the companion and the like (what loosens a
-  permission there takes Touch ID). Its Permissions tab stays the person's:
-  the app gives the window another title while that tab is in front.
+  at it and change the look, the companion, notifications and the menu.
+  Tabs that can weaken a gate (General, Permissions, AI Tools, Diagnostics)
+  stay the person's: the app gives the window another title while one of
+  those is in front.
   ``PINLET_SETTINGS_BY_AI=0`` closes Settings to AIs again.
 * **macOS security prompts.** The login/administrator sheet, privacy
   ("would like to control…") prompts and the Privacy & Security pane.
@@ -49,8 +50,8 @@ SECURITY_PANES = (
     ("system settings", "login password"),
 )
 
-# Pinlet.app's Settings window, by its exact title. On the Permissions tab the
-# app titles it "Pinlet Settings: Permissions", which is not this.
+# Pinlet.app's Settings window, by its exact title. On a tab that is the person's
+# alone the app titles it "Pinlet Settings: Permissions" and the like, which is not this.
 SETTINGS_TITLE = "Pinlet Settings"
 
 # A helper panel taller than this is one of the click-through drawing layers
@@ -81,7 +82,7 @@ def settings_open(env: Mapping[str, str] | None = None) -> bool:
 
 
 def is_settings(title: str, pid: int, own: set[int]) -> bool:
-    """True for Pinlet's Settings window, off its Permissions tab, while AIs may use it."""
+    """True for Pinlet's Settings window, on a tab AIs may use, while they may use it."""
     return pid in own and " ".join(title.split()) == SETTINGS_TITLE and settings_open()
 
 

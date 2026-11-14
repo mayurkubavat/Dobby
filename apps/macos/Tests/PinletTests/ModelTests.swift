@@ -273,8 +273,14 @@ private func companionView(_ rows: [(Int, String, String, Int)]) -> TopbarView {
 
 @Test func settingsTitleKeepsThePermissionsTabThePersons() {
     // pinlet/overlay/offlimits.py lets an AI use the window titled exactly "Pinlet Settings".
-    #expect(SettingsWindowController.title(for: "general") == "Pinlet Settings")
-    #expect(SettingsWindowController.title(for: "companion") == "Pinlet Settings")
-    #expect(SettingsWindowController.title(for: "permissions") != "Pinlet Settings")
+    for tab in ["appearance", "companion", "notifications", "menu"] {
+        #expect(SettingsWindowController.title(for: tab) == "Pinlet Settings")
+    }
+    // What can weaken a gate, or rewrites other apps' settings, is the person's alone.
+    for tab in ["general", "permissions", "ai-tools", "diagnostics"] {
+        #expect(SettingsWindowController.title(for: tab) != "Pinlet Settings")
+    }
+    #expect(SettingsWindowController.title(for: "permissions") == "Pinlet Settings: Permissions")
+    #expect(SettingsWindowController.aiTabs.isSubset(of: Set(AppSettings.tabs)))
     #expect(AppSettings.tabs.contains("companion"))
 }
