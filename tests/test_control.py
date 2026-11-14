@@ -553,7 +553,7 @@ def test_overview_and_picker_groups(tmp_path):
     assert groups[1][2] == [("Pause", "menuAgentPauseToggle:"), ("Stop", "menuAgentStop:")]
     assert groups[2][1] == 0
     commands.request_stop(tmp_path, other)
-    assert commands.read(tmp_path, other) == {"paused": False, "stop": 1}
+    assert commands.read(tmp_path, other) == {"paused": False, "stop": 1, "step": 0}
 
 
 # ------------------------------------------------- fairness and feedback

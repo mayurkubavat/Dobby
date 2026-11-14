@@ -92,7 +92,9 @@ class Controller:
         self._name_from_env = name
         self.on_wait: Callable[[dict[str, Any] | None], None] | None = None
         self.on_paused: Callable[[bool], None] | None = None
-        self._stop_seen = commands.read(self.root, pid)["stop"]
+        seen = commands.read(self.root, pid)
+        self._stop_seen = seen["stop"]
+        self._step_seen = seen["step"]
         self._registered = False
         if register:
             self._register()
@@ -255,6 +257,9 @@ class Controller:
             )
         if not cmd["paused"]:
             return
+        if cmd["step"] > self._step_seen:  # "One step": this action runs, the next one waits
+            self._step_seen = cmd["step"]
+            return
         holding = self._depth > 0
         if holding:
             self._finish_without_world()
@@ -269,6 +274,9 @@ class Controller:
                     self._stop_seen = cmd["stop"]
                     raise ControlStopped("Stopped by the person from the Pinlet menu while paused.")
                 if not cmd["paused"]:
+                    break
+                if cmd["step"] > self._step_seen:
+                    self._step_seen = cmd["step"]
                     break
                 if self._clock() >= deadline:
                     raise ControlStopped("This Pinlet stayed paused too long; stopping the task.")

@@ -14,6 +14,12 @@ then one JSON request per line, each answered with the same ``id``::
     {"id": 5, "op": "answer", "prompt_id": 3, "ok": false, "reason": "use the test account"}
                                                          -> an Allow/Deny card's answer
     {"id": 6, "op": "tell", "pid": 4242, "text": "use the March file"}  -> {"queued": 1, "woke": false}
+    {"id": 7, "op": "companion", "visible": true, "frame": [x, y, w, h], "bar": true}
+                                                         -> {"avoid": null, "stage": {..}}
+
+``companion`` is Rime's heartbeat (Pinlet.app only): while it is fresh the
+floating bar stays hidden; the reply says where to step aside and what the
+bar would show (``stage``, also returned by ``topbar``).
 
 ``activity`` returns ``lines``: the activity journal grouped into sentences
 ("Tibble · Cursor clicked 4 times in Safari"), oldest first (see :mod:`pinlet.journal`),
@@ -29,7 +35,7 @@ app's card (see :mod:`pinlet.hub.prompts`).
 :mod:`pinlet.control.inbox`); it reaches the AI with its next tool result, and
 wakes a Pinlet whose AI waits in ``wait_for_wake``.
 
-``action`` keys: ``pause_toggle``, ``pause``, ``resume``, ``stop``, ``hide``, ``wake`` (need
+``action`` keys: ``pause_toggle``, ``pause``, ``resume``, ``step``, ``stop``, ``hide``, ``wake`` (need
 ``pid``), ``pause_all``, ``resume_all``, ``stop_all``, ``clear_finished``,
 ``show_hidden``; ``allow`` / ``deny`` take ``prompt_id``. Stopped and
 cleared Pinlets leave the menu until they work again. They go through
@@ -66,6 +72,7 @@ ACTION_KEYS = (
     "show_hidden",
     "hide",
     "wake",
+    "step",
     "allow",
     "deny",
 )
@@ -175,6 +182,8 @@ def action(key: str, pid: int | None = None, prompt_id: int | None = None) -> di
         commands.request_stop(root, pid)
         _end_task_rules(pid)
         tb.Hiding.load().hide([pid])
+    elif key == "step":
+        commands.step_once(root, pid)
     elif key == "pause_toggle":
         commands.set_paused(root, pid, not commands.read(root, pid)["paused"])
     else:
@@ -268,6 +277,34 @@ def _view(hiding=None):
     return tb.topbar_view(everyone, states, hiding=hiding)
 
 
+def companion_beat(request: Mapping[str, Any]) -> dict[str, Any]:
+    """The companion's heartbeat (see :mod:`pinlet.overlay.companion`).
+
+    Only Pinlet.app may send it: a fresh heartbeat hides the floating bar.
+    The reply carries ``avoid``, a point the companion should step away from
+    (or None), and ``stage``, what the bar would show.
+    """
+    from pinlet.overlay import companion
+
+    frame = request.get("frame")
+    companion.beat(
+        visible=bool(request.get("visible")),
+        frame=frame if isinstance(frame, list) else None,
+        bar=bool(request.get("bar")),
+    )
+    return {"avoid": companion.avoid_request(), "stage": stage()}
+
+
+def stage() -> dict[str, Any]:
+    """What the bar shows right now, for the companion (``topbar.stage_of``)."""
+    from pinlet.overlay import topbar as tb
+
+    try:
+        return tb.stage_of(tb.read_states())
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def topbar() -> dict[str, Any]:
     """The menu as JSON (``pinlet.overlay.topbar.View.to_dict``)."""
     from pinlet.overlay import topbar as tb
@@ -277,7 +314,7 @@ def topbar() -> dict[str, Any]:
 
 # Requests that stand for the person: answering a question, speaking to the AI
 # as the person, and letting a paused AI go on. Only Pinlet.app may send them.
-_PERSON_ACTIONS = frozenset({"allow", "resume", "resume_all", "pause_toggle"})
+_PERSON_ACTIONS = frozenset({"allow", "resume", "resume_all", "pause_toggle", "step"})
 NOT_THE_APP = "only Pinlet.app can do this, for the person at the Mac"
 
 
@@ -302,7 +339,7 @@ def from_app(peer_pid: int | None, env: Mapping[str, str] | None = None) -> bool
 
 def _needs_person(request: Mapping[str, Any]) -> bool:
     op = request.get("op")
-    if op in ("answer", "tell", "rules_key"):
+    if op in ("answer", "tell", "rules_key", "companion"):
         return True
     return op == "action" and str(request.get("key") or "") in _PERSON_ACTIONS
 
@@ -331,7 +368,7 @@ def handle(
             from . import prompts
 
             prompts.note_poll()  # the app is alive: Allow/Deny goes to its card
-            body = {"view": topbar(), "prompts": prompts.pending()}
+            body = {"view": topbar(), "prompts": prompts.pending(), "stage": stage()}
         elif op == "prompts":
             from . import prompts
 
@@ -398,6 +435,12 @@ def handle(
             if quit_cb is not None:
                 quit_cb()
             body = {"quitting": True}
+        elif op == "companion":
+            body = companion_beat(request)
+        elif op == "seen":
+            from pinlet.overlay import companion as _companion
+
+            body = {"items": _companion.read_seen()}
         elif op == "ping":
             body = {"pong": True}
         else:

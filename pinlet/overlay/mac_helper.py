@@ -100,7 +100,7 @@ from Quartz import (
 )
 
 from ..personality import Voice
-from . import geometry, inputlock, protocol, style, topbar
+from . import companion, geometry, inputlock, protocol, style, topbar
 from .barlock import (
     BAR_LOCK,
     mark_waiting,
@@ -260,6 +260,11 @@ class OverlayController:
         # The task in progress, for the bar's live step and timer.
         self.task_started = 0.0
         self.goal = ""  # what the AI says it is doing, for the bar
+        self.thought = ""  # why it takes its next step (the companion's cloud)
+        # Rime in Pinlet.app can stand in for the bar while its heartbeat is fresh.
+        self.companion_has_bar = False
+        self.companion_rec: dict[str, Any] = {}
+        self.companion_next = 0.0
         self.intent_at = 0.0  # when the pointer label last got a step to show
         self.intent_held = False
         self.task_steps = 0
@@ -870,6 +875,8 @@ class OverlayController:
     def on_tick(self) -> None:
         """Timer callback: animations, heartbeat, agent list and idle checks."""
         now = time.monotonic()
+        if now >= self.companion_next:
+            self._check_companion(now)
         if self.interactive:
             self._refresh_agents()
             if now >= self.publish_next:
@@ -945,6 +952,38 @@ class OverlayController:
                 self._refresh_pill()
         self._track_tick()
 
+    def _check_companion(self, now: float) -> None:
+        """Read Rime's heartbeat: while it is fresh the bar stays hidden; when it stops, the bar is back."""
+        self.companion_next = now + 0.25
+        self.companion_rec = companion.read()
+        has = companion.stands_in_for_bar(self.companion_rec)
+        if has != self.companion_has_bar:
+            self.companion_has_bar = has
+            self._refresh_pill()
+
+    def _dodge_then(self, msg: dict[str, Any], target: tuple[float, float]) -> bool:
+        """Ask Rime to step away before the pointer glides under it; True when that is pending.
+
+        The move runs again (marked ``_dodged``) once Rime is clear, or after
+        :data:`companion.AVOID_WAIT_S` at the latest.
+        """
+        if msg.get("_dodged"):
+            return False
+        rec = companion.read()
+        if not companion.covers(rec, target):
+            return False
+        companion.ask_avoid(target)
+        deadline = time.monotonic() + companion.AVOID_WAIT_S
+
+        def again() -> None:
+            if companion.covers(companion.read(), target) and time.monotonic() < deadline:
+                AppHelper.callLater(0.04, again)
+                return
+            self.handle({**msg, "_dodged": True})
+
+        AppHelper.callLater(0.04, again)
+        return True
+
     def _end_task(self) -> None:
         """The AI let go: the bar stops saying "working" now, not ``active_secs`` later.
 
@@ -954,6 +993,7 @@ class OverlayController:
         if self.last_action > quiet:
             self.last_action = quiet
         self.goal = ""
+        self.thought = ""
         self.cursor_state = "idle"
         self._refresh_tag()
         self._refresh_pill()
@@ -1182,8 +1222,8 @@ class OverlayController:
             other_waiting=self.others_waiting,
             locked=self.input_lock is not None,
         )
-        if view is None:
-            self.pill.hide()
+        if view is None or self.companion_has_bar:
+            self.pill.hide()  # nothing to show, or Rime shows it
         else:
             mode, _text, _primary, _secondary, color, _dot_alpha = view
             rgb = self.rgb if color == "risk" else self.colors[color]
@@ -1657,6 +1697,17 @@ class OverlayController:
             elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
             turbo=self.turbo,
             app=self._app_name() if working else "",
+            stage=topbar.stage_record(
+                goal=self.goal,
+                thought=self.thought if working else "",
+                kind=self.cursor_state,
+                started=(time.time() - (now - self.task_started))
+                if (working and self.task_started)
+                else 0.0,
+                pointer=self.cursor if (working and self.pointer_visible) else None,
+                risk=self.risk_level,
+                bar_hidden=self.companion_has_bar,
+            ),
         )
         self.publish_next = now + 5.0
 
@@ -1870,6 +1921,8 @@ class OverlayController:
         if op == "cursor.move":
             self._mark_active()
             target = (float(msg["x"]), float(msg["y"]))
+            if self._dodge_then(msg, target):
+                return  # handled again (and acked) once Rime has stepped aside
             verb = msg.get("verb")
             if msg.get("probe"):
                 name, frame = self.probe.at(*target)
@@ -1963,6 +2016,10 @@ class OverlayController:
             self.ack(msg_id)
         elif op == "task.end":
             self._end_task()
+            self.ack(msg_id)
+        elif op == "thought":
+            self.thought = str(msg["text"])
+            self._refresh_menu()  # the companion reads it from the published status
             self.ack(msg_id)
         elif op == "risk":
             self._set_risk(msg["level"])

@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let engine = Engine()
@@ -11,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let activity = ActivityPanel()
     private let companion = CompanionPanel()
     private var hotKey: HotKey?
+    private var pauseKey: HotKey?
     private var timer: Timer?
     private var polling = false
 
@@ -33,6 +35,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         companion.onTell = { [weak self] pid, text, done in self?.tell(pid, text, done: done) }
+        companion.onAction = { [weak self] key, pid in self?.send(key, pid: pid) }
+        companion.onBeat = { [weak self] fields, done in
+            self?.control.queue.async { [weak self] in
+                let reply = self?.control.companionBeat(fields)
+                DispatchQueue.main.async { done(reply) }
+            }
+        }
+        companion.onSeen = { [weak self] done in
+            self?.control.queue.async { [weak self] in
+                let items = self?.control.seen() ?? []
+                DispatchQueue.main.async { done(items) }
+            }
+        }
+        companion.cardFrame = { [weak self] in self?.promptPanel.frame }
+        // Control-Option-P freezes every AI at work, from anywhere, with or without Rime.
+        pauseKey = HotKey(keyCode: UInt32(kVK_ANSI_P)) { [weak self] in self?.freezeAll() }
         // Control-Option-Space: the companion's ask bubble when it is on screen, else the activity panel.
         hotKey = HotKey { [weak self] in
             guard let self else { return }
@@ -171,7 +189,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menu.update(view: view ?? TopbarView.empty, engineNote: note,
                                  waiting: prompts.filter(\.missed))
                 self.activity.update(view ?? TopbarView.empty, reachable: view != nil)
-                self.companion.update(view: view ?? TopbarView.empty, prompts: prompts, reachable: view != nil)
+                self.lastRows = view?.rows ?? []
+                self.companion.update(view: view ?? TopbarView.empty, prompts: prompts, reachable: view != nil,
+                                      stage: reply?.stage)
                 // One card at a time, the oldest question first; the rest wait their turn.
                 self.lastPrompts = prompts
                 self.confirming.formIntersection(prompts.map(\.id))
@@ -180,6 +200,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.notifier.update(prompts: prompts, rows: view?.rows ?? [])
             }
         }
+    }
+
+    /// The rows as of the last poll (for ⌃⌥P).
+    private var lastRows: [TopbarView.Row] = []
+
+    /// ⌃⌥P: Rime freezes the AI when it is on screen; without Rime, pause every AI at work.
+    private func freezeAll() {
+        if companion.isShown {
+            companion.freezeNow()
+            return
+        }
+        for pid in CompanionFreeze.targets(lastRows) { send("pause", pid: pid) }
     }
 
     private func answer(_ promptID: Int, _ answer: PromptAnswer) {

@@ -34,3 +34,5 @@ targets:
       - sdk: AppIntents.framework
       - sdk: Carbon.framework
       - sdk: LocalAuthentication.framework
+      - sdk: Speech.framework
+      - sdk: AVFoundation.framework

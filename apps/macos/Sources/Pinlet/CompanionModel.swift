@@ -204,6 +204,21 @@ enum CompanionSettings {
         return sizes.contains(stored) ? stored : defaultSize
     }
 
+    private static func flag(_ key: String, _ fallback: Bool, _ defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: key) as? Bool ?? fallback
+    }
+
+    /// "Show progress with: Rime": Rime's cloud and click stand in for the floating bar.
+    static func replacesBar(defaults: UserDefaults = .standard) -> Bool { flag("companionReplacesBar", true, defaults) }
+    /// The ice thread from Rime to the AI's pointer.
+    static func tether(defaults: UserDefaults = .standard) -> Bool { flag("companionTether", true, defaults) }
+    /// Shake the pointer to call Rime over.
+    static func summon(defaults: UserDefaults = .standard) -> Bool { flag("companionSummon", true, defaults) }
+    /// Tuck Rime behind a screen edge when idle.
+    static func peek(defaults: UserDefaults = .standard) -> Bool { flag("companionPeek", true, defaults) }
+    /// "Quieter cloud": only the step and the timer.
+    static func quiet(defaults: UserDefaults = .standard) -> Bool { flag("companionQuiet", false, defaults) }
+
     /// Words in the bubble: off with Personality "Off" or "Minimal text".
     static func speaks(defaults: UserDefaults = .standard) -> Bool {
         defaults.string(forKey: "personality") != "off" && !defaults.bool(forKey: "minimalText")

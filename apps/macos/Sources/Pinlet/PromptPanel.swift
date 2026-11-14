@@ -16,6 +16,9 @@ final class PromptPanel {
 
     private var panel: KeyPanel?
     private(set) var shown: Prompt?
+
+    /// The card's frame while it is on screen (Rime points at it).
+    var frame: NSRect? { panel?.isVisible == true ? panel?.frame : nil }
     private var deadline = Date()
 
     /// Show `prompt` (or keep showing it), or hide the card when `nil`.

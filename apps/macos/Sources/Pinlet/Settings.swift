@@ -39,6 +39,11 @@ final class AppSettings: ObservableObject {
     // The companion (read live by CompanionPanel, no relaunch).
     @Published var companion: Bool = false { didSet { store("companion", companion) } }
     @Published var companionSize: Int = CompanionSettings.defaultSize { didSet { store("companionSize", companionSize) } }
+    @Published var companionReplacesBar: Bool = true { didSet { store("companionReplacesBar", companionReplacesBar) } }
+    @Published var companionTether: Bool = true { didSet { store("companionTether", companionTether) } }
+    @Published var companionSummon: Bool = true { didSet { store("companionSummon", companionSummon) } }
+    @Published var companionPeek: Bool = true { didSet { store("companionPeek", companionPeek) } }
+    @Published var companionVoice: Bool = false { didSet { store("companionVoice", companionVoice) } }
 
     /// The values as `pinlet serve` reads them. Only what was changed here.
     func engineEnvironment() -> [String: String] {
@@ -86,6 +91,11 @@ final class AppSettings: ObservableObject {
         clickTrail = defaults.object(forKey: "clickTrail") as? Bool ?? true
         companion = defaults.object(forKey: "companion") as? Bool ?? false
         companionSize = CompanionSettings.size(defaults: defaults)
+        companionReplacesBar = defaults.object(forKey: "companionReplacesBar") as? Bool ?? true
+        companionTether = defaults.object(forKey: "companionTether") as? Bool ?? true
+        companionSummon = defaults.object(forKey: "companionSummon") as? Bool ?? true
+        companionPeek = defaults.object(forKey: "companionPeek") as? Bool ?? true
+        companionVoice = defaults.object(forKey: "companionVoice") as? Bool ?? false
     }
 
     /// One colour for every AI, in macOS's own palette. Frost is Pinlet's icon colour.
@@ -276,8 +286,21 @@ struct SettingsView: View {
                     }
                     .disabled(!settings.companion)
                 } footer: {
-                    SettingsFooter("Rime sits in a corner and shows what Pinlet is doing: asleep, thinking, working, asking, paused or done. Click it or press ⌃⌥Space to tell your AI something, and drag it anywhere. Allow and Deny stay on the card. Applies right away, with no relaunch.")
+                    SettingsFooter("Rime sits in a corner and shows what Pinlet is doing: asleep, thinking, working, asking, paused or done. Drag it anywhere. Allow and Deny stay on the card. Applies right away, with no relaunch.")
                 }
+                Section {
+                    Picker("Show progress with", selection: $settings.companionReplacesBar) {
+                        Text("Rime").tag(true)
+                        Text("The bar").tag(false)
+                    }
+                    Toggle("Ice thread from Rime to the AI's pointer", isOn: $settings.companionTether)
+                    Toggle("Shake the pointer to call Rime over", isOn: $settings.companionSummon)
+                    Toggle("Tuck Rime behind a screen edge when idle", isOn: $settings.companionPeek)
+                    Toggle("Say \u{201C}Rime, wait\u{201D} to freeze the AI", isOn: $settings.companionVoice)
+                } footer: {
+                    SettingsFooter("With Rime, the floating bar steps aside: Rime's thought cloud shows the AI's goal, step and timer, and one click on Rime freezes the AI, then offers Resume, Cancel task (hold), One step, Tell and more. ⌃⌥P freezes it from anywhere. If Rime ever stops answering, the bar comes back by itself. Voice listens only while an AI works, on this Mac only.")
+                }
+                .disabled(!settings.companion)
             }
             .modifier(SettingsForm())
             .tabItem { Label("Companion", systemImage: "face.smiling") }

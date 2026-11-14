@@ -58,9 +58,14 @@ def publish(
     elapsed: float = 0.0,
     turbo: bool = False,
     app: str = "",
+    stage: Mapping[str, object] | None = None,
     directory: str = STATUS_DIR,
 ) -> None:
-    """Write this helper's Pinlet status (cheap; called on every bar refresh)."""
+    """Write this helper's Pinlet status (cheap; called on every bar refresh).
+
+    ``stage`` is what the bar shows right now (see :func:`stage_record`), for
+    the companion that can stand in for the bar.
+    """
     if not server_pid:
         return
     rec = {
@@ -74,6 +79,8 @@ def publish(
         "app": str(app)[:60],
         "at": time.time(),
     }
+    if stage:
+        rec["stage"] = dict(stage)
     try:
         os.makedirs(directory, exist_ok=True)
         path = os.path.join(directory, f"{int(server_pid)}.json")
@@ -83,6 +90,68 @@ def publish(
         os.replace(tmp, path)
     except OSError:
         pass
+
+
+def stage_record(
+    *,
+    goal: str = "",
+    thought: str = "",
+    kind: str = "idle",
+    started: float = 0.0,
+    pointer: Sequence[float] | None = None,
+    risk: str = "ok",
+    bar_hidden: bool = False,
+) -> dict[str, object]:
+    """The bar's live content as plain JSON for the companion.
+
+    ``started`` is a wall-clock time (0 when no task runs), ``pointer`` the
+    agent pointer in global top-left points (None when it is not on screen),
+    ``bar_hidden`` whether the companion stands in for the bar right now.
+    """
+    return {
+        "goal": _short(str(goal or ""), 160),
+        "thought": _short(str(thought or ""), 120),
+        "kind": str(kind or "idle"),
+        "started": float(started or 0.0),
+        "pointer": [round(float(pointer[0]), 1), round(float(pointer[1]), 1)] if pointer else None,
+        "risk": str(risk or "ok"),
+        "bar_hidden": bool(bar_hidden),
+    }
+
+
+_STAGE_ORDER = ("confirm", "paused", "takeover", "working", "awake")
+
+
+def stage_of(states: Mapping[int, Mapping[str, object]]) -> dict[str, object]:
+    """What the companion shows: the busiest Pinlet's status and bar content.
+
+    Picks the published status that most needs the person (Allow/Deny, then
+    paused, then working) and flattens it: mode, step, steps, elapsed, app,
+    server pid, plus the :func:`stage_record` fields. {} when nothing is busy.
+    """
+    best: tuple[int, float, int, Mapping[str, object]] | None = None
+    for pid, rec in states.items():
+        mode = str(rec.get("mode") or "")
+        if mode not in _STAGE_ORDER:
+            continue
+        key = (_STAGE_ORDER.index(mode), -float(rec.get("at") or 0.0), int(pid), rec)
+        if best is None or key[:3] < best[:3]:
+            best = key
+    if best is None:
+        return {}
+    rec = best[3]
+    out: dict[str, object] = {
+        "server_pid": int(best[2]),
+        "mode": str(rec.get("mode") or ""),
+        "step": str(rec.get("step") or ""),
+        "steps": int(rec.get("steps") or 0),
+        "elapsed": float(rec.get("elapsed") or 0.0),
+        "app": str(rec.get("app") or ""),
+    }
+    stage = rec.get("stage")
+    if isinstance(stage, Mapping):
+        out.update(stage)
+    return out
 
 
 def clear(server_pid: int, directory: str = STATUS_DIR) -> None:
@@ -541,6 +610,8 @@ __all__: Sequence[str] = (
     "render_icon",
     "render_row_icon",
     "row_icon_path",
+    "stage_of",
+    "stage_record",
     "tooltip",
     "topbar_view",
 )

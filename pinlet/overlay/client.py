@@ -30,6 +30,7 @@ from typing import Any
 from typing_extensions import override
 
 from . import protocol
+from .text import clean_thought
 
 log = logging.getLogger(__name__)
 
@@ -144,6 +145,10 @@ class NullOverlay:
 
     def task_end(self) -> bool:
         """The AI let go of control: the bar stops saying it is working."""
+        return True
+
+    def thought(self, text: str) -> bool:
+        """Why the AI takes its next step, for the companion's cloud ("" clears it)."""
         return True
 
     def scan(self, rect: tuple | None = None) -> bool:
@@ -763,6 +768,10 @@ class OverlayClient(NullOverlay):
     @override
     def task_end(self) -> bool:
         return self._send("task.end")
+
+    @override
+    def thought(self, text: str) -> bool:
+        return self._send("thought", text=clean_thought(text))
 
     @override
     def scan(self, rect: tuple | None = None) -> bool:

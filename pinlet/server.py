@@ -183,6 +183,96 @@ def _handoff_guard(fn: Any) -> Any:
     return guarded
 
 
+# Action tools that take an optional ``why``: a few words the companion shows
+# beside the step. Added here so every tool gets it the same way.
+WHY_TOOLS = frozenset(
+    {
+        "click",
+        "click_and_type",
+        "find_and_click",
+        "drag_and_drop",
+        "scroll",
+        "scroll_until_visible",
+        "type_text",
+        "press_key",
+        "hotkey",
+        "act_on_element",
+        "focus_window",
+    }
+)
+WHY_DOC = (
+    '\n\n    why: optional, a few plain words on why you take this step ("to attach the notes");'
+    " Pinlet shows them to the person beside the step."
+)
+
+
+def _with_why(fn: Any) -> Any:
+    """Gives ``fn`` an optional ``why`` argument that goes to the companion, not to ``fn``."""
+    import functools
+    import inspect
+
+    sig = inspect.signature(fn)
+    if "why" in sig.parameters:
+        return fn
+    params = [*sig.parameters.values()]
+    params.append(
+        inspect.Parameter("why", inspect.Parameter.KEYWORD_ONLY, default="", annotation="str")
+    )
+
+    if inspect.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def told_async(*args: Any, why: str = "", **kwargs: Any) -> Any:
+            _show_thought(why)
+            return await fn(*args, **kwargs)
+
+        out: Any = told_async
+    else:
+
+        @functools.wraps(fn)
+        def told(*args: Any, why: str = "", **kwargs: Any) -> Any:
+            _show_thought(why)
+            return fn(*args, **kwargs)
+
+        out = told
+    out.__signature__ = sig.replace(parameters=params)
+    out.__annotations__ = {**getattr(fn, "__annotations__", {}), "why": "str"}
+    out.__doc__ = (fn.__doc__ or "").rstrip() + WHY_DOC
+    return out
+
+
+def _note_seen(result: Any) -> None:
+    """Keep what this look found, in screen points, for the companion's "Show what it sees"."""
+    try:
+        from pinlet.overlay import companion, find_overlay_hal
+
+        ov_hal = find_overlay_hal(hal)
+        to_points = getattr(ov_hal, "_to_points", None)
+        if to_points is None:
+            return
+        items = []
+        for el in getattr(result, "marks", None) or []:
+            b = el.bbox
+            x0, y0 = to_points(b.x, b.y)
+            x1, y1 = to_points(b.x + b.width, b.y + b.height)
+            items.append({"label": el.name, "role": el.role, "rect": [x0, y0, x1 - x0, y1 - y0]})
+        companion.note_seen(items)
+    except Exception:  # noqa: BLE001 - never let this break a tool
+        pass
+
+
+def _show_thought(why: str) -> None:
+    """Tell the companion why the AI takes this step ("" clears the last one). Best effort."""
+    try:
+        from pinlet.overlay import find_overlay_hal
+
+        ov_hal = find_overlay_hal(hal)
+        if ov_hal is not None:
+            ov_hal.overlay.thought(str(why or ""))
+    except Exception:  # noqa: BLE001 - never let this break a tool
+        pass
+
+
 class PinletServer(MCPServer):
     """MCP server whose tools/list follows the active domain profile."""
 
@@ -191,6 +281,8 @@ class PinletServer(MCPServer):
 
     def add_tool(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
         """Registers a tool wrapped in the handoff guard."""
+        if getattr(fn, "__name__", "") in WHY_TOOLS:
+            fn = _with_why(fn)
         return super().add_tool(_handoff_guard(fn), *args, **kwargs)
 
     async def list_tools(self):
@@ -524,6 +616,7 @@ def take_screenshot(
         strategy_override=strategy_override,
         zoom_factor=zoom_factor,
     )
+    _note_seen(result)
     return _screenshot_summary(result.model_dump(), include_image)
 
 

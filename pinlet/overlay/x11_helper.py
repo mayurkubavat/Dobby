@@ -775,6 +775,7 @@ class X11Overlay:
         # The task in progress, for the bar's live step and timer.
         self.task_started = 0.0
         self.goal = ""  # what the AI says it is doing, for the bar
+        self.thought = ""  # why it takes its next step (the companion's cloud)
         self.task_steps = 0
         self.current_step = ""
         self.bar_second = -1
@@ -1234,6 +1235,14 @@ class X11Overlay:
             elapsed=(now - self.task_started) if (working and self.task_started) else 0.0,
             turbo=bool(self.cfg.get("turbo")),
             app=self._app_name() if working else "",
+            stage=topbar.stage_record(
+                goal=self.goal,
+                thought=self.thought if working else "",
+                kind=self.state,
+                started=(time.time() - (now - self.task_started))
+                if (working and self.task_started)
+                else 0.0,
+            ),
         )
         self.publish_next = now + 5.0
 
@@ -1715,9 +1724,14 @@ class X11Overlay:
             quiet = time.monotonic() - float(self.cfg["active_secs"]) - 0.01
             self.last_action = min(self.last_action, quiet)
             self.goal = ""
+            self.thought = ""
             self.state = "idle"
             self._layout_tag()
             self._refresh_bar()
+            self.ack(msg_id)
+        elif op == "thought":
+            self.thought = str(msg["text"])
+            self.publish_next = 0.0  # republish soon for the companion
             self.ack(msg_id)
         elif op == "risk":
             self.risk = msg["level"]

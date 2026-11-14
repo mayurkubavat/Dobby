@@ -126,11 +126,22 @@ final class ControlClient {
         poll()?.view
     }
 
-    /// The menu and the Allow/Deny questions waiting for the app, in one request.
-    func poll() -> (view: TopbarView, prompts: [Prompt])? {
+    /// The menu, the Allow/Deny questions waiting for the app and what the bar
+    /// shows (for Rime), in one request.
+    func poll() -> (view: TopbarView, prompts: [Prompt], stage: CompanionStage)? {
         guard let reply = request("topbar"), reply["ok"] as? Bool == true,
               let raw = reply["view"] as? [String: Any], let view = TopbarView(json: raw) else { return nil }
-        return (view, Prompt.list(reply["prompts"]))
+        return (view, Prompt.list(reply["prompts"]), CompanionStage(json: reply["stage"] as? [String: Any]))
+    }
+
+    /// Rime's heartbeat (control op "companion"): the reply says where to step aside and what the bar shows.
+    func companionBeat(_ fields: [String: Any]) -> [String: Any]? {
+        request("companion", fields)
+    }
+
+    /// What the AI found on its last look at the screen (control op "seen").
+    func seen() -> [[String: Any]] {
+        request("seen")?["items"] as? [[String: Any]] ?? []
     }
 
     /// The card's (or a notification's) answer. False when the question is gone.

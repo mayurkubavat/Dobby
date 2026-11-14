@@ -20,3 +20,20 @@ def short(text: str, limit: int) -> str:
     """
     text = " ".join(str(text).split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+THOUGHT_CHARS = 90
+# Bidi overrides and isolates can make text read differently from what it says.
+_BIDI = dict.fromkeys(map(ord, "‪‫‬‭‮⁦⁧⁨⁩‎‏"))
+
+
+def clean_thought(text: str, limit: int = THOUGHT_CHARS) -> str:
+    """An AI's few words for the companion's cloud, made safe to show.
+
+    Control characters and bidi overrides are dropped, whitespace collapses
+    and the text is cut to ``limit`` characters. It stays plain text: the
+    cloud never turns it into a link or a button.
+    """
+    text = str(text or "").translate(_BIDI)
+    text = "".join(c if c.isprintable() else " " for c in text)
+    return short(text, limit)

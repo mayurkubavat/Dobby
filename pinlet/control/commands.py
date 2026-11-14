@@ -1,6 +1,7 @@
-"""Per-Pinlet Pause, Resume and Stop sent from any control bar.
+"""Per-Pinlet Pause, Resume, One step and Stop sent from any control bar.
 
-Each Pinlet server owns ``commands/<pid>.json``: ``{"paused": bool, "stop": n}``.
+Each Pinlet server owns ``commands/<pid>.json``: ``{"paused": bool, "stop": n, "step": n}``.
+``step`` grows each time the person lets a paused Pinlet take exactly one action.
 The overlay's Pinlet picker writes it; that server's :class:`Controller` reads
 it before every action, waits while paused and stops when ``stop`` grows.
 Plain files keep it cross-process and cross-platform, like the lease.
@@ -29,10 +30,14 @@ def read(root: Path, pid: int) -> dict[str, Any]:
     try:
         data = json.loads(_path(root, pid).read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            return {"paused": bool(data.get("paused")), "stop": int(data.get("stop", 0))}
+            return {
+                "paused": bool(data.get("paused")),
+                "stop": int(data.get("stop", 0)),
+                "step": int(data.get("step", 0)),
+            }
     except (OSError, ValueError, TypeError):
         pass
-    return {"paused": False, "stop": 0}
+    return {"paused": False, "stop": 0, "step": 0}
 
 
 def _update(root: Path, pid: int, **change: Any) -> dict[str, Any]:
@@ -44,6 +49,9 @@ def _update(root: Path, pid: int, **change: Any) -> dict[str, Any]:
             cur["stop"] += 1
             cur["paused"] = False
             change.pop("stop")
+        if change.pop("step", False):
+            cur["step"] += 1
+            cur["paused"] = True  # one action, then paused again
         cur.update(change)
         tmp = path.with_name(f".{pid}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps(cur), encoding="utf-8")
@@ -54,6 +62,11 @@ def _update(root: Path, pid: int, **change: Any) -> dict[str, Any]:
 def set_paused(root: Path, pid: int, paused: bool) -> dict[str, Any]:
     """Asks the Pinlet with ``pid`` to pause or resume; returns the new command state."""
     return _update(root, pid, paused=bool(paused))
+
+
+def step_once(root: Path, pid: int) -> dict[str, Any]:
+    """Lets the Pinlet with ``pid`` take exactly one action, then stay paused."""
+    return _update(root, pid, step=True)
 
 
 def request_stop(root: Path, pid: int) -> dict[str, Any]:

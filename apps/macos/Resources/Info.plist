@@ -15,6 +15,10 @@
     <key>NSHighResolutionCapable</key><true/>
     <key>NSAppleEventsUsageDescription</key>
     <string>Pinlet uses Apple Events when an AI asks it to work in an app for you.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Only if you switch on "Rime, wait" in Settings &gt; Companion: Pinlet listens, on this Mac, for those words while an AI works, so you can freeze it by voice.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Only if you switch on "Rime, wait": Pinlet recognises those words on this Mac. Nothing you say leaves it.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>Pinlet looks at the screen so your AI can see what it is doing.</string>
     <key>CFBundleURLTypes</key>
