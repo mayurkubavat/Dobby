@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// It only mirrors state. Allow and Deny stay on the card (PromptPanel), so
 /// the character is never a way to approve something. Off unless switched on
-/// in Settings > Appearance or with `PINLET_COMPANION=1`.
+/// in Settings > Companion or with `PINLET_COMPANION=1`.
 ///
 /// Its window is a clear, non-activating panel sized to the character and its
 /// bubble: clear pixels pass clicks through, and while an AI is working the

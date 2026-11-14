@@ -24,7 +24,7 @@ final class AppSettings: ObservableObject {
     @Published var barAtBottom: Bool = false { didSet { store("barAtBottom", barAtBottom) } }  // above the Dock
     /// The Settings tab in front ("general", "appearance", "permissions"…). Not saved.
     @Published var tab: String = "general"
-    static let tabs = ["general", "appearance", "notifications", "menu", "ai-tools", "permissions", "diagnostics"]
+    static let tabs = ["general", "appearance", "companion", "notifications", "menu", "ai-tools", "permissions", "diagnostics"]
     @Published var background: Bool = false { didSet { store("background", background) } }  // work in one window, leave the screen alone
     @Published var borrowWhenIdle: Bool = false { didSet { store("borrowWhenIdle", borrowWhenIdle) } }
     /// "" (human: steps at a speed a person can follow and stop) or "fast".
@@ -238,6 +238,12 @@ struct SettingsView: View {
                 } footer: {
                     SettingsFooter("Colour tints the pointer, its label, the glow and the bar. Minimal text drops “Pinlet is working” and shows each action only briefly. On macOS 26 and later the bar and Pinlet's cards are Liquid Glass.")
                 }
+            }
+            .modifier(SettingsForm())
+            .tabItem { Label("Appearance", systemImage: "paintbrush") }
+            .tag("appearance")
+
+            Form {
                 Section {
                     Toggle("Show the companion", isOn: $settings.companion)
                     Picker("Size", selection: $settings.companionSize) {
@@ -248,12 +254,12 @@ struct SettingsView: View {
                     }
                     .disabled(!settings.companion)
                 } footer: {
-                    SettingsFooter("Rime sits in a corner and shows what Pinlet is doing: asleep, thinking, working, asking, paused or done. Click it or press ⌃⌥Space to tell your AI something, and drag it anywhere. Allow and Deny stay on the card. Applies right away.")
+                    SettingsFooter("Rime sits in a corner and shows what Pinlet is doing: asleep, thinking, working, asking, paused or done. Click it or press ⌃⌥Space to tell your AI something, and drag it anywhere. Allow and Deny stay on the card. Applies right away, with no relaunch.")
                 }
             }
             .modifier(SettingsForm())
-            .tabItem { Label("Appearance", systemImage: "paintbrush") }
-            .tag("appearance")
+            .tabItem { Label("Companion", systemImage: "face.smiling") }
+            .tag("companion")
 
             Form {
                 Section {

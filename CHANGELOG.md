@@ -18,7 +18,7 @@ The first public release will be 0.1.0. It contains:
 - `pinlet://settings/permissions` (or `/appearance`, `/ai-tools`…) opens
   Settings on that tab, and Settings > Appearance can let screenshots and
   recordings show the bar.
-- A companion, off by default (Settings > Appearance > Show the companion, or
+- A companion, off by default (Settings > Companion > Show the companion, or
   `PINLET_COMPANION=1`): Rime, a small animated character in a corner of the
   screen that shows what Pinlet is doing (asleep, awake, thinking, working,
   asking, paused, done, in trouble, locked). Click it or press ⌃⌥Space to
