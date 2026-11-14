@@ -146,7 +146,6 @@ final class CompanionPanel {
         rig.setAccessibilityLabel(frozen ? "Rime. The AI is frozen. Click for options."
                                   : working ? "Rime. Click to freeze \(speaking?.firstName ?? "the AI")."
                                   : "Pinlet companion, \(mood.spoken)")
-        rig.risky = stage.risky && mood == .act
         rig.lookAt = mood == .ask ? cardFrame().map { NSPoint(x: $0.midX, y: $0.midY) } : nil
         log.observe(stage: stage, working: working || frozen, name: speaking?.firstName ?? "")
         state.lastTask = log.last

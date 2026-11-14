@@ -45,3 +45,17 @@ def test_click_freezes_while_working_and_pause_menu():
 def test_ai_text_is_cleaned():
     b = sc.bubble(sc.ACT, step="Click‮ evil\x00\n  now")
     assert "‮" not in b.text and "\x00" not in b.text and "  " not in b.text
+
+
+def test_rime_art_matches_the_mac_and_draws():
+    from pinlet.overlay import rime_art
+
+    # Same poses as CompanionPose.target in the Mac app: Rime's look is not ours to change.
+    assert rime_art.pose("pause")["eyeOpen"] == 0.48 and rime_art.pose("pause")["tuft"] == 10
+    assert rime_art.pose("act")["browTilt"] == 9 and rime_art.pose("act")["glow"] == 1
+    assert rime_art.pose("nonsense") == rime_art.BASE
+    cairo = __import__("pytest").importorskip("cairo")
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, 200, 220)
+    for mood in ("sleep", "think", "act", "ask", "pause", "done", "error", "lock"):
+        rime_art.draw_mood(cairo.Context(surf), mood, 0.9)
+    assert any(surf.get_data())

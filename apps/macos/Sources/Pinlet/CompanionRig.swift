@@ -6,10 +6,8 @@ import AppKit
 final class CompanionRigView: NSView {
     var onClick: () -> Void = {}
     var onMoved: () -> Void = {}
-    /// Where to look and lean instead of the pointer (the approval card), global Cocoa.
+    /// Where to look instead of the pointer (the approval card), global Cocoa. Rime's look stays as drawn.
     var lookAt: NSPoint?
-    /// A risky step: focused brows and a bright crystal.
-    var risky = false
 
     var mood: CompanionMood = .sleep {
         didSet { if mood != oldValue { moodChanged() } }
@@ -132,11 +130,6 @@ final class CompanionRigView: NSView {
             }
             if mood == .ask {
                 target[.armRight] = 140 + sin(now * 6) * 14
-                if let card = lookAt, let window {
-                    // Lean toward the card it points at.
-                    let mid = window.convertPoint(toScreen: convert(NSPoint(x: bounds.midX, y: bounds.midY), to: nil))
-                    target[.tilt] = card.x < mid.x ? -8 : 8
-                }
             }
         case .think:
             target[.lookX] = -3 + cos(now * 1.3) * 2
@@ -151,11 +144,6 @@ final class CompanionRigView: NSView {
             target[.squash] = 1 - max(0, cos(now * 11)) * 0.05
             target[.armLeft] = 18 + sin(now * 11) * 16
             target[.armRight] = 18 - sin(now * 11) * 16
-            if risky {
-                target[.browTilt] += 6
-                target[.glow] = 1
-                target[.mouthCurve] = 0
-            }
         case .error:
             if e < 0.55 { target[.x] = sin(e * 42) * 5 * (1 - e / 0.55) }
         case .done:

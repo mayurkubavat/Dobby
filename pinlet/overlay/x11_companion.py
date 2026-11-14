@@ -30,9 +30,11 @@ import cairo  # noqa: E402
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import companion_scene as scene  # noqa: E402
+from . import rime_art  # noqa: E402
 
 W, H = 300, 210  # the window: bubble above, Rime at the bottom right
 BODY_R = 30.0
+RIME_SCALE = 0.42  # Rime's 200 x 220 art box, scaled to about 84 x 92
 BODY_CX, BODY_CY = W - 48.0, H - 44.0
 BUBBLE = (8.0, 14.0, W - 40.0, 92.0)  # x, y, w, h
 EDGE = 18  # gap to the screen edge
@@ -195,8 +197,8 @@ class X11Companion:
         if self.dodged_until and time.monotonic() >= self.dodged_until:
             self.dodged_until = 0.0
             self.win.move(*(self.home or self._corner()))
-        if self.composited and self.mood != scene.PAUSE:
-            self.win.queue_draw()  # the gentle bob; frozen Rime holds still
+        if self.composited:
+            self.win.queue_draw()  # the gentle bob and Rime's sparkles; frozen Rime holds still
         return True
 
     # ------------------------------------------------------------ input
@@ -288,58 +290,12 @@ class X11Companion:
         self._paint_rime(cr, BODY_CX, BODY_CY + bob)
 
     def _paint_rime(self, cr, cx: float, cy: float) -> None:
-        """An original frost spirit: a round ice body, a three-point crown, big eyes."""
-        frozen = self.mood == scene.PAUSE
-        # Crown of ice points.
-        cr.set_source_rgba(*ICE_RGB, 0.95)
-        for dx, hgt in ((-14, 12), (0, 18), (14, 12)):
-            cr.move_to(cx + dx - 6, cy - BODY_R + 6)
-            cr.line_to(cx + dx, cy - BODY_R - hgt + 6)
-            cr.line_to(cx + dx + 6, cy - BODY_R + 6)
-            cr.close_path()
-            cr.fill()
-        # Body.
-        grad = cairo.RadialGradient(cx - 10, cy - 12, 4, cx, cy, BODY_R)
-        top = (0.93, 0.98, 1.0) if frozen else (0.85, 0.97, 1.0)
-        grad.add_color_stop_rgba(0, *top, 1)
-        grad.add_color_stop_rgba(1, *(CYAN if not frozen else ICE_RGB), 1)
-        cr.arc(cx, cy, BODY_R, 0, 2 * math.pi)
-        cr.set_source(grad)
-        cr.fill_preserve()
-        cr.set_source_rgba(1, 1, 1, 0.8)
-        cr.set_line_width(1.5)
-        cr.stroke()
-        # Eyes.
-        cr.set_source_rgba(*INK, 1)
-        for ex in (cx - 10, cx + 10):
-            if self.mood in (scene.SLEEP, scene.DONE):
-                cr.set_line_width(2.2)
-                cr.arc(ex, cy - 1, 5, 0.15 * math.pi, 0.85 * math.pi)  # closed, content
-                cr.stroke()
-            else:
-                big = 6.5 if self.mood == scene.ASK else 5.5
-                cr.arc(ex, cy - 2, big, 0, 2 * math.pi)
-                cr.fill()
-                cr.set_source_rgba(1, 1, 1, 0.95)
-                cr.arc(ex - 2, cy - 4.5, 1.8, 0, 2 * math.pi)
-                cr.fill()
-                cr.set_source_rgba(*INK, 1)
-        # Mouth.
-        cr.set_line_width(1.8)
-        if self.mood == scene.ERROR:
-            cr.move_to(cx - 5, cy + 13)
-            cr.curve_to(cx - 2, cy + 9, cx + 2, cy + 9, cx + 5, cy + 13)
-        elif self.mood == scene.PAUSE:
-            cr.move_to(cx - 4, cy + 11)
-            cr.line_to(cx + 4, cy + 11)
-        else:
-            cr.arc(cx, cy + 8, 4, 0.2 * math.pi, 0.8 * math.pi)
-        cr.stroke()
-        # Cheeks.
-        cr.set_source_rgba(1.0, 0.6, 0.7, 0.45)
-        for ex in (cx - 18, cx + 18):
-            cr.arc(ex, cy + 6, 3.5, 0, 2 * math.pi)
-            cr.fill()
+        """Rime itself, drawn by ``rime_art`` exactly as on the Mac; only scaled."""
+        cr.save()
+        cr.translate(cx - 100 * RIME_SCALE, cy - 138 * RIME_SCALE)
+        cr.scale(RIME_SCALE, RIME_SCALE)
+        rime_art.draw_mood(cr, self.mood, time.monotonic())
+        cr.restore()
 
     def _paint_bubble(self, cr, b: scene.Bubble) -> None:
         x, y, w, h = BUBBLE
