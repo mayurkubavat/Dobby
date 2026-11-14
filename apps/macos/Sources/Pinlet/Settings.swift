@@ -21,6 +21,7 @@ final class AppSettings: ObservableObject {
     @Published var restingBar: Bool = false { didSet { store("restingBar", restingBar) } }  // keep the bar while resting
     /// Let screenshots and screen recordings show the bar (for demos and for checking its look).
     @Published var barInRecordings: Bool = false { didSet { store("barInRecordings", barInRecordings) } }
+    @Published var barAtBottom: Bool = false { didSet { store("barAtBottom", barAtBottom) } }  // above the Dock
     /// The Settings tab in front ("general", "appearance", "permissions"…). Not saved.
     @Published var tab: String = "general"
     static let tabs = ["general", "appearance", "notifications", "menu", "ai-tools", "permissions", "diagnostics"]
@@ -49,6 +50,7 @@ final class AppSettings: ObservableObject {
         if !appPrompts { env["PINLET_APP_PROMPTS"] = "0" }
         if restingBar { env["PINLET_OVERLAY_PILL"] = "always" }
         if barInRecordings { env["PINLET_OVERLAY_PILL_RECORD"] = "1" }
+        if barAtBottom { env["PINLET_OVERLAY_PILL_POS"] = "bottom" }
         if !pace.isEmpty { env["PINLET_PACE"] = pace }
         if !defaultLevel.isEmpty { env["PINLET_DEFAULT_MODE"] = defaultLevel }
         if !color.isEmpty { env["PINLET_OVERLAY_COLOR"] = color }
@@ -73,6 +75,7 @@ final class AppSettings: ObservableObject {
         appPrompts = defaults.object(forKey: "appPrompts") as? Bool ?? true
         restingBar = defaults.object(forKey: "restingBar") as? Bool ?? false
         barInRecordings = defaults.object(forKey: "barInRecordings") as? Bool ?? false
+        barAtBottom = defaults.object(forKey: "barAtBottom") as? Bool ?? false
         background = defaults.object(forKey: "background") as? Bool ?? false
         borrowWhenIdle = defaults.object(forKey: "borrowWhenIdle") as? Bool ?? false
         pace = defaults.string(forKey: "pace") ?? ""
@@ -210,6 +213,8 @@ struct SettingsView: View {
                         .onChange(of: settings.restingBar) { _ in changed = true }
                     Toggle("Show the bar in screenshots and recordings", isOn: $settings.barInRecordings)
                         .onChange(of: settings.barInRecordings) { _ in changed = true }
+                    Toggle("Keep the bar at the bottom of the screen", isOn: $settings.barAtBottom)
+                        .onChange(of: settings.barAtBottom) { _ in changed = true }
                 } footer: {
                     SettingsFooter("Default glass is clear at rest and regular with text. With the bar off at rest, wake Pinlet from the menu or with ⌃⌥Space.")
                 }

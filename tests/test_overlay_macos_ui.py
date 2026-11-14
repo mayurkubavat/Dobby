@@ -763,6 +763,23 @@ def test_modern_goal_outlives_the_pointer_and_goes_after_a_long_quiet(make):
     assert c.goal == ""
 
 
+def test_modern_bar_goes_quiet_when_the_ai_lets_go(make):
+    c, _ = _modern(make)
+    c.handle({"op": "goal", "text": "Reply to Sam"})
+    c.handle({"op": "intent", "text": "Click ‘Send’"})
+    assert c.pill.mode == "working"
+    c.handle({"op": "task.end"})
+    assert c.pill.mode != "working" and c.goal == ""
+    assert "Reply to Sam" not in c.pill.label.stringValue()
+
+
+def test_modern_resumed_task_keeps_its_timer_and_steps(make):
+    c, _ = _modern(make)
+    c.handle({"op": "goal", "text": "Reply to Sam", "elapsed": 95.0, "steps": 4})
+    c.handle({"op": "intent", "text": "Click ‘Send’"})
+    assert "Pinlet: Reply to Sam · Click ‘Send’ · step 5 · 1:3" in c.pill.label.stringValue()
+
+
 def test_modern_fixed_colour_ignores_registry(make):
     c, _ = _modern(make, color="#00AA00", color_fixed=True)
     c.server_pid = 222

@@ -186,6 +186,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # need not hide it and it never blinks). True: visible in recordings, but
     # it hides for a moment during each of Pinlet's captures.
     "pill_in_recordings": False,
+    "pill_pos": "top",  # or "bottom": above the Dock, clear of window title bars
     # The menu bar item (``topbar``): a Pinlet icon in the menu bar with a
     # Focus-style dropdown listing every running Pinlet. Only the bar owner
     # shows it. ``chip_menu``: a ▾ on the name tag opens Pinlet's menu.
@@ -943,6 +944,19 @@ class OverlayController:
                 self.pill.mode = "ready"
                 self._refresh_pill()
         self._track_tick()
+
+    def _end_task(self) -> None:
+        """The AI let go: the bar stops saying "working" now, not ``active_secs`` later.
+
+        The pointer and its label still linger, so the last step stays readable.
+        """
+        quiet = time.monotonic() - float(self.cfg["active_secs"]) - 0.01
+        if self.last_action > quiet:
+            self.last_action = quiet
+        self.goal = ""
+        self.cursor_state = "idle"
+        self._refresh_tag()
+        self._refresh_pill()
 
     def _put_away_when_done(self, now: float) -> None:
         """The task is over: stop the thinking sweep, hide the agent pointer."""
@@ -1941,8 +1955,14 @@ class OverlayController:
             self.goal = msg["text"]
             if self.goal:
                 self._mark_active()  # a task is starting: the bar comes up with its goal
+                if msg.get("elapsed") is not None:  # under way before Pinlet restarted
+                    self.task_started = time.monotonic() - max(0.0, float(msg["elapsed"]))
+                    self.task_steps = max(0, int(msg.get("steps") or 0))
             self._refresh_tag()
             self._refresh_pill()
+            self.ack(msg_id)
+        elif op == "task.end":
+            self._end_task()
             self.ack(msg_id)
         elif op == "risk":
             self._set_risk(msg["level"])

@@ -126,7 +126,9 @@ def started(root: Path, agent_key: str, tool: str, fp: str, now: float | None = 
     _write(path, records)
 
 
-def finished(root: Path, agent_key: str, tool: str, fp: str, ok: bool) -> None:
+def finished(
+    root: Path, agent_key: str, tool: str, fp: str, ok: bool, now: float | None = None
+) -> None:
     """Marks the newest matching ``started`` receipt done (or failed)."""
     if not agent_key or tool not in GUARDED:
         return
@@ -136,8 +138,45 @@ def finished(root: Path, agent_key: str, tool: str, fp: str, ok: bool) -> None:
     for rec in reversed(records):
         if rec.get("fp") == fp and rec.get("hub") == me and rec.get("state") == "started":
             rec["state"] = "done" if ok else "failed"
+            rec["ended"] = time.time() if now is None else now
             break
     _write(path, records)
+
+
+SETTLE_S = 2.0  # an answer this old has reached the client
+
+
+def settle(root: Path, now: float | None = None) -> None:
+    """This Pinlet is quitting in good order: forget the calls it has answered.
+
+    A receipt guards against running a call twice when its answer was lost.
+    A call that ended more than ``SETTLE_S`` ago has had its answer sent, so
+    the AI sending the same call again after the restart means it: it runs.
+    Calls still running, or ended a moment ago, keep their receipts. Never
+    raises; after a crash nothing is settled and every receipt stands.
+    """
+    now = time.time() if now is None else now
+    me = os.getpid()
+    try:
+        paths = list(_dir(root).glob("*.json"))
+    except OSError:
+        return
+    for path in paths:
+        try:
+            records = _read(path)
+            kept = [
+                r
+                for r in records
+                if not (
+                    r.get("hub") == me
+                    and r.get("state") in ("done", "failed")
+                    and now - float(r.get("ended", now)) > SETTLE_S
+                )
+            ]
+            if len(kept) != len(records):
+                _write(path, kept)
+        except (OSError, ValueError, TypeError):
+            continue
 
 
 def blocked_result(rec: dict[str, Any]) -> dict[str, Any]:

@@ -356,6 +356,7 @@ it. Settings go in the client's `env`:
 | --- | --- |
 | `PINLET_OVERLAY=0` | Turn the overlay off |
 | `PINLET_OVERLAY_PILL=always` | Keep the small "Pinlet is sleeping" bar on screen while Pinlet rests (default `auto`: the bar shows only while Pinlet works, asks or is paused; `off`: never) |
+| `PINLET_OVERLAY_PILL_POS=bottom` | macOS: keep the bar at the bottom of the screen, above the Dock, so it does not cover a window's title bar (default: under the menu bar) |
 | `PINLET_OVERLAY_STYLE=classic` | Use the older, larger look |
 | `PINLET_OVERLAY_THEME=light` | The light bar and prompts instead of the default dark look; `auto` follows the desktop's light or dark mode |
 | `PINLET_OVERLAY_GLASS=clear` | On macOS 26 and later, pin clear Liquid Glass (the default is clear while the bar sleeps and regular once it has text); `regular` pins regular; `0` keeps the older frosted bar |

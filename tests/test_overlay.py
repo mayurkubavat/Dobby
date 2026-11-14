@@ -919,6 +919,8 @@ def test_overlay_config_pill_options():
     assert overlay_config({"PINLET_OVERLAY_PILL": "auto"})["pill"] == "auto"
     assert overlay_config({"PINLET_OVERLAY_PILL": "0"})["pill"] == "off"
     assert overlay_config({"PINLET_OVERLAY_PILL_RECORD": "1"})["pill_in_recordings"] is True
+    assert overlay_config({"PINLET_OVERLAY_PILL_POS": "Bottom"})["pill_pos"] == "bottom"
+    assert "pill_pos" not in overlay_config({"PINLET_OVERLAY_PILL_POS": "top"})
 
 
 def test_client_start_async_starts_one_helper(fake_client):

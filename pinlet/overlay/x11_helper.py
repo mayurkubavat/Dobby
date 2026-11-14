@@ -1705,7 +1705,18 @@ class X11Overlay:
         elif op == "goal":
             if msg["text"]:
                 self._mark_active()
+                if msg.get("elapsed") is not None:  # under way before Pinlet restarted
+                    self.task_started = time.monotonic() - max(0.0, float(msg["elapsed"]))
+                    self.task_steps = max(0, int(msg.get("steps") or 0))
             self.goal = msg["text"]
+            self._refresh_bar()
+            self.ack(msg_id)
+        elif op == "task.end":  # the AI let go: stop saying "working" now
+            quiet = time.monotonic() - float(self.cfg["active_secs"]) - 0.01
+            self.last_action = min(self.last_action, quiet)
+            self.goal = ""
+            self.state = "idle"
+            self._layout_tag()
             self._refresh_bar()
             self.ack(msg_id)
         elif op == "risk":

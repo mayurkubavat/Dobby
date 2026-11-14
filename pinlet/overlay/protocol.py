@@ -37,7 +37,10 @@ OPS: dict[str, tuple] = {
     "cursor.hide": ((), ()),
     "intent": (("text",), ("ms",)),
     # What the AI is trying to get done, in one line, for the bar ("" clears it).
-    "goal": (("text",), ()),
+    # elapsed / steps: the task was already under way (Pinlet restarted mid-task).
+    "goal": (("text",), ("elapsed", "steps")),
+    # The AI let go of control: the bar stops saying it is working at once.
+    "task.end": ((), ()),
     "target.box": (("x", "y", "w", "h"), ()),
     "target.clear": ((), ()),
     "risk": (("level",), ()),

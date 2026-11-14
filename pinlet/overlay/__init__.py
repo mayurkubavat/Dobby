@@ -195,6 +195,8 @@ def overlay_config(env: dict[str, str] | None = None) -> dict[str, Any]:
         cfg["menu_bar"] = False
     if is_true(env, "PINLET_OVERLAY_PILL_RECORD"):
         cfg["pill_in_recordings"] = True
+    if env.get("PINLET_OVERLAY_PILL_POS", "").strip().lower() == "bottom":
+        cfg["pill_pos"] = "bottom"  # above the Dock, clear of window title bars
     glass = env.get("PINLET_OVERLAY_GLASS", "").strip().lower()
     if glass in _FALSE:
         cfg["liquid_glass"] = "off"

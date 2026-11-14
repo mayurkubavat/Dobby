@@ -269,6 +269,8 @@ class PinletServer(MCPServer):
         is_error = bool(getattr(result, "is_error", getattr(result, "isError", False)))
         if receipt is not None:
             _receipt_mark(receipt, not is_error)
+            if not is_error:
+                _count_step()
         from pinlet import journal as _journal_mod
 
         _journal(name, _journal_mod.outcome_of(result), time.monotonic() - started)
@@ -2142,6 +2144,17 @@ def request_control(max_wait_s: float | None = None, goal: str = "") -> dict[str
 _goal_owner = ""  # which agent's goal is on the bar ("" when none)
 
 
+def _count_step() -> None:
+    """One more step of the calling agent's task, kept with its saved goal."""
+    try:
+        from pinlet.hub import goals as _goals
+
+        root, _who, key = _me()
+        _goals.step(root, key)
+    except Exception:  # noqa: BLE001 - never let this break a tool
+        return
+
+
 _goals_checked: set[str] = set()  # agents whose saved goal this process has looked up
 
 
@@ -2161,16 +2174,21 @@ def _restore_goal() -> None:
             return
         _goals_checked.add(key)
         root, _who, _key = _me()
-        text = _goals.load(root, key)
-        if text and not _goal_owner:
+        task = _goals.task(root, key)
+        if task and not _goal_owner:
             tool_log.info("%sgoal kept across a restart", _session_tag())
-            _show_goal(text)
+            # The bar's timer and step count carry on from where the task was.
+            _show_goal(task["text"], elapsed=task["elapsed"], steps=task["steps"])
     except Exception:  # noqa: BLE001 - never let this break a tool
         return
 
 
-def _show_goal(goal: str) -> None:
-    """Put the AI's one-line goal on the bar (best effort)."""
+def _show_goal(goal: str, elapsed: float | None = None, steps: int | None = None) -> None:
+    """Put the AI's one-line goal on the bar (best effort).
+
+    ``elapsed`` and ``steps`` are given when a saved task is put back after a
+    restart; the saved record is then left as it is.
+    """
     from pinlet.overlay import find_overlay_hal
 
     ov_hal = find_overlay_hal(hal)
@@ -2179,13 +2197,17 @@ def _show_goal(goal: str) -> None:
     global _goal_owner
     _goal_owner = _session_tag() if goal.strip() else ""
     with contextlib.suppress(Exception):
-        ov_hal.overlay.goal(goal)
+        if elapsed is None:
+            ov_hal.overlay.goal(goal)
+        else:
+            ov_hal.overlay.goal(goal, elapsed=elapsed, steps=steps)
     with contextlib.suppress(Exception):  # so it outlives a restart of this Pinlet
         from pinlet.hub import goals as _goals
 
         root, _who, key = _me()
         _goals_checked.add(key)
-        _goals.save(root, key, goal)
+        if elapsed is None:
+            _goals.save(root, key, goal)
     tool_log.info("%sgoal: %s", _session_tag(), " ".join(goal.split())[:160])
 
 
@@ -2430,10 +2452,11 @@ def release_control() -> dict[str, Any]:
     mine = _goal_owner in ("", _session_tag())
     if ov_hal is not None and (released or mine):
         with contextlib.suppress(Exception):
-            if released:  # done for now: the pointer label stops saying "Thinking…"
-                ov_hal.overlay.state("idle")
             if mine:
                 _show_goal("")
+            if released:  # done: the bar and the pointer label stop saying it is working
+                ov_hal.overlay.state("idle")
+                ov_hal.overlay.task_end()
     return {"ok": True, "released": released, **ctl.status()}
 
 

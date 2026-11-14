@@ -265,6 +265,19 @@ def goal_text(
     return ("⚡ " + text) if turbo else text
 
 
+def bar_y(area_y: float, area_h: float, bar_h: float, row: int = 0, pos: str = "top") -> float:
+    """Bottom edge of the bar inside the screen's usable area (y grows upward).
+
+    "top" hangs it under the menu bar; "bottom" rests it above the Dock,
+    where it does not cover the front window's title bar and toolbar.
+    Bars of several Pinlets stack one row apart, away from the edge.
+    """
+    step = row * (bar_h + 6)
+    if pos == "bottom":
+        return area_y + 8 + step
+    return area_y + area_h - bar_h - 8 - step
+
+
 def goal_tip(goal: str, step: str) -> str | None:
     """The working bar's tooltip: the whole goal and the step, uncut."""
     goal = " ".join(goal.split())

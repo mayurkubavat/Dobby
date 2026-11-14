@@ -226,6 +226,12 @@ class Hub:
         """
         log.info("quit requested by %s", reason)
         self.quitting = True
+        with contextlib.suppress(Exception):  # answered calls may be sent again after the restart
+            from pinlet.control import control_root
+
+            from . import receipts
+
+            receipts.settle(control_root())
         if self.task_group is not None:
             self.task_group.cancel_scope.cancel()
 

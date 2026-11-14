@@ -1264,7 +1264,9 @@ class _Pill:
         if screens:
             vf = screens[0].visibleFrame()
             fx = vf.origin.x + (vf.size.width - w) / 2
-            fy = vf.origin.y + vf.size.height - H - 8 - self.row * (H + 6)
+            fy = style.bar_y(
+                vf.origin.y, vf.size.height, H, self.row, str(self.cfg.get("pill_pos") or "top")
+            )
             frame = ((fx, fy), (w, H))
             old = self.window.frame()
             if self.animate and self.window.isVisible() and abs(old.size.width - w) > 0.5:

@@ -135,8 +135,15 @@ class NullOverlay:
         """Sets the risk colour for the current step ("caution", "danger" or none)."""
         return True
 
-    def goal(self, text: str) -> bool:
-        """Tells the bar what the AI is trying to get done ("" clears it)."""
+    def goal(self, text: str, elapsed: float | None = None, steps: int | None = None) -> bool:
+        """Tells the bar what the AI is trying to get done ("" clears it).
+
+        ``elapsed`` and ``steps`` carry a task that was already under way.
+        """
+        return True
+
+    def task_end(self) -> bool:
+        """The AI let go of control: the bar stops saying it is working."""
         return True
 
     def scan(self, rect: tuple | None = None) -> bool:
@@ -747,8 +754,15 @@ class OverlayClient(NullOverlay):
         return self._send("risk", level=level)
 
     @override
-    def goal(self, text: str) -> bool:
-        return self._send("goal", text=" ".join(str(text or "").split())[:160])
+    def goal(self, text: str, elapsed: float | None = None, steps: int | None = None) -> bool:
+        extra: dict[str, Any] = {}
+        if elapsed is not None:
+            extra.update(elapsed=float(elapsed), steps=int(steps or 0))
+        return self._send("goal", text=" ".join(str(text or "").split())[:160], **extra)
+
+    @override
+    def task_end(self) -> bool:
+        return self._send("task.end")
 
     @override
     def scan(self, rect: tuple | None = None) -> bool:

@@ -92,3 +92,19 @@ def test_the_server_answers_a_repeat_without_acting(tmp_path, monkeypatch):
         sessions.CURRENT.reset(token)
     assert result.is_error
     assert json.loads(result.content[0].text)["repeat_blocked"]
+
+
+def test_a_clean_quit_lets_an_answered_call_be_sent_again(tmp_path):
+    done = receipts.fingerprint("press_key", {"key": "shift"})
+    fresh = receipts.fingerprint("click", {"x": 1, "y": 2})
+    running = receipts.fingerprint("type_text", {"text": "hi"})
+    receipts.started(tmp_path, KEY, "press_key", done, now=1000.0)
+    receipts.finished(tmp_path, KEY, "press_key", done, ok=True, now=1000.5)
+    receipts.started(tmp_path, KEY, "click", fresh, now=1014.0)
+    receipts.finished(tmp_path, KEY, "click", fresh, ok=True, now=1014.5)
+    receipts.started(tmp_path, KEY, "type_text", running, now=1014.8)
+    receipts.settle(tmp_path, now=1015.0)  # the old Pinlet quits in good order
+    _as_old_pinlet(tmp_path)
+    assert receipts.check(tmp_path, KEY, "press_key", done, now=1020.0) is None  # meant: runs
+    assert receipts.check(tmp_path, KEY, "click", fresh, now=1020.0)["state"] == "done"
+    assert receipts.check(tmp_path, KEY, "type_text", running, now=1020.0)["state"] == "started"

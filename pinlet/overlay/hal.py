@@ -656,9 +656,12 @@ class OverlayHAL:
         return done
 
     def _after_keys(self) -> None:
-        """Input lock: a key may switch windows (new window, app switch): follow it."""
-        if getattr(self.overlay, "lock_on", False):
-            self._follow_active_window()
+        """A key may switch windows (new window, app switch): the glow follows it.
+
+        It also puts the glow on the window being typed into when a task
+        starts with the keyboard and never clicks.
+        """
+        self._follow_active_window()
 
     @property
     def _quiet(self) -> bool:

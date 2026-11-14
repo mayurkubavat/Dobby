@@ -404,3 +404,18 @@ def test_goal_stays_through_a_pause_in_the_work():
     assert not menu.goal_over("Reply to Sam", 60.0)
     assert menu.goal_over("Reply to Sam", menu.GOAL_SECS + 1)
     assert not menu.goal_over("", 10_000.0)
+
+
+def test_protocol_carries_a_resumed_task_and_the_end_of_one():
+    from pinlet.overlay import protocol
+
+    msg = protocol.decode(protocol.encode("goal", text="Reply to Sam", elapsed=95.0, steps=4))
+    assert msg["elapsed"] == 95.0 and msg["steps"] == 4
+    assert protocol.decode(protocol.encode("task.end"))["op"] == "task.end"
+
+
+def test_bar_sits_under_the_menu_bar_or_above_the_dock():
+    assert style.bar_y(70, 900, 34) == 70 + 900 - 34 - 8
+    assert style.bar_y(70, 900, 34, row=1) == 70 + 900 - 34 - 8 - 40
+    assert style.bar_y(70, 900, 34, pos="bottom") == 78
+    assert style.bar_y(70, 900, 34, row=1, pos="bottom") == 118

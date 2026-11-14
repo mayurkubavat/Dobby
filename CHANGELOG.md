@@ -11,6 +11,9 @@ The first public release will be 0.1.0. It contains:
 
 ### Added
 
+- The bar stops saying Pinlet is working the moment the AI lets go of control. After Pinlet restarts in the middle of a task, the bar's timer and step count carry on. The glow now also appears around the window when a task only uses the keyboard.
+- The bar can sit at the bottom of the screen, above the Dock, so it does not cover a window's title bar: Settings > Appearance > "Keep the bar at the bottom of the screen", or `PINLET_OVERLAY_PILL_POS=bottom`.
+- When Pinlet quits in good order, a call it had already answered may be sent again after the restart. Only calls cut off by the restart, or answered in its last two seconds, are still held back once.
 - The goal an AI gives stays on the bar while it thinks between steps (it went away with the pointer after about half a minute, and on Linux after eight seconds), and one agent letting go of control no longer clears another agent's goal. It leaves after three minutes without a step or when the AI releases control. It also comes back when Pinlet restarts in the middle of a task (an update, for one).
 - `pinlet://settings/permissions` (or `/appearance`, `/ai-tools`…) opens
   Settings on that tab, and Settings > Appearance can let screenshots and
