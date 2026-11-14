@@ -240,6 +240,24 @@ def test_topbar_shows_shared_sessions(monkeypatch):
     assert view["icon_state"] == "working" and view["palette"]["fill"] == "#0E7490"
 
 
+def test_a_session_that_let_go_is_not_shown_as_working():
+    from pinlet.hub import control
+
+    info = sessions.open_session("Claude Code", 4243, "careful")
+    token = sessions.CURRENT.set(info)
+    try:
+        sessions.note_call("click")
+        assert control.session_states()[4243]["mode"] == "working"
+        sessions.note_call("release_control")
+        state = control.session_states()[4243]
+        assert state["mode"] == "ready" and state["step"] == ""
+        sessions.note_call("click")  # the next task shows again
+        assert control.session_states()[4243]["mode"] == "working"
+    finally:
+        sessions.CURRENT.reset(token)
+        sessions.close_session(info)
+
+
 def test_app_is_only_used_on_macos(tmp_path):
     app = tmp_path / "Pinlet.app"
     (app / "Contents" / "MacOS").mkdir(parents=True)

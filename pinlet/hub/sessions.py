@@ -37,6 +37,7 @@ class SessionInfo:
     client: str = ""
     # Made by the client's connector when it starts and sent again on every
     # reconnect, so it outlives a restart of the shared Pinlet ("" = unknown).
+    done: bool = False  # the agent's last call was release_control
     agent_key: str = ""
     # PINLET_TOOL_TIMEOUT_S from the client's own config (None = not set).
     tool_timeout_s: float | None = None
@@ -94,7 +95,9 @@ def note_call(tool: str) -> None:
         return
     info.calls += 1
     info.last_call = time.time()
-    info.last_tool = tool
+    # Letting go ends the task: the menu and the companion stop showing it as working.
+    info.done = tool == "release_control"
+    info.last_tool = None if info.done else tool
 
 
 def note_outcome(outcome: str, info: SessionInfo | None = None) -> None:

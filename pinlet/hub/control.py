@@ -230,7 +230,11 @@ def session_states(
     for s in snapshot:
         if not s.get("pid"):
             continue
-        recent = bool(s.get("last_call")) and now - float(s["last_call"]) < WORKING_WINDOW_S
+        recent = (
+            bool(s.get("last_call"))
+            and now - float(s["last_call"]) < WORKING_WINDOW_S
+            and not s.get("done")
+        )
         out[int(s["pid"])] = {
             "mode": "working" if recent else "ready",
             "turbo": bool(s.get("turbo")),
